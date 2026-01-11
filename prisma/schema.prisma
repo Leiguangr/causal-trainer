@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String        @id @default(cuid())
+  email         String        @unique
+  name          String?
+  password      String
+  role          String        @default("user") // user, admin
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  quizSessions  QuizSession[]
+  corrections   Correction[]  @relation("SubmittedCorrections")
+  reviews       Correction[]  @relation("ReviewedCorrections")
+}
+
+model Question {
+  id              String      @id @default(cuid())
+  scenario        String
+  claim           String
+  pearlLevel      String      // L1, L2, L3
+  domain          String      // Markets, Medicine, Law, etc.
+  subdomain       String?     // More specific domain (e.g., "Commodities")
+  trapType        String      // CONFOUNDING, REVERSE, SELECTION, etc.
+  trapSubtype     String      // More specific subtype
+  explanation     String
+  difficulty      String      @default("medium") // easy, medium, hard
+  groundTruth     String      @default("INVALID") // VALID, INVALID, CONDITIONAL
+  variables       String?     // JSON string for SQLite: { X, Y, Z[] }
+  causalStructure String?     // Brief description of causal graph
+  keyInsight      String?     // One-line takeaway
+  wiseRefusal     String?     // Complete answer with verdict
+  isVerified      Boolean     @default(false)
+  isLLMGenerated  Boolean     @default(false)
+  sourceCase      String?     // e.g., "3.15" from BucketLarge-G
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  answers         Answer[]
+  corrections     Correction[]
+}
+
+model QuizSession {
+  id              String      @id @default(cuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id])
+  totalQuestions  Int
+  correctAnswers  Int         @default(0)
+  domainsFilter   String?     // JSON array of selected domains
+  levelsFilter    String?     // JSON array of selected levels
+  difficulty      String?     // easy, medium, hard, or null for all
+  startedAt       DateTime    @default(now())
+  completedAt     DateTime?
+  
+  answers         Answer[]
+}
+
+model Answer {
+  id              String      @id @default(cuid())
+  sessionId       String
+  session         QuizSession @relation(fields: [sessionId], references: [id])
+  questionId      String
+  question        Question    @relation(fields: [questionId], references: [id])
+  selectedType    String
+  selectedSubtype String?
+  isCorrect       Boolean
+  isTypeCorrect   Boolean     // Track if just the type was correct
+  timeTakenMs     Int?
+  answeredAt      DateTime    @default(now())
+}
+
+model Correction {
+  id                    String      @id @default(cuid())
+  questionId            String
+  question              Question    @relation(fields: [questionId], references: [id])
+  submittedById         String
+  submittedBy           User        @relation("SubmittedCorrections", fields: [submittedById], references: [id])
+  suggestedType         String?
+  suggestedSubtype      String?
+  suggestedExplanation  String?
+  comment               String?
+  status                String      @default("pending") // pending, approved, rejected
+  reviewedById          String?
+  reviewedBy            User?       @relation("ReviewedCorrections", fields: [reviewedById], references: [id])
+  reviewNote            String?
+  createdAt             DateTime    @default(now())
+  reviewedAt            DateTime?
+}
+
