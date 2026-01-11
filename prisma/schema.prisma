@@ -8,43 +8,47 @@ datasource db {
 }
 
 model User {
-  id            String        @id @default(cuid())
-  email         String        @unique
-  name          String?
-  password      String
-  role          String        @default("user") // user, admin
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id               String             @id @default(cuid())
+  email            String             @unique
+  name             String?
+  password         String
+  role             String             @default("user") // user, admin
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
-  quizSessions  QuizSession[]
-  corrections   Correction[]  @relation("SubmittedCorrections")
-  reviews       Correction[]  @relation("ReviewedCorrections")
+  quizSessions     QuizSession[]
+  corrections      Correction[]       @relation("SubmittedCorrections")
+  reviews          Correction[]       @relation("ReviewedCorrections")
+  generationBatches GenerationBatch[]
 }
 
 model Question {
-  id              String      @id @default(cuid())
-  scenario        String
-  claim           String
-  pearlLevel      String      // L1, L2, L3
-  domain          String      // Markets, Medicine, Law, etc.
-  subdomain       String?     // More specific domain (e.g., "Commodities")
-  trapType        String      // CONFOUNDING, REVERSE, SELECTION, etc.
-  trapSubtype     String      // More specific subtype
-  explanation     String
-  difficulty      String      @default("medium") // easy, medium, hard
-  groundTruth     String      @default("INVALID") // VALID, INVALID, CONDITIONAL
-  variables       String?     // JSON string for SQLite: { X, Y, Z[] }
-  causalStructure String?     // Brief description of causal graph
-  keyInsight      String?     // One-line takeaway
-  wiseRefusal     String?     // Complete answer with verdict
-  isVerified      Boolean     @default(false)
-  isLLMGenerated  Boolean     @default(false)
-  sourceCase      String?     // e.g., "3.15" from BucketLarge-G
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  id                String      @id @default(cuid())
+  scenario          String
+  claim             String
+  pearlLevel        String      // L1, L2, L3
+  domain            String      // Markets, Medicine, Law, etc.
+  subdomain         String?     // More specific domain (e.g., "Commodities")
+  trapType          String      // CONFOUNDING, REVERSE, SELECTION, etc.
+  trapSubtype       String      // More specific subtype
+  explanation       String
+  difficulty        String      @default("medium") // easy, medium, hard
+  groundTruth       String      @default("INVALID") // VALID, INVALID, CONDITIONAL
+  variables         String?     // JSON string for SQLite: { X, Y, Z[] }
+  causalStructure   String?     // Brief description of causal graph
+  keyInsight        String?     // One-line takeaway
+  wiseRefusal       String?     // Complete answer with verdict
+  isVerified        Boolean     @default(false)
+  isLLMGenerated    Boolean     @default(false)
+  sourceCase        String?     // e.g., "3.15" from BucketLarge-G
+  generationBatchId String?     // Track which batch this came from
+  reviewNotes       String?     // Admin notes during review
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 
-  answers         Answer[]
-  corrections     Correction[]
+  answers           Answer[]
+  corrections       Correction[]
+  generationBatch   GenerationBatch? @relation(fields: [generationBatchId], references: [id])
 }
 
 model QuizSession {
@@ -92,5 +96,20 @@ model Correction {
   reviewNote            String?
   createdAt             DateTime    @default(now())
   reviewedAt            DateTime?
+}
+
+model GenerationBatch {
+  id              String      @id @default(cuid())
+  pearlLevel      String?     // Target level for this batch (L1, L2, L3, or null for mixed)
+  domain          String?     // Target domain for this batch
+  requestedCount  Int         // How many questions were requested
+  generatedCount  Int         // How many were actually generated
+  approvedCount   Int         @default(0) // How many have been verified
+  promptNotes     String?     // Custom instructions for generation
+  createdAt       DateTime    @default(now())
+  createdById     String?     // Admin user ID (optional)
+  createdBy       User?       @relation(fields: [createdById], references: [id])
+
+  questions       Question[]
 }
 
