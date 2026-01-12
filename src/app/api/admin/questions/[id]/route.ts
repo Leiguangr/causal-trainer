@@ -14,19 +14,22 @@ export async function PATCH(
       where: { id },
       data: {
         scenario: body.scenario,
-        claim: body.claim,
+        // claim/explanation are legacy-only; allow updates but they are not
+        // required by the new unified schema
+        claim: body.claim ?? null,
         pearlLevel: body.pearlLevel,
         domain: body.domain,
         subdomain: body.subdomain,
         trapType: body.trapType,
         trapSubtype: body.trapSubtype,
-        explanation: body.explanation,
+        explanation: body.explanation ?? null,
         difficulty: body.difficulty,
         groundTruth: body.groundTruth,
         variables: body.variables,
         causalStructure: body.causalStructure,
         keyInsight: body.keyInsight,
         wiseRefusal: body.wiseRefusal,
+        hiddenTimestamp: body.hiddenTimestamp,
         reviewNotes: body.reviewNotes,
         isVerified: body.isVerified ?? false,
       },
@@ -62,4 +65,3 @@ export async function DELETE(
     );
   }
 }
-

@@ -31,7 +31,7 @@ function QuizContent() {
     causalStructure: string | null
     keyInsight: string | null
     wiseRefusal: string | null
-    variables: { X: string; Y: string; Z: string[] } | null
+    variables: { X: string; Y: string; Z: string | string[] } | null
   } | null>(null)
 
   // Timer
@@ -300,7 +300,7 @@ function ResultDisplay({ result, selectedType, selectedSubtype }: {
     causalStructure: string | null
     keyInsight: string | null
     wiseRefusal: string | null
-    variables: { X: string; Y: string; Z: string[] } | null
+    variables: { X: string; Y: string; Z: string | string[] } | null
   }
   selectedType: string
   selectedSubtype: string | null
@@ -341,10 +341,21 @@ function ResultDisplay({ result, selectedType, selectedSubtype }: {
       {result.variables && (
         <div className="bg-gray-50 rounded-lg p-3 mb-4">
           <h4 className="font-medium text-gray-900 mb-2 text-sm">Causal Variables</h4>
+          {Array.isArray(result.variables.Z) && (
+            <>
+            </>
+          )}
           <div className="grid grid-cols-3 gap-2 text-xs">
             <div><span className="font-medium text-gray-600">X (Exposure):</span> <span className="text-gray-800">{result.variables.X}</span></div>
             <div><span className="font-medium text-gray-600">Y (Outcome):</span> <span className="text-gray-800">{result.variables.Y}</span></div>
-            <div><span className="font-medium text-gray-600">Z (Confounders):</span> <span className="text-gray-800">{result.variables.Z?.join(', ') || 'None'}</span></div>
+            <div>
+              <span className="font-medium text-gray-600">Z (Key variable):</span>{' '}
+              <span className="text-gray-800">
+                {Array.isArray(result.variables.Z)
+                  ? (result.variables.Z.length ? result.variables.Z.join(', ') : 'None')
+                  : (result.variables.Z || 'None')}
+              </span>
+            </div>
           </div>
         </div>
       )}
@@ -367,4 +378,3 @@ function ResultDisplay({ result, selectedType, selectedSubtype }: {
     </div>
   )
 }
-

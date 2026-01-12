@@ -60,10 +60,13 @@ export default function GeneratePage() {
                 onChange={(e) => { setPearlLevel(e.target.value as PearlLevel); setTrapType(''); setTrapSubtype(''); }}
                 className="w-full p-2 border rounded-md"
               >
-                {Object.entries(PEARL_LEVELS).map(([level, name]) => (
-                  <option key={level} value={level}>{level}: {name}</option>
+                {Object.entries(PEARL_LEVELS).map(([level, meta]) => (
+                  <option key={level} value={level}>{level}: {meta.name}</option>
                 ))}
               </select>
+              <p className="mt-1 text-xs text-gray-500">
+                {PEARL_LEVELS[pearlLevel].description}
+              </p>
             </div>
 
             {/* Domain */}
@@ -132,14 +135,13 @@ export default function GeneratePage() {
                   <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">{q.trapType || trapType}</span>
                   <span className="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded">{q.difficulty}</span>
                 </div>
-                <p className="text-gray-800 mb-2"><strong>Scenario:</strong> {q.scenario}</p>
-                <p className="text-gray-800 mb-2"><strong>Claim:</strong> {q.claim}</p>
+                <p className="text-gray-800 mb-2"><strong>Scenario (with embedded claim):</strong> {q.scenario}</p>
                 <details className="mt-4">
                   <summary className="cursor-pointer text-blue-600 hover:underline">Show Explanation</summary>
                   <div className="mt-2 p-3 bg-gray-50 rounded">
-                    <p className="text-gray-700">{q.explanation}</p>
+                    <p className="text-gray-700 whitespace-pre-line">{q.wiseRefusal}</p>
                     <div className="mt-2 text-sm text-gray-500">
-                      <strong>Variables:</strong> X={q.variables?.X}, Y={q.variables?.Y}, Z=[{q.variables?.Z?.join(', ')}]
+                      <strong>Variables:</strong> X={q.variables?.X}, Y={q.variables?.Y}, Z={q.variables?.Z}
                     </div>
                   </div>
                 </details>
@@ -151,4 +153,3 @@ export default function GeneratePage() {
     </div>
   );
 }
-

@@ -46,18 +46,37 @@ export async function GET(req: NextRequest) {
         },
       },
       questions: questions.map(q => {
-        // Parse variables if it's a JSON string
-        let variables;
-        try {
-          variables = q.variables ? JSON.parse(q.variables) : null;
-        } catch {
-          variables = q.variables;
+        // Parse variables and hiddenTimestamp from JSON strings (SQLite)
+        let rawVars: any = null;
+        if (q.variables) {
+          try {
+            rawVars = JSON.parse(q.variables);
+          } catch {
+            rawVars = q.variables;
+          }
+        }
+
+        const variables = rawVars
+          ? {
+              X: rawVars.X,
+              Y: rawVars.Y,
+              // Normalize Z to a single string for export (join arrays if legacy)
+              Z: Array.isArray(rawVars.Z) ? rawVars.Z.join('; ') : rawVars.Z,
+            }
+          : null;
+
+        let hiddenTimestamp: any = undefined;
+        if (q.hiddenTimestamp) {
+          try {
+            hiddenTimestamp = JSON.parse(q.hiddenTimestamp);
+          } catch {
+            // leave undefined if parse fails
+          }
         }
 
         return {
           caseId: q.sourceCase || q.id,
           scenario: q.scenario,
-          claim: q.claim,
           variables,
           annotations: {
             pearlLevel: q.pearlLevel,
@@ -68,9 +87,9 @@ export async function GET(req: NextRequest) {
             difficulty: q.difficulty,
             causalStructure: q.causalStructure,
             keyInsight: q.keyInsight,
+            hiddenTimestamp,
           },
           groundTruth: q.groundTruth,
-          explanation: q.explanation,
           wiseRefusal: q.wiseRefusal,
         };
       }),
@@ -94,4 +113,3 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-

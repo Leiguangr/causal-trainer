@@ -8,7 +8,8 @@ const prisma = new PrismaClient()
 interface QuestionData {
   sourceCase: string
   scenario: string
-  claim: string
+  // Legacy: separate claim field; new seeds may leave this empty
+  claim?: string
   pearlLevel: string
   domain: string
   subdomain?: string
@@ -16,11 +17,13 @@ interface QuestionData {
   trapSubtype: string
   difficulty: string
   groundTruth: string
-  explanation: string
+  // Legacy: short explanation; canonical reasoning lives in wiseRefusal
+  explanation?: string
   variables: Record<string, unknown>
-  causalStructure: string
-  keyInsight: string
+  causalStructure?: string
+  keyInsight?: string
   wiseRefusal: string
+  hiddenTimestamp?: Record<string, unknown>
 }
 
 async function main() {
@@ -66,7 +69,7 @@ async function main() {
       where: { id: `seed-${q.sourceCase}` },
       update: {
         scenario: q.scenario,
-        claim: q.claim,
+        claim: q.claim ?? null,
         pearlLevel: q.pearlLevel,
         domain: q.domain,
         subdomain: q.subdomain,
@@ -74,18 +77,19 @@ async function main() {
         trapSubtype: q.trapSubtype,
         difficulty: q.difficulty,
         groundTruth: q.groundTruth,
-        explanation: q.explanation,
+        explanation: q.explanation ?? null,
         variables: JSON.stringify(q.variables),
-        causalStructure: q.causalStructure,
-        keyInsight: q.keyInsight,
+        causalStructure: q.causalStructure ?? null,
+        keyInsight: q.keyInsight ?? null,
         wiseRefusal: q.wiseRefusal,
+        hiddenTimestamp: q.hiddenTimestamp ? JSON.stringify(q.hiddenTimestamp) : null,
         isVerified: true,
         isLLMGenerated: false,
       },
       create: {
         id: `seed-${q.sourceCase}`,
         scenario: q.scenario,
-        claim: q.claim,
+        claim: q.claim ?? null,
         pearlLevel: q.pearlLevel,
         domain: q.domain,
         subdomain: q.subdomain,
@@ -93,11 +97,12 @@ async function main() {
         trapSubtype: q.trapSubtype,
         difficulty: q.difficulty,
         groundTruth: q.groundTruth,
-        explanation: q.explanation,
+        explanation: q.explanation ?? null,
         variables: JSON.stringify(q.variables),
-        causalStructure: q.causalStructure,
-        keyInsight: q.keyInsight,
+        causalStructure: q.causalStructure ?? null,
+        keyInsight: q.keyInsight ?? null,
         wiseRefusal: q.wiseRefusal,
+        hiddenTimestamp: q.hiddenTimestamp ? JSON.stringify(q.hiddenTimestamp) : null,
         sourceCase: q.sourceCase,
         isVerified: true,
         isLLMGenerated: false,
@@ -117,4 +122,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect()
   })
-

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { PEARL_LEVELS, PearlLevel } from '@/types';
 
 interface Stats {
   L1: { current: number; target: number };
@@ -22,6 +23,11 @@ export default function GeneratePage() {
     L3: { current: 0, target: 103 },
   });
   const [lastResult, setLastResult] = useState<any>(null);
+
+  const selectedPearlMeta =
+    (['L1', 'L2', 'L3'] as PearlLevel[]).includes(pearlLevel as PearlLevel)
+      ? PEARL_LEVELS[pearlLevel as PearlLevel]
+      : null;
 
   useEffect(() => {
     fetchStats();
@@ -125,10 +131,16 @@ export default function GeneratePage() {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2"
               >
                 <option value="">All Levels (Mixed)</option>
-                <option value="L1">L1 - Association</option>
-                <option value="L2">L2 - Intervention</option>
-                <option value="L3">L3 - Counterfactual</option>
+                <option value="L1">L1 - {PEARL_LEVELS.L1.name}</option>
+                <option value="L2">L2 - {PEARL_LEVELS.L2.name}</option>
+                <option value="L3">L3 - {PEARL_LEVELS.L3.name}</option>
               </select>
+              {selectedPearlMeta && (
+                <p className="mt-1 text-xs text-gray-500">
+                  <span className="font-semibold">{selectedPearlMeta.name}:</span>{' '}
+                  {selectedPearlMeta.description}
+                </p>
+              )}
             </div>
 
             <div>
@@ -246,4 +258,3 @@ export default function GeneratePage() {
     </div>
   );
 }
-

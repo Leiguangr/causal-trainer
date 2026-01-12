@@ -25,19 +25,22 @@ model User {
 model Question {
   id                String      @id @default(cuid())
   scenario          String
-  claim             String
+  // Legacy field: separate claim text (now embedded in scenario for new questions)
+  claim             String?
   pearlLevel        String      // L1, L2, L3
   domain            String      // Markets, Medicine, Law, etc.
   subdomain         String?     // More specific domain (e.g., "Commodities")
   trapType          String      // CONFOUNDING, REVERSE, SELECTION, etc.
   trapSubtype       String      // More specific subtype
-  explanation       String
+  // Legacy field: short explanation (canonical reasoning now lives in wiseRefusal)
+  explanation       String?
   difficulty        String      @default("medium") // easy, medium, hard
   groundTruth       String      @default("INVALID") // VALID, INVALID, CONDITIONAL
-  variables         String?     // JSON string for SQLite: { X, Y, Z[] }
+  variables         String?     // JSON string for SQLite: { X, Y, Z } with single-Z (string) or legacy array
   causalStructure   String?     // Brief description of causal graph
   keyInsight        String?     // One-line takeaway
   wiseRefusal       String?     // Complete answer with verdict
+  hiddenTimestamp   String?     // Optional JSON string: { condition1, condition2 } when temporal order matters
   isVerified        Boolean     @default(false)
   isLLMGenerated    Boolean     @default(false)
   sourceCase        String?     // e.g., "3.15" from BucketLarge-G
@@ -112,4 +115,3 @@ model GenerationBatch {
 
   questions       Question[]
 }
-

@@ -6,19 +6,22 @@ import { useRouter } from 'next/navigation';
 interface Question {
   id: string;
   scenario: string;
-  claim: string;
+  // Legacy field: separate claim, now embedded in scenario for new questions
+  claim?: string | null;
   pearlLevel: string;
   domain: string;
   subdomain: string | null;
   trapType: string;
   trapSubtype: string;
-  explanation: string;
+  // Legacy short explanation; canonical reasoning lives in wiseRefusal
+  explanation?: string | null;
   difficulty: string;
   groundTruth: string;
   variables: string | null;
   causalStructure: string | null;
   keyInsight: string | null;
   wiseRefusal: string | null;
+  hiddenTimestamp?: string | null;
   reviewNotes: string | null;
   sourceCase: string | null;
 }
@@ -223,10 +226,12 @@ export default function ReviewPage() {
                 <p className="text-gray-900">{current.scenario}</p>
               </div>
 
-              <div>
-                <h3 className="font-semibold text-gray-700 mb-1">Claim</h3>
-                <p className="text-gray-900 italic">"{current.claim}"</p>
-              </div>
+              {current.claim && (
+                <div>
+                  <h3 className="font-semibold text-gray-700 mb-1">Claim (legacy)</h3>
+                  <p className="text-gray-900 italic">"{current.claim}"</p>
+                </div>
+              )}
 
               <div>
                 <h3 className="font-semibold text-gray-700 mb-1">Variables</h3>
@@ -275,15 +280,17 @@ export default function ReviewPage() {
                 />
               </div>
 
+              {/* Claim is legacy-only; new questions embed claim in scenario */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Claim
+                  Claim (legacy, optional)
                 </label>
                 <textarea
                   value={current.claim || ''}
                   onChange={(e) => updateField('claim', e.target.value)}
                   rows={2}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  placeholder="Optional legacy field; new questions should encode the claim inside the scenario."
                 />
               </div>
 
@@ -418,15 +425,17 @@ export default function ReviewPage() {
                 />
               </div>
 
+              {/* Explanation is legacy; canonical reasoning should be in wiseRefusal */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Explanation
+                  Explanation (legacy, optional)
                 </label>
                 <textarea
                   value={current.explanation || ''}
                   onChange={(e) => updateField('explanation', e.target.value)}
-                  rows={4}
+                  rows={3}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  placeholder="Legacy short explanation. Prefer putting full reasoning in Wise Refusal."
                 />
               </div>
 
@@ -441,6 +450,23 @@ export default function ReviewPage() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2"
                   placeholder="The claim is [VALID/INVALID/CONDITIONAL]..."
                 />
+              </div>
+
+              {/* Hidden Timestamp (optional) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Hidden Timestamp (optional, JSON)
+                </label>
+                <textarea
+                  value={current.hiddenTimestamp || ''}
+                  onChange={(e) => updateField('hiddenTimestamp', e.target.value)}
+                  rows={3}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 font-mono text-sm"
+                  placeholder='{"condition1": "Z occurs before X ...", "condition2": "X occurs before Z ..."}'
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Use when the ordering of Z and X matters (e.g., leak vs. trade timing). Leave empty otherwise.
+                </p>
               </div>
 
               <div>
@@ -492,4 +518,3 @@ export default function ReviewPage() {
     </div>
   );
 }
-

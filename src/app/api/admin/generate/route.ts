@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import OpenAI from 'openai';
+import { PEARL_LEVELS, PearlLevel } from '@/types';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -12,11 +13,7 @@ function buildPrompt(
   existingSummaries?: string,
   promptNotes?: string
 ): string {
-  const levelDescription = {
-    L1: 'Association - Observational relationships and patterns in data. Common traps: confounding, reverse causation, selection bias.',
-    L2: 'Intervention - Causal effects of actions and interventions. Common traps: unblocked backdoor paths, mediator errors, feedback loops.',
-    L3: 'Counterfactual - Reasoning about what-ifs and alternative scenarios. Common traps: preemption, cross-world confounding, dynamic divergence.',
-  };
+  const pearlMeta = pearlLevel && (PEARL_LEVELS[pearlLevel as PearlLevel] ?? null);
 
   const domainExamples = {
     Markets: 'stock trading, commodities, currency, crypto, macroeconomics',
@@ -26,43 +23,55 @@ function buildPrompt(
     Education: 'learning outcomes, teaching methods, student performance',
   };
 
-  return `You are an expert in causal reasoning and Pearl's Causality Hierarchy. Generate ONE high-quality causal reasoning question.
+  const pearlSection = pearlMeta
+    ? `- Pearl Level: ${pearlMeta.id} – ${pearlMeta.name}
+  Description: ${pearlMeta.description}
+  Canonical examples:
+  - ${pearlMeta.examples[0]}
+  - ${pearlMeta.examples[1] ?? ''}`
+    : '- Pearl Level: Choose L1, L2, or L3 appropriately (Association / Intervention / Counterfactual).';
+
+  return `You are an expert in causal reasoning and Pearl's Causality Hierarchy. Generate ONE high-quality causal reasoning question using the unified question schema.
 
 REQUIREMENTS:
-${pearlLevel ? `- Pearl Level: ${pearlLevel} (${levelDescription[pearlLevel as keyof typeof levelDescription]})` : '- Pearl Level: Choose L1, L2, or L3 appropriately'}
+${pearlSection}
 ${domain ? `- Domain: ${domain} (e.g., ${domainExamples[domain as keyof typeof domainExamples] || 'relevant scenarios'})` : '- Domain: Choose an appropriate domain'}
 - Create a realistic, detailed scenario with specific numbers and context
 - The scenario should be distinct from existing questions
-- Include clear causal variables (X, Y, Z, etc.)
-- Provide a specific claim to evaluate
-- Give detailed explanation and wise refusal
+- Use a **single unified scenario field** that includes both setup **and** the causal claim/conclusion
+- Embed inline tags (X), (Y), (Z) in the scenario text to mark the variables
+- Define variables.X, variables.Y, variables.Z where Z is a **single key additional variable** (confounder / mediator / collider / mechanism)
+- Optionally include a hiddenTimestamp block *only if* temporal order of Z vs X matters
+- Provide a complete wiseRefusal as the **only explanation field** (no separate explanation)
 
 ${promptNotes ? `\nADDITIONAL INSTRUCTIONS:\n${promptNotes}\n` : ''}
 
 ${existingSummaries ? `\nEXISTING SCENARIOS TO AVOID DUPLICATING:\n${existingSummaries}\n` : ''}
 
-OUTPUT FORMAT (valid JSON only):
+OUTPUT FORMAT (valid JSON only, unified schema):
 {
-  "scenario": "Detailed scenario with specific context, numbers, and setting...",
-  "claim": "The specific causal claim to evaluate (as a quote)...",
+  "scenario": "2–4 sentences with specific context and numbers. Includes both the setup and the causal claim/conclusion, with (X), (Y), (Z) tags inline.",
   "variables": {
     "X": "Primary treatment/cause variable description",
     "Y": "Outcome variable description",
-    "Z": "Confounder/Mediator/Other relevant variable description"
+    "Z": "Single key additional variable (confounder/mediator/collider/mechanism)"
   },
   "annotations": {
     "pearlLevel": "L1 or L2 or L3",
     "domain": "Markets or Medicine or Law or Technology or Education or other",
-    "subdomain": "Specific area within domain",
-    "trapType": "CONFOUNDING or REVERSE or SELECTION or COLLIDER or MEDIATOR or COUNTERFACTUAL or other",
-    "trapSubtype": "Specific variant of the trap",
-    "difficulty": "Easy or Medium or Hard",
+    "subdomain": "Specific area within domain (e.g., 'Behavioral Finance')",
+    "trapType": "CONFOUNDING or REVERSE or SELECTION or COLLIDER or COUNTERFACTUAL or other",
+    "trapSubtype": "Specific variant of the trap, or empty string if none fits",
+    "difficulty": "easy or medium or hard (lowercase)",
     "causalStructure": "Brief description of the causal DAG (e.g., 'Z → X, Z → Y (confounding)')",
-    "keyInsight": "One-line key takeaway"
+    "keyInsight": "One-line key takeaway",
+    "hiddenTimestamp": {
+      "condition1": "Optional – description when Z occurs BEFORE X",
+      "condition2": "Optional – description when X occurs BEFORE Z"
+    }
   },
   "groundTruth": "VALID or INVALID or CONDITIONAL",
-  "explanation": "Detailed explanation of why the claim is valid/invalid/conditional. Include the causal mechanism and why the trap occurs.",
-  "wiseRefusal": "Complete answer starting with 'The claim is [VALID/INVALID/CONDITIONAL].' followed by clear reasoning."
+  "wiseRefusal": "Complete answer starting with 'The [counterfactual/causal] claim is [VALID/INVALID/CONDITIONAL].' and explicitly referencing X, Y, and Z in the reasoning."
 }
 
 Generate the question now. Return ONLY valid JSON, no other text.`;
@@ -76,13 +85,11 @@ interface GenerateRequest {
 }
 
 interface GeneratedQuestion {
-  caseId: string;
   scenario: string;
-  claim: string;
   variables: {
     X: string;
     Y: string;
-    Z?: string;
+    Z: string;
     [key: string]: string | undefined;
   };
   annotations: {
@@ -94,9 +101,12 @@ interface GeneratedQuestion {
     difficulty: string;
     causalStructure: string;
     keyInsight: string;
+    hiddenTimestamp?: {
+      condition1: string;
+      condition2: string;
+    };
   };
   groundTruth: string;
-  explanation: string;
   wiseRefusal: string;
 }
 
@@ -111,7 +121,7 @@ export async function POST(req: NextRequest) {
 
     // Get existing questions to avoid duplication
     const existingQuestions = await prisma.question.findMany({
-      select: { scenario: true, claim: true },
+      select: { scenario: true },
       take: 100,
       orderBy: { createdAt: 'desc' },
     });
@@ -175,22 +185,27 @@ export async function POST(req: NextRequest) {
         const question = await prisma.question.create({
           data: {
             scenario: generated.scenario,
-            claim: generated.claim,
             pearlLevel: generated.annotations.pearlLevel,
             domain: generated.annotations.domain,
             subdomain: generated.annotations.subdomain,
             trapType: generated.annotations.trapType,
             trapSubtype: generated.annotations.trapSubtype,
-            explanation: generated.explanation,
             difficulty: generated.annotations.difficulty.toLowerCase(),
             groundTruth: generated.groundTruth,
-            variables: JSON.stringify(generated.variables),
+            variables: JSON.stringify({
+              X: generated.variables.X,
+              Y: generated.variables.Y,
+              Z: generated.variables.Z,
+            }),
             causalStructure: generated.annotations.causalStructure,
             keyInsight: generated.annotations.keyInsight,
             wiseRefusal: generated.wiseRefusal,
             sourceCase: caseId,
             isLLMGenerated: true,
             isVerified: false,
+            hiddenTimestamp: generated.annotations.hiddenTimestamp
+              ? JSON.stringify(generated.annotations.hiddenTimestamp)
+              : null,
             generationBatchId: batch.id,
           },
         });
@@ -221,4 +236,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-

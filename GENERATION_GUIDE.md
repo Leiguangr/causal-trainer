@@ -86,38 +86,47 @@ Default admin credentials:
 - **JSON Format**: Standard format matching the specification
 
 #### Workflow:
-1. Select which Pearl levels to include
-2. Choose "Verified only" (recommended)
-3. Click "Preview" to see sample
-4. Review metadata and sample questions
-5. Click "Download JSON" to get full export
+#### Export Format (Unified Question Schema)
 
-#### Export Format:
-```json
+Exports follow the unified question schema (single `scenario`, single-Z `variables`, and `wiseRefusal` as the only explanation field).
+
+```jsonc
 {
   "metadata": {
     "exportDate": "2026-01-11T...",
     "totalQuestions": 450,
     "distribution": { "L1": 50, "L2": 297, "L3": 103 },
-    "version": "1.0"
+    "version": "2.0"
   },
   "questions": [
     {
-      "caseId": "3.46",
-      "scenario": "...",
-      "claim": "...",
-      "variables": { "X": "...", "Y": "...", "Z": "..." },
-      "annotations": {
-        "pearlLevel": "L2",
-        "domain": "Markets",
-        "subdomain": "Commodities",
-        "trapType": "CONFOUNDING",
-        "trapSubtype": "Spurious Correlation",
-        "difficulty": "Medium",
-        "causalStructure": "Z → X, Z → Y",
-        "keyInsight": "..."
+      "caseId": "3.46",                    // Same as sourceCase when present
+      "scenario": "Full scenario containing both setup and causal claim, with (X)/(Y)/(Z) tags embedded.",
+      "variables": {
+        "X": "Exposure/treatment variable (string)",
+        "Y": "Outcome variable (string)",
+        "Z": "Single key additional variable (string)"
       },
-      "groundTruth": "INVALID",
+      "annotations": {
+        "pearlLevel": "L1 | L2 | L3",
+        "domain": "Markets | Medicine | ...",
+        "subdomain": "Short phrase like 'Behavioral Finance'",
+        "trapType": "Primary trap type (e.g., CONFOUNDING, COLLIDER)",
+        "trapSubtype": "Optional subtype (or empty)",
+        "difficulty": "easy | medium | hard",
+        "causalStructure": "Explicit description of causal relations (e.g., 'Z -> X, Z -> Y')",
+        "keyInsight": "One-line takeaway",
+        "hiddenTimestamp": {
+          "condition1": "Optional – case where Z occurs BEFORE X",
+          "condition2": "Optional – case where X occurs BEFORE Z"
+        }
+      },
+      "groundTruth": "VALID | INVALID | CONDITIONAL",
+      "wiseRefusal": "Full answer that starts with the verdict and explicitly references X, Y, and Z."
+    }
+  ]
+}
+```
       "explanation": "...",
       "wiseRefusal": "The claim is INVALID because..."
     }
@@ -141,10 +150,10 @@ Default admin credentials:
 
 ### Quality Criteria
 - ✅ Realistic, specific scenarios with numbers/context
-- ✅ Clear causal claim to evaluate
+- ✅ Clear causal claim embedded **inside the scenario** (no separate `claim` field)
 - ✅ Correct Pearl level classification
 - ✅ Appropriate trap type and subtype
-- ✅ Educational explanation
+- ✅ Educational explanation fully captured in `wiseRefusal`
 - ✅ Valid JSON for variables
 - ✅ Clear causal structure description
 
@@ -165,6 +174,59 @@ Default admin credentials:
 - Track completion by Pearl level
 - Monitor verified vs unverified questions
 
+## Annotation Workflow & Pearl Levels (for Admins & Prompts)
+
+To keep annotations consistent, both the Admin UI and LLM prompts follow a shared workflow and Pearl level definitions.
+
+### 3-Step Annotation Workflow
+
+1. **Step 1 – Pearl Level**  
+   Decide whether the reasoning is about:
+   - **L1** – Associations in observed data (correlations)
+   - **L2** – Effects of interventions/policies (do-operator)
+   - **L3** – Counterfactual what-ifs between worlds
+
+2. **Step 2 – Ground Truth**  
+   Set `groundTruth` to exactly one of:
+   - `VALID` – The embedded causal claim in the scenario is correct
+   - `INVALID` – The claim is wrong due to a trap
+   - `CONDITIONAL` – The claim holds only under additional assumptions
+
+3. **Step 3 – Trap Type & Subtype**  
+   - Choose **exactly one** `trapType` for NO cases (trap present).
+   - Set `trapSubtype` only **after** the trap type is fixed.
+   - Leave `trapSubtype` empty if no subtype fits cleanly.
+
+Admins can edit all unified fields for each example: `scenario`, `variables.X/Y/Z`, `pearlLevel`, `groundTruth`, `trapType/subtype`, `domain/subdomain`, `difficulty`, `causalStructure`, `keyInsight`, optional `hiddenTimestamp`, and `wiseRefusal`.
+
+### Pearl Level Reference (Used in Prompts & UI)
+
+Pearl level metadata is implemented in TypeScript as `PEARL_LEVELS` and injected into generation prompts and admin tooltips.
+
+- **L1 – Association**  
+  *Description*: Patterns and correlations in observational data; no explicit interventions.  
+  *Examples*:  
+  - "People who drink more coffee (X) have higher rates of heart disease (Y) in observational surveys."  
+  - "Cities with more police officers (X) report more crime (Y)."
+
+- **L2 – Intervention**  
+  *Description*: Causal effects of doing X (policies, treatments, actions).  
+  *Examples*:  
+  - "A hospital introduces a new triage protocol (X) and mortality (Y) falls, while case mix (Z) also changes."  
+  - "A central bank cuts rates (X) and stock prices (Y) rise, while risk appetite (Z) also shifts."
+
+- **L3 – Counterfactual**  
+  *Description*: What **would have happened** under alternative actions X′, often across possible worlds.  
+  *Examples*:  
+  - "If the Senator had not traded (X′), the stock (Y) would not have risen despite the Spending Bill (Z)."  
+  - "If we had deployed earlier (X′), the outage (Y) would have been avoided, given existing safeguards (Z)."
+
+These descriptions and examples appear in:
+
+- Admin generation prompts (`/api/admin/generate`)
+- Cheatsheet-based generator prompts (`/api/generate`)
+- Pearl level tooltips in Admin UI and the developer generator
+
 ## API Endpoints (for developers)
 - `POST /api/admin/generate` - Generate questions
 - `GET /api/admin/stats` - Get progress statistics
@@ -175,4 +237,3 @@ Default admin credentials:
 
 ## Support
 For issues or questions, check the console logs or contact the development team.
-

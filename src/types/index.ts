@@ -1,10 +1,52 @@
 // Pearl Levels
 export type PearlLevel = 'L1' | 'L2' | 'L3';
 
-export const PEARL_LEVELS: Record<PearlLevel, string> = {
-  L1: 'Association',
-  L2: 'Intervention',
-  L3: 'Counterfactual',
+// Structured Pearl level metadata used in prompts & UI
+export interface PearlLevelMeta {
+  id: PearlLevel;
+  name: string;          // Human-readable name
+  description: string;   // What this level means
+  examples: string[];    // 1–3 short canonical question sketches
+}
+
+export const PEARL_LEVELS: Record<PearlLevel, PearlLevelMeta> = {
+  L1: {
+    id: 'L1',
+    name: 'Association',
+    description:
+      'Association-level questions are about patterns and correlations in observed data without explicit interventions. The focus is on whether X and Y move together once we account for Z.',
+    examples: [
+      'People who drink more coffee (X) have higher rates of heart disease (Y) in observational surveys.',
+      'Cities with more police officers (X) report more crime (Y).',
+    ],
+  },
+  L2: {
+    id: 'L2',
+    name: 'Intervention',
+    description:
+      'Intervention-level questions ask about the causal effect of doing X on Y (policies, treatments, actions). The focus is on do-operator reasoning and blocked/backdoor paths.',
+    examples: [
+      'A hospital introduces a new triage protocol (X) and mortality (Y) falls, while case mix (Z) also changes.',
+      'A central bank cuts rates (X) and stock prices (Y) rise, while risk appetite (Z) also shifts.',
+    ],
+  },
+  L3: {
+    id: 'L3',
+    name: 'Counterfactual',
+    description:
+      'Counterfactual-level questions compare what actually happened with what would have happened under a different action X′, often across possible worlds.',
+    examples: [
+      'If the Senator had not traded (X′), the stock (Y) would not have risen despite the Spending Bill (Z).',
+      'If we had deployed earlier (X′), the outage (Y) would have been avoided, given existing safeguards (Z).',
+    ],
+  },
+};
+
+// Convenience mapping for simple label display (e.g., dropdowns)
+export const PEARL_LEVEL_LABELS: Record<PearlLevel, string> = {
+  L1: PEARL_LEVELS.L1.name,
+  L2: PEARL_LEVELS.L2.name,
+  L3: PEARL_LEVELS.L3.name,
 };
 
 // =============================================================================
@@ -209,26 +251,55 @@ export interface QuizConfig {
 }
 
 // Question for Quiz (matches SCHEMA.md)
+// QuizQuestion mirrors the unified schema used throughout the app.
+// NOTE: Some properties (claim, explanation, variables.Z as array) are kept
+// optional for backward compatibility with legacy data.
 export interface QuizQuestion {
-  id: string;                    // Database ID
-  sourceCase?: string;           // Original case ID (e.g., "3.43")
+  id: string;                      // Database ID
+  sourceCase?: string;             // Original case ID (e.g., "3.43")
+
+  // Single unified scenario containing setup + causal claim with inline tags
   scenario: string;
-  claim: string;
+
+  /**
+   * @deprecated
+   * Legacy separate claim field. New questions should embed the claim inside
+   * `scenario` and leave this undefined.
+   */
+  claim?: string;
+
   pearlLevel: PearlLevel;
   domain: string;
-  subdomain?: string;            // More specific domain (e.g., "Commodities")
+  subdomain?: string;              // More specific domain (e.g., "Commodities")
   trapType: string;
   trapSubtype: string;
   difficulty: Difficulty;
-  groundTruth: GroundTruth;      // VALID, INVALID, or CONDITIONAL
-  variables: {
-    X: string;                   // Exposure/treatment variable
-    Y: string;                   // Outcome variable
-    Z: string[];                 // Confounders, mediators, mechanisms
-  };
-  causalStructure: string;       // Brief description of causal graph
-  keyInsight: string;            // One-line takeaway
-  explanation: string;           // Ground truth reasoning
-  wiseRefusal: string;           // Complete answer with verdict
-}
+  groundTruth: GroundTruth;        // VALID, INVALID, or CONDITIONAL
 
+  // Variables now use a single-Z representation, but we accept arrays for Z
+  // from legacy rows and normalize at the edge of the app.
+  variables?: {
+    X: string;                     // Exposure/treatment variable
+    Y: string;                     // Outcome variable
+    Z: string | string[];          // Single key variable (new) or array (legacy)
+  };
+
+  causalStructure?: string;        // Brief description of causal graph
+  keyInsight?: string;             // One-line takeaway
+
+  /**
+   * @deprecated
+   * Legacy short explanation field. Canonical reasoning now lives in
+   * `wiseRefusal`. This may be present for older questions but should not
+   * be required for new ones.
+   */
+  explanation?: string;
+
+  wiseRefusal: string;             // Complete answer with verdict + reasoning
+
+  // Optional temporal metadata when order of Z vs X matters
+  hiddenTimestamp?: {
+    condition1: string;            // Z occurs before X
+    condition2: string;            // X occurs before Z
+  };
+}
