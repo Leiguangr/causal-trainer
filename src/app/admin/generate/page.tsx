@@ -11,7 +11,7 @@ interface Stats {
 
 interface BatchStatus {
   batchId: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
   progress: number;
   currentIndex: number;
   requestedCount: number;
@@ -27,8 +27,24 @@ interface BatchStatus {
   }>;
 }
 
+interface Dataset {
+  name: string;
+  totalCount: number;
+  verifiedCount: number;
+}
+
+// Distribution matrix type
+interface DistributionMatrix {
+  L1: { yes: number; no: number; ambiguous: number };
+  L2: { yes: number; no: number; ambiguous: number };
+  L3: { yes: number; no: number; ambiguous: number };
+}
+
+type GenerationMode = 'simple' | 'matrix';
+
 export default function GeneratePage() {
   const router = useRouter();
+  const [generationMode, setGenerationMode] = useState<GenerationMode>('simple');
   const [pearlLevel, setPearlLevel] = useState<string>('');
   const [domain, setDomain] = useState<string>('');
   const [batchSize, setBatchSize] = useState<number>(10);
@@ -43,9 +59,126 @@ export default function GeneratePage() {
   const [currentBatchId, setCurrentBatchId] = useState<string | null>(null);
   const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null);
 
+  // Dataset state
+  const [datasets, setDatasets] = useState<Dataset[]>([]);
+  const [selectedDataset, setSelectedDataset] = useState<string>('');
+  const [newDatasetName, setNewDatasetName] = useState<string>('');
+  const [showNewDataset, setShowNewDataset] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
+
+  // Distribution matrix state (for matrix mode)
+  const [distributionMatrix, setDistributionMatrix] = useState<DistributionMatrix>({
+    L1: { yes: 5, no: 15, ambiguous: 5 },
+    L2: { yes: 10, no: 25, ambiguous: 10 },
+    L3: { yes: 5, no: 15, ambiguous: 5 },
+  });
+
+  // Helper to update matrix cell
+  const updateMatrixCell = (level: 'L1' | 'L2' | 'L3', validity: 'yes' | 'no' | 'ambiguous', value: number) => {
+    setDistributionMatrix(prev => ({
+      ...prev,
+      [level]: {
+        ...prev[level],
+        [validity]: Math.max(0, value),
+      },
+    }));
+  };
+
+  // Calculate matrix totals
+  const getMatrixTotal = () => {
+    return Object.values(distributionMatrix).reduce(
+      (sum, level) => sum + level.yes + level.no + level.ambiguous,
+      0
+    );
+  };
+
+  const getLevelTotal = (level: 'L1' | 'L2' | 'L3') => {
+    const l = distributionMatrix[level];
+    return l.yes + l.no + l.ambiguous;
+  };
+
+  const getValidityTotal = (validity: 'yes' | 'no' | 'ambiguous') => {
+    return distributionMatrix.L1[validity] + distributionMatrix.L2[validity] + distributionMatrix.L3[validity];
+  };
+
   useEffect(() => {
     fetchStats();
+    fetchDatasets();
   }, []);
+
+  const fetchDatasets = async () => {
+    try {
+      const res = await fetch('/api/admin/datasets');
+      if (res.ok) {
+        const data = await res.json();
+        setDatasets(data.datasets || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch datasets:', error);
+    }
+  };
+
+  const handleDeleteDataset = async (datasetName: string) => {
+    const displayName = datasetName || 'default';
+    const confirmMsg = `Are you sure you want to delete ALL questions in dataset "${displayName}"?\n\nThis action cannot be undone.`;
+
+    if (!confirm(confirmMsg)) return;
+
+    setIsDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/datasets/${encodeURIComponent(datasetName || 'default')}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to delete dataset');
+      }
+
+      const result = await res.json();
+      alert(result.message);
+
+      // Refresh datasets list and stats
+      await fetchDatasets();
+      await fetchStats();
+
+      // If the deleted dataset was selected, switch to default
+      if (selectedDataset === datasetName) {
+        setSelectedDataset('');
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      alert(`Failed to delete dataset: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleCancelBatch = async () => {
+    if (!currentBatchId) return;
+    if (!confirm('Are you sure you want to cancel the current generation?')) return;
+
+    setIsCancelling(true);
+    try {
+      const res = await fetch(`/api/admin/generate/${currentBatchId}/cancel`, {
+        method: 'POST',
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to cancel batch');
+      }
+
+      const result = await res.json();
+      alert(result.message);
+    } catch (error) {
+      console.error('Cancel error:', error);
+      alert(`Failed to cancel: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
 
   // Poll for batch status when generating
   useEffect(() => {
@@ -58,7 +191,7 @@ export default function GeneratePage() {
           const status: BatchStatus = await res.json();
           setBatchStatus(status);
 
-          if (status.status === 'completed' || status.status === 'failed') {
+          if (status.status === 'completed' || status.status === 'failed' || status.status === 'cancelled') {
             setIsGenerating(false);
             fetchStats();
           }
@@ -93,20 +226,37 @@ export default function GeneratePage() {
     setBatchStatus(null);
 
     try {
+      // Build request body based on generation mode
+      const requestBody: Record<string, unknown> = {
+        domain: domain || undefined,
+        promptNotes: promptNotes || undefined,
+        dataset: selectedDataset || 'default',
+      };
+
+      if (generationMode === 'matrix') {
+        // Matrix mode: use distributionMatrix
+        requestBody.distributionMatrix = distributionMatrix;
+        requestBody.batchSize = getMatrixTotal(); // Required field, but will be ignored
+      } else {
+        // Simple mode: use batchSize + validityMix + pearlLevel
+        requestBody.pearlLevel = pearlLevel || undefined;
+        requestBody.batchSize = batchSize;
+        requestBody.validityMix = {
+          yes: validityMix.valid,
+          no: validityMix.invalid,
+          ambiguous: validityMix.conditional,
+        };
+      }
+
       const res = await fetch('/api/admin/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          pearlLevel: pearlLevel || undefined,
-          domain: domain || undefined,
-          batchSize,
-          promptNotes: promptNotes || undefined,
-          validityMix,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!res.ok) {
-        throw new Error('Generation failed');
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Generation failed');
       }
 
       const result = await res.json();
@@ -114,7 +264,7 @@ export default function GeneratePage() {
       // isGenerating stays true - will be set false when polling detects completion
     } catch (error) {
       console.error('Generation error:', error);
-      alert('Failed to start generation. Please try again.');
+      alert(`Failed to start generation: ${error instanceof Error ? error.message : 'Unknown error'}`);
       setIsGenerating(false);
     }
   };
@@ -161,25 +311,115 @@ export default function GeneratePage() {
 
         {/* Generation Form */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Generate New Batch</h2>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Pearl Level
-              </label>
-              <select
-                value={pearlLevel}
-                onChange={(e) => setPearlLevel(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">Generate New Batch</h2>
+            {/* Mode Toggle */}
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setGenerationMode('simple')}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  generationMode === 'simple'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
               >
-                <option value="">All Levels (Mixed)</option>
-                <option value="L1">L1 - Association</option>
-                <option value="L2">L2 - Intervention</option>
-                <option value="L3">L3 - Counterfactual</option>
-              </select>
+                Simple
+              </button>
+              <button
+                onClick={() => setGenerationMode('matrix')}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  generationMode === 'matrix'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Matrix (Overnight)
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {/* Dataset Selection */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <label className="block text-sm font-medium text-blue-900 mb-2">
+                📁 Dataset
+              </label>
+              {!showNewDataset ? (
+                <div className="flex gap-2">
+                  <select
+                    value={selectedDataset}
+                    onChange={(e) => setSelectedDataset(e.target.value)}
+                    className="flex-1 border border-blue-300 rounded-lg px-3 py-2 bg-white"
+                  >
+                    <option value="">default</option>
+                    {datasets.filter(d => d.name !== 'default').map(d => (
+                      <option key={d.name} value={d.name}>
+                        {d.name} ({d.totalCount} questions, {d.verifiedCount} verified)
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewDataset(true)}
+                    className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                  >
+                    + New
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteDataset(selectedDataset)}
+                    disabled={isDeleting}
+                    className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm disabled:opacity-50"
+                    title="Delete all questions in this dataset"
+                  >
+                    {isDeleting ? '...' : '🗑️'}
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newDatasetName}
+                    onChange={(e) => setNewDatasetName(e.target.value.replace(/[^a-zA-Z0-9_-]/g, ''))}
+                    placeholder="dataset-name (letters, numbers, - or _)"
+                    className="flex-1 border border-blue-300 rounded-lg px-3 py-2"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (newDatasetName.trim()) {
+                        const name = newDatasetName.trim();
+                        setSelectedDataset(name);
+                        // Add to datasets list so it appears in dropdown
+                        if (!datasets.find(d => d.name === name)) {
+                          setDatasets([...datasets, { name, totalCount: 0, verifiedCount: 0 }]);
+                        }
+                        setShowNewDataset(false);
+                        setNewDatasetName('');
+                      }
+                    }}
+                    className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+                  >
+                    Create
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNewDataset(false);
+                      setNewDatasetName('');
+                    }}
+                    className="px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+              <p className="text-xs text-blue-700 mt-1">
+                Questions will be added to: <strong>{selectedDataset || 'default'}</strong>
+              </p>
             </div>
 
+            {/* Domain (shared between modes) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Domain
@@ -198,76 +438,194 @@ export default function GeneratePage() {
               </select>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Batch Size (1-200)
-              </label>
-              <input
-                type="number"
-                min="1"
-                max="200"
-                value={batchSize}
-                onChange={(e) => setBatchSize(parseInt(e.target.value) || 10)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2"
-              />
-            </div>
+            {/* Simple Mode Controls */}
+            {generationMode === 'simple' && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Pearl Level
+                  </label>
+                  <select
+                    value={pearlLevel}
+                    onChange={(e) => setPearlLevel(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                  >
+                    <option value="">All Levels (Mixed)</option>
+                    <option value="L1">L1 - Association</option>
+                    <option value="L2">L2 - Intervention</option>
+                    <option value="L3">L3 - Counterfactual</option>
+                  </select>
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Validity Mix (must sum to 100%)
-              </label>
-              <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-xs text-green-700 mb-1">✓ Valid</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Batch Size (1-200)
+                  </label>
                   <input
                     type="number"
-                    min="0"
-                    max="100"
-                    value={validityMix.valid}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value) || 0;
-                      setValidityMix(prev => ({ ...prev, valid: Math.min(100, Math.max(0, val)) }));
-                    }}
-                    className="w-full border border-green-300 rounded-lg px-3 py-2 text-center"
+                    min="1"
+                    max="200"
+                    value={batchSize}
+                    onChange={(e) => setBatchSize(parseInt(e.target.value) || 10)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-xs text-red-700 mb-1">✗ Invalid</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={validityMix.invalid}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value) || 0;
-                      setValidityMix(prev => ({ ...prev, invalid: Math.min(100, Math.max(0, val)) }));
-                    }}
-                    className="w-full border border-red-300 rounded-lg px-3 py-2 text-center"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Validity Mix (must sum to 100%)
+                  </label>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs text-green-700 mb-1">✓ YES</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={validityMix.valid}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          setValidityMix(prev => ({ ...prev, valid: Math.min(100, Math.max(0, val)) }));
+                        }}
+                        className="w-full border border-green-300 rounded-lg px-3 py-2 text-center"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-red-700 mb-1">✗ NO</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={validityMix.invalid}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          setValidityMix(prev => ({ ...prev, invalid: Math.min(100, Math.max(0, val)) }));
+                        }}
+                        className="w-full border border-red-300 rounded-lg px-3 py-2 text-center"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-yellow-700 mb-1">? AMBIGUOUS</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={validityMix.conditional}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 0;
+                          setValidityMix(prev => ({ ...prev, conditional: Math.min(100, Math.max(0, val)) }));
+                        }}
+                        className="w-full border border-yellow-300 rounded-lg px-3 py-2 text-center"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {validityMix.valid + validityMix.invalid + validityMix.conditional === 100
+                      ? <span className="text-green-600">✓ Sums to 100%</span>
+                      : <span className="text-red-600">⚠ Must sum to 100% (current: {validityMix.valid + validityMix.invalid + validityMix.conditional}%)</span>
+                    }
+                  </p>
                 </div>
-                <div>
-                  <label className="block text-xs text-yellow-700 mb-1">? Conditional</label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={validityMix.conditional}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value) || 0;
-                      setValidityMix(prev => ({ ...prev, conditional: Math.min(100, Math.max(0, val)) }));
-                    }}
-                    className="w-full border border-yellow-300 rounded-lg px-3 py-2 text-center"
-                  />
+              </>
+            )}
+
+            {/* Matrix Mode Controls */}
+            {generationMode === 'matrix' && (
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <label className="block text-sm font-medium text-purple-900 mb-3">
+                  🎯 Distribution Matrix (exact counts per cell)
+                </label>
+                <p className="text-xs text-purple-700 mb-3">
+                  Specify exactly how many questions to generate for each Pearl Level × Validity combination. Max 500 total.
+                </p>
+
+                {/* Matrix Grid */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr>
+                        <th className="p-2 text-left font-medium text-gray-700"></th>
+                        <th className="p-2 text-center font-medium text-green-700">✓ YES</th>
+                        <th className="p-2 text-center font-medium text-red-700">✗ NO</th>
+                        <th className="p-2 text-center font-medium text-yellow-700">? AMBIGUOUS</th>
+                        <th className="p-2 text-center font-medium text-gray-500">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(['L1', 'L2', 'L3'] as const).map((level) => (
+                        <tr key={level} className="border-t border-purple-200">
+                          <td className={`p-2 font-medium ${
+                            level === 'L1' ? 'text-blue-700' :
+                            level === 'L2' ? 'text-purple-700' :
+                            'text-orange-700'
+                          }`}>
+                            {level}
+                          </td>
+                          <td className="p-2">
+                            <input
+                              type="number"
+                              min="0"
+                              max="200"
+                              value={distributionMatrix[level].yes}
+                              onChange={(e) => updateMatrixCell(level, 'yes', parseInt(e.target.value) || 0)}
+                              className="w-full border border-green-300 rounded px-2 py-1 text-center bg-white"
+                            />
+                          </td>
+                          <td className="p-2">
+                            <input
+                              type="number"
+                              min="0"
+                              max="200"
+                              value={distributionMatrix[level].no}
+                              onChange={(e) => updateMatrixCell(level, 'no', parseInt(e.target.value) || 0)}
+                              className="w-full border border-red-300 rounded px-2 py-1 text-center bg-white"
+                            />
+                          </td>
+                          <td className="p-2">
+                            <input
+                              type="number"
+                              min="0"
+                              max="200"
+                              value={distributionMatrix[level].ambiguous}
+                              onChange={(e) => updateMatrixCell(level, 'ambiguous', parseInt(e.target.value) || 0)}
+                              className="w-full border border-yellow-300 rounded px-2 py-1 text-center bg-white"
+                            />
+                          </td>
+                          <td className="p-2 text-center font-medium text-gray-600">
+                            {getLevelTotal(level)}
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="border-t-2 border-purple-300 bg-purple-100">
+                        <td className="p-2 font-medium text-gray-700">Total</td>
+                        <td className="p-2 text-center font-medium text-green-700">{getValidityTotal('yes')}</td>
+                        <td className="p-2 text-center font-medium text-red-700">{getValidityTotal('no')}</td>
+                        <td className="p-2 text-center font-medium text-yellow-700">{getValidityTotal('ambiguous')}</td>
+                        <td className="p-2 text-center font-bold text-purple-900">{getMatrixTotal()}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Summary */}
+                <div className="mt-3 flex items-center justify-between">
+                  <span className="text-sm text-purple-700">
+                    {getMatrixTotal() === 0 ? (
+                      <span className="text-red-600">⚠ Enter at least one count</span>
+                    ) : getMatrixTotal() > 500 ? (
+                      <span className="text-red-600">⚠ Exceeds max of 500 (current: {getMatrixTotal()})</span>
+                    ) : (
+                      <span className="text-green-600">✓ Will generate {getMatrixTotal()} questions</span>
+                    )}
+                  </span>
+                  <span className="text-xs text-purple-600">
+                    ~{Math.ceil(getMatrixTotal() * 8 / 60)} min estimated
+                  </span>
                 </div>
               </div>
-              <p className="text-sm text-gray-500 mt-1">
-                {validityMix.valid + validityMix.invalid + validityMix.conditional === 100
-                  ? <span className="text-green-600">✓ Sums to 100%</span>
-                  : <span className="text-red-600">⚠ Must sum to 100% (current: {validityMix.valid + validityMix.invalid + validityMix.conditional}%)</span>
-                }
-              </p>
-            </div>
+            )}
 
+            {/* Custom Instructions (shared) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Custom Instructions (Optional)
@@ -286,10 +644,12 @@ export default function GeneratePage() {
 
             <button
               onClick={handleGenerate}
-              disabled={isGenerating}
+              disabled={isGenerating || (generationMode === 'matrix' && (getMatrixTotal() === 0 || getMatrixTotal() > 500))}
               className="w-full bg-primary-600 text-white py-3 rounded-lg font-semibold hover:bg-primary-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
-              {isGenerating ? 'Generating...' : 'Generate Batch'}
+              {isGenerating ? 'Generating...' : generationMode === 'matrix'
+                ? `Generate ${getMatrixTotal()} Questions (Matrix)`
+                : 'Generate Batch'}
             </button>
           </div>
         </div>
@@ -301,16 +661,29 @@ export default function GeneratePage() {
               <h2 className="text-xl font-semibold">
                 {batchStatus.status === 'running' ? '⏳ Generating...' :
                  batchStatus.status === 'completed' ? '✅ Generation Complete' :
-                 batchStatus.status === 'failed' ? '❌ Generation Failed' : '⏸️ Pending'}
+                 batchStatus.status === 'failed' ? '❌ Generation Failed' :
+                 batchStatus.status === 'cancelled' ? '🛑 Cancelled' : '⏸️ Pending'}
               </h2>
-              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                batchStatus.status === 'running' ? 'bg-blue-100 text-blue-700' :
-                batchStatus.status === 'completed' ? 'bg-green-100 text-green-700' :
-                batchStatus.status === 'failed' ? 'bg-red-100 text-red-700' :
-                'bg-gray-100 text-gray-700'
-              }`}>
-                {batchStatus.status.toUpperCase()}
-              </span>
+              <div className="flex items-center gap-2">
+                {batchStatus.status === 'running' && (
+                  <button
+                    onClick={handleCancelBatch}
+                    disabled={isCancelling}
+                    className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm disabled:opacity-50"
+                  >
+                    {isCancelling ? 'Cancelling...' : '⏹ Stop'}
+                  </button>
+                )}
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  batchStatus.status === 'running' ? 'bg-blue-100 text-blue-700' :
+                  batchStatus.status === 'completed' ? 'bg-green-100 text-green-700' :
+                  batchStatus.status === 'failed' ? 'bg-red-100 text-red-700' :
+                  batchStatus.status === 'cancelled' ? 'bg-orange-100 text-orange-700' :
+                  'bg-gray-100 text-gray-700'
+                }`}>
+                  {batchStatus.status.toUpperCase()}
+                </span>
+              </div>
             </div>
 
             {/* Progress Bar */}
@@ -325,7 +698,8 @@ export default function GeneratePage() {
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${
                     batchStatus.status === 'failed' ? 'bg-red-500' :
-                    batchStatus.status === 'completed' ? 'bg-green-500' : 'bg-blue-500'
+                    batchStatus.status === 'completed' ? 'bg-green-500' :
+                    batchStatus.status === 'cancelled' ? 'bg-orange-500' : 'bg-blue-500'
                   }`}
                   style={{ width: `${batchStatus.progress}%` }}
                 />
@@ -366,8 +740,8 @@ export default function GeneratePage() {
                     <div key={q.id} className="flex items-center gap-2 text-sm bg-gray-50 p-2 rounded">
                       <span className="font-mono text-gray-500">#{idx + 1}</span>
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                        q.groundTruth === 'VALID' ? 'bg-green-100 text-green-700' :
-                        q.groundTruth === 'INVALID' ? 'bg-red-100 text-red-700' :
+                        q.groundTruth === 'YES' ? 'bg-green-100 text-green-700' :
+                        q.groundTruth === 'NO' ? 'bg-red-100 text-red-700' :
                         'bg-yellow-100 text-yellow-700'
                       }`}>
                         {q.groundTruth}
@@ -391,7 +765,7 @@ export default function GeneratePage() {
             )}
 
             {/* Actions */}
-            {(batchStatus.status === 'completed' || batchStatus.status === 'failed') && (
+            {(batchStatus.status === 'completed' || batchStatus.status === 'failed' || batchStatus.status === 'cancelled') && (
               <div className="mt-4 flex gap-3 border-t pt-4">
                 <button
                   onClick={() => router.push('/admin/review')}

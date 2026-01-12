@@ -39,3 +39,6 @@ Thumbs.db
 # Misc
 *.log
 .vercel
+
+# Personal research notes
+RESEARCH_NOTES.md

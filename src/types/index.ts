@@ -197,7 +197,10 @@ export type Domain = typeof DOMAINS[number];
 export type Difficulty = 'easy' | 'medium' | 'hard';
 
 // Ground Truth for answers
-export type GroundTruth = 'VALID' | 'INVALID' | 'CONDITIONAL';
+// YES = claim is supported as stated
+// NO = claim is invalid due to violated causal/statistical assumption
+// AMBIGUOUS = claim cannot be definitively evaluated given available information
+export type GroundTruth = 'YES' | 'NO' | 'AMBIGUOUS';
 
 // Quiz Configuration
 export interface QuizConfig {
@@ -220,7 +223,7 @@ export interface QuizQuestion {
   trapType: string;
   trapSubtype: string;
   difficulty: Difficulty;
-  groundTruth: GroundTruth;      // VALID, INVALID, or CONDITIONAL
+  groundTruth: GroundTruth;      // YES, NO, or AMBIGUOUS
   variables: {
     X: string;                   // Exposure/treatment variable
     Y: string;                   // Outcome variable

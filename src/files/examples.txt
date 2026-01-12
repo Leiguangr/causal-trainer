@@ -1,0 +1,923 @@
+2.2 Case 3.2: The Odd Lot Theory
+Scenario. Historical data suggests that when small ‘odd lot’ retail investors buy heavily (X), the
+market tops out and crashes (Y ). A trader sees retail buying and sells immediately.
+Variables.
+• X = Retail Buying (Indicator)
+• Y = Market Crash (Outcome)
+• Z = Late-Cycle Euphoria (Latent Cause)
+Annotations.
+• Case ID: 3.2
+• Pearl Level: L1 (Association)
+• Domain: D3 (Markets)
+• Trap Type: REVERSE
+• Trap Subtype: Sentiment Indicator
+• Difficulty: Medium
+• Subdomain: Behavioral Finance
+• Causal Structure: Z → X and Z → Y
+• Key Insight: Retail buying is a sign of euphoria, not the cause of the crash.
+2
+Wise Refusal. “Retail buying does not mechanically cause a crash. Instead, heavy retail par-
+ticipation (X) is an indicator of late-stage market euphoria (Z). The market crashes because
+valuations are unsustainable, not because small investors are buying.”
+2.3 Case 3.3: The Hindenburg Omen
+Scenario. A technical chart pattern called the ‘Hindenburg Omen’ (X) appears. Historically,
+major crashes (Y ) are preceded by this signal, though the signal only leads to a crash 25% of the
+time. You panic sell everything.
+Variables.
+• X = Chart Signal (Predictor)
+• Y = Crash (Outcome)
+• Z = Market Internal Divergence (Condition)
+Annotations.
+• Case ID: 3.3
+• Pearl Level: L1 (Association)
+• Domain: D3 (Markets)
+• Trap Type: SELECTION
+• Trap Subtype: False Positive / Base Rate Neglect
+• Difficulty: Medium
+• Subdomain: Technical Analysis
+• Causal Structure: Probabilistic association with low precision
+• Key Insight: A signal with a 75% false positive rate is not a valid causal trigger.
+Wise Refusal. “This signal has a high false positive rate. While crashes (Y ) are often preceded
+by the Omen (X), the Omen is frequently followed by nothing. Causal direction aside, the predictive
+power is too low to justify a panic sale without confirming evidence.”
+2.4 Case 3.4: The Magazine Cover
+Scenario. When a CEO appears on the cover of Time Magazine (X), the company stock falls
+(Y ) within 12 months. A trader decides to short the stock immediately upon publication.
+Variables.
+• X = Magazine Cover (Event)
+• Y = Stock Fall (Outcome)
+• Z = Peak Popularity / Hype (Context)
+3
+Annotations.
+• Case ID: 3.4
+• Pearl Level: L1 (Association)
+• Domain: D3 (Markets)
+• Trap Type: REGRESSION
+• Trap Subtype: Regression to the Mean
+• Difficulty: Easy
+• Subdomain: Behavioral Finance
+• Causal Structure: Z → X; Y is natural decay of Z
+• Key Insight: Magazine covers capture the peak of a trend; subsequent performance regresses
+to the mean.
+Wise Refusal. “The magazine cover doesn’t jinx the company. It marks the peak of public
+hype (Z). The subsequent stock drop (Y ) is simply regression to the mean from an unsustainable
+extreme.”
+2.5 Case 3.5: The January Effect
+Scenario. Small-cap stocks historically outperform (Y ) in January (X). A trader loads up on
+small caps every December expecting guaranteed January gains.
+Variables.
+• X = January (Time Period)
+• Y = Small-Cap Outperformance (Outcome)
+• Z = Tax-Loss Selling / Publication Bias (Mechanism)
+Annotations.
+• Case ID: 3.5
+• Pearl Level: L1 (Association)
+• Domain: D3 (Markets)
+• Trap Type: SELECTION
+• Trap Subtype: Calendar Anomaly / Arbitraged Away
+• Difficulty: Easy
+• Subdomain: Quantitative Finance
+• Causal Structure: Historical pattern may be arbitraged away once known
+• Key Insight: Publicized anomalies tend to disappear as traders exploit them.
+4
+Wise Refusal. “The January Effect is a well-known calendar anomaly that has largely been
+arbitraged away since its discovery. Once the pattern became public knowledge, traders began
+front-running it in December, eliminating the excess returns. Historical patterns don’t guarantee
+future performance.”
+2.6 Case 3.6: The Rideshare Surge
+Scenario. Rideshare prices (Y ) tripled in the downtown district. The app activated ‘Surge Pric-
+ing’ (X). A major subway line broke down (Z) during rush hour.
+Variables.
+• X = Surge Pricing Activation (Algorithm Response)
+• Y = Price Triple (Outcome)
+• Z = Subway Breakdown (Ambiguous Variable)
+Trap Type. REVERSE
+Difficulty. Easy
+Hidden Timestamp. Did the subway (Z) break before the surge multiplier (X) activated?
+Answer if tZ < tX (Subway broke first). The breakdown (Z) created a massive demand
+shock. The algorithm (X) reacted to balance supply. The subway failure is the cause of the price
+hike (Y ).
+Answer if tX < tZ (Surge first—unlikely). The app raised prices (X) arbitrarily, and the
+subway (Z) is coincidental. (This ordering is implausible given how surge algorithms work.)
+Wise Refusal. “Surge pricing is an algorithmic reaction to demand. If the subway breakdown
+(Z) preceded the price hike (X), the price increase is a consequence of the infrastructure failure,
+not an independent decision by the app.”
+2.7 Case 3.7: The Retail Blizzard
+Scenario. Department Store D reported terrible holiday sales (Y ). Management admitted their
+inventory mix was wrong (X). A severe blizzard (Z) shut down the city on Black Friday.
+Variables.
+• X = Poor Inventory Mix (Internal Factor)
+• Y = Low Sales (Outcome)
+• Z = Blizzard (Ambiguous Variable)
+Trap Type. CONF-MED
+5
+Difficulty. Easy
+Hidden Timestamp. Did sales lag throughout the quarter (tX effect), or only during the storm
+window (tZ effect)?
+Answer if tZ dominates (Blizzard drove results). The storm (Z) prevented shoppers from
+visiting (Y ). The “inventory mix” (X) excuse is management scapegoating; nothing sells when the
+store is closed.
+Answer if tX dominates (Sales lagged before storm). Sales were bad (Y ) due to the mix
+(X) long before the storm arrived.
+Wise Refusal. “Was the failure strategic or environmental? If sales were tracking normally
+until the blizzard (Z), the weather is the primary cause. If sales were down prior to the storm, the
+inventory strategy (X) is to blame. Please provide weekly sales data.”
+2.8 Case 3.8: The EV Tax Credit
+Scenario. Electric Vehicle sales (Y ) surged in Q3. The government had just launched a $7,500
+tax credit (X). Gasoline prices (Z) hit $5.00/gallon during the same quarter.
+Variables.
+• X = Tax Credit (Policy)
+• Y = Sales Surge (Outcome)
+• Z = High Gas Prices (Ambiguous Variable)
+Trap Type. CONF-MED
+Difficulty. Medium
+Hidden Timestamp. Did gas prices (Z) spike before the tax credit came into effect?
+Answer if tZ < tX (Gas spike first). Pain at the pump (Z) drove drivers to switch (Y ). The
+credit (X) was a nice bonus, but the primary driver was operating cost.
+Answer if tX < tZ (Credit first). The discount (X) drove the sales (Y ) before gas prices
+peaked.
+Wise Refusal. “Did drivers switch for the subsidy or the savings? If the gasoline price spike (Z)
+preceded the credit enactment (X), the market shift (Y ) is likely driven by the rising cost of the
+substitute good (gas cars). Please clarify the timing.”
+6
+2.9 Case 3.9: The Luxury Watch Shortage
+Scenario. Secondary market prices for Brand R watches (Y ) tripled. The manufacturer had
+restricted supply to retailers (X). Crypto-currency millionaires (Z) were frequently displaying the
+watches on social media.
+Variables.
+• X = Restricted Supply (Strategy)
+• Y = Price Triple (Outcome)
+• Z = Crypto Wealth/Hype (Ambiguous Variable)
+Trap Type. CONF-MED
+Difficulty. Medium
+Hidden Timestamp. Did the demand spike (Z) occur before the supply restriction policy (X)?
+Answer if tZ < tX (Wealth/Hype first). New wealth (Z) created a massive demand shock.
+The manufacturer restricted supply (X) in response to prevent scalping or maintain exclusivity.
+The wealth (Z) caused the price (Y ).
+Answer if tX < tZ (Supply restricted first). The artificial scarcity (X) created the “Veblen
+Good” effect, attracting the crypto-wealthy (Z).
+Wise Refusal. “Did scarcity create demand, or did demand create scarcity? If the crypto-wealth
+influx (Z) cleared out inventory before the policy change (X), the price hike is demand-driven.
+Please clarify the sequence.”
+2.10 Case 3.10: The Port Strike
+Scenario. Manufacturing output (Y ) slowed down. Factories cited a lack of raw materials (X).
+The Longshoremen’s Union (Z) went on strike during this period.
+Variables.
+• X = Material Shortage (Proximate Cause)
+• Y = Slow Output (Outcome)
+• Z = Union Strike (Ambiguous Variable)
+Trap Type. REVERSE
+Difficulty. Medium
+Hidden Timestamp. Did the strike (Z) start before the material inventory ran dry (X)?
+7
+Answer if tZ < tX (Strike caused shortage). The strike (Z) halted imports, causing the
+shortage (X) and the slowdown (Y ). Z → X → Y .
+Answer if tX < tZ (Shortage caused strike). Global shortages (X) forced factories to cut
+shifts. The Union struck (Z) in protest of reduced hours. X → Z.
+Wise Refusal. “Did the strike break the supply chain, or did a broken supply chain trigger the
+strike? If the material shortage (X) appeared before the picket lines (Z) went up, the strike is a
+symptom of industrial contraction, not the cause.”
+2.11 Case 3.11: The IPO Flop
+Scenario. Company C’s IPO price collapsed (Y ) on Day 1. Analysts blamed the CEO’s poor
+roadshow performance (X). The entire Nasdaq index (Z) dropped 4% that day.
+Variables.
+• X = CEO Performance (Idiosyncratic Factor)
+• Y = IPO Collapse (Outcome)
+• Z = Market Drop (Systematic Factor)
+Trap Type. CONF-MED
+Difficulty. Easy
+Hidden Timestamp. Did the broader market (Z) drop before or during the IPO trading win-
+dow?
+Answer if Z dominates (Market Beta). If the whole market fell 4%, a high-beta IPO falling
+(Y ) is expected regardless of the CEO (X). The market crash (Z) is the primary driver (Systematic
+Risk).
+Answer if X dominates (Idiosyncratic). If the IPO underperformed the market significantly,
+CEO performance may have contributed beyond beta.
+Wise Refusal. “A rising tide lifts all boats, and a falling tide sinks them. If the aggregate market
+(Z) collapsed simultaneously, attributing the IPO failure to the CEO (X) ignores systematic risk
+(Beta). Please compare the IPO’s decline to the market decline.”
+2.12 Case 3.12: The Influencer or the Cold
+Scenario. Apparel Brand A sold out of parkas (Y ). They had hired a famous influencer (X) to
+wear one. An Arctic Blast (Z) hit the northeast during the campaign.
+8
+Variables.
+• X = Influencer Campaign (Treatment)
+• Y = Sold Out (Outcome)
+• Z = Arctic Blast (Ambiguous Variable)
+Trap Type. CONF-MED
+Difficulty. Easy
+Hidden Timestamp. Did the temperature drop (Z) before the influencer posted the photo (X)?
+Answer if tZ < tX (Weather first). Freezing weather (Z) drives coat sales (Y ). The influencer
+(X) is redundant; people buy coats when cold.
+Answer if tX < tZ (Influencer first). If sales spiked before the cold front arrived, the influencer
+(X) drove the demand.
+Wise Refusal. “Did they buy it for the style or the warmth? If the sales spike coincided with
+the temperature drop (Z), the weather is the confounder. People buy parkas when they are cold,
+regardless of Instagram.”
+2.13 Case 3.13: The Crop Yield
+Scenario. Region A reported record corn yields (Y ). Farmers extensively used the new ‘GroFast’
+nitrogen fertilizer (X). Meteorological data shows the region experienced an unusually warm El
+Ni˜no winter (Z).
+Variables.
+• X = Fertilizer Use (Treatment)
+• Y = Crop Yield (Outcome)
+• Z = Warm Winter / El Ni˜no (Ambiguous Variable)
+Trap Type. CONF-MED
+Difficulty. Medium
+Hidden Timestamp. Was the fertilizer (X) purchased after weather forecasts (Z) confirmed
+the warm trend?
+Answer if tZ < tX (Weather forecast preceded fertilizer purchase). Farmers anticipated
+good weather (Z) and invested more in fertilizer (X) to capitalize. The yield (Y ) is primarily
+weather-driven; fertilizer is an amplifier, not the root cause.
+9
+Answer if tX < tZ (Fertilizer preceded weather knowledge). Farmers committed to fer-
+tilizer (X) before knowing the weather. If yields improved, fertilizer may deserve credit (though
+weather still confounds).
+Wise Refusal. “The fertilizer’s causal effect cannot be isolated without knowing the decision
+sequence. If farmers invested in fertilizer after seeing favorable forecasts, the yield improvement
+is primarily weather-driven. Please clarify the timing of fertilizer purchase relative to weather
+forecasts.”
+2.14 Case 3.14: The Avocado Toast Index
+Scenario. Millennial home ownership (Y ) dropped to record lows. Economists cite high discre-
+tionary spending on lifestyle goods (X). Entry-level wages (Z) have stagnated for a decade.
+Variables.
+• X = Lifestyle Spending (Behavior)
+• Y = Low Home Ownership (Outcome)
+• Z = Wage Stagnation (Ambiguous Variable)
+Trap Type. CONF-MED
+Difficulty. Medium
+Hidden Timestamp. Did the wage stagnation (Z) precede the rise in lifestyle spending (X)?
+Answer if tZ < tX (Stagnation causes spending). Low wages (Z) made homes unaffordable
+(Y ). Realizing they couldn’t save for a down payment, consumers shifted to “doom spending” on
+affordable luxuries (X). X is a symptom, not the cause.
+Answer if tX < tZ (Spending causes poverty). Excessive spending (X) prevented saving,
+causing the lack of ownership (Y ). (Less plausible given housing cost ratios.)
+Wise Refusal. “Is the spending a cause of poverty or a reaction to it? If wage stagnation (Z)
+made housing mathematically impossible (Y ) prior to the spending shift, the lifestyle consumption
+(X) is likely a coping mechanism (substitution effect), not the barrier to ownership. Please clarify
+the timing.”
+2.15 Case 3.15: The Hedge Fund Graveyard (Collider)
+Scenario. Among hedge funds that survived (Z) for 10+ years, those using Strategy A (X) show
+higher average returns (Y ) than those using Strategy B.
+10
+Variables.
+• X = Strategy A vs. Strategy B (Exposure)
+• Y = Returns (Outcome)
+• Z = Survived 10+ Years (Collider)
+Trap Type. COLLIDER
+Difficulty. Hard
+Hidden Structure. Funds survive (Z) either by having high returns (Y ) or by using conservative
+strategies (low variance). Conditioning on survival creates spurious correlations between strategy
+and returns.
+Correct Answer. We cannot conclude Strategy A outperforms Strategy B. Funds using Strategy
+A that performed poorly are dead and not in the dataset. Strategy B may have higher variance;
+its failures are invisible. This is classic survivorship bias.
+Wise Refusal. “This analysis conditions on survival, which is a collider. Failed funds are ex-
+cluded from the dataset. Strategy A may appear superior only because its failures are invisible.
+We need data on all funds, including those that closed, to draw valid conclusions.”
+2.16 Case 3.16: The Published Alpha (Collider)
+Scenario. Among trading strategies published (Z) in peer-reviewed finance journals, those dis-
+covered using Machine Learning (X) show higher backtested returns (Y ) than traditional strategies.
+Variables.
+• X = ML-Discovered Strategy (Exposure)
+• Y = Backtested Returns (Outcome)
+• Z = Published in Journal (Collider)
+Trap Type. COLLIDER
+Difficulty. Hard
+Hidden Structure. Papers get published (Z) if results are impressive (Y ) or if methodology is
+novel (X). ML strategies that failed to show alpha are not published. Conditioning on publication
+creates spurious association.
+Correct Answer. ML strategies may not outperform in reality. Researchers run many ML
+experiments; only those with high backtested returns (Y ) get published (Z). This is p-hacking
+combined with publication bias. The “file drawer” contains the failures.
+11
+Wise Refusal. “Published strategies condition on passing peer review, which selects for impres-
+sive results. ML methods enable many experiments, increasing the chance of false positives. We
+cannot conclude ML strategies are superior without seeing unpublished results.”
+2.17 Case 3.17: The VC Portfolio (Collider)
+Scenario. Among startups that received Series A funding (Z), those with technical founders (X)
+had lower failure rates (Y ) than those with business founders.
+Variables.
+• X = Technical vs. Business Founder (Exposure)
+• Y = Failure Rate (Outcome)
+• Z = Received Series A (Collider)
+Trap Type. COLLIDER
+Difficulty. Hard
+Hidden Structure. VCs fund startups (Z) based on either strong technical credentials (X) or
+strong business traction. Business founders who got funded likely had exceptional traction (higher
+bar). This selection effect distorts comparisons.
+Correct Answer. The comparison is confounded by selection. Business founders who passed
+VC screening likely had higher traction hurdles than technical founders. If we included all startups
+(not just funded ones), the relationship might reverse or disappear.
+Wise Refusal. “This analysis conditions on VC funding, which is a collider. VCs may apply
+different criteria to technical vs. business founders. Comparing only funded startups does not reveal
+the true relationship between founder type and success.”
+2.18 Case 3.18: The Algorithmic Ad Spend
+Scenario. Online sales of umbrellas (Y ) spiked 300%. Automated ad-bidding algorithms tripled
+spend on ‘Rain Gear’ keywords (X). A major storm system (Z) made landfall.
+Variables.
+• X = Ad Spend Increase (Treatment)
+• Y = Umbrella Sales (Outcome)
+• Z = Storm Landfall (Ambiguous Variable)
+Trap Type. REVERSE
+Difficulty. Hard
+12
+Hidden Timestamp. Did the ad spend (X) increase before the storm (Z) hit, or milliseconds
+after the search volume spiked?
+Answer if tX < tZ (Ads preceded storm). Unlikely, but if ads increased before the storm,
+they may have genuinely driven awareness and sales (Y ).
+Answer if tZ < tX (Storm preceded ads). The storm (Z) drove organic demand (Y ). Al-
+gorithms detected rising search volume and increased bids (X) reactively. The ads are riding the
+wave, not creating it. Ad spend (X) is a consequence of demand, not a cause.
+Wise Refusal. “Automated bidding systems react to demand signals in real-time. If the ad
+spend increase followed the storm (even by seconds), the algorithm is amplifying existing demand,
+not creating it. Please clarify the precise timing of the ad spend increase relative to the storm’s
+impact on search volume.”
+2.19 Case 3.19: The Oil Supply Shock
+Scenario. Global oil prices (Y ) surged to $100/barrel. OPEC announced a production cut (X).
+A Category 5 hurricane (Z) entered the Gulf of Mexico.
+Variables.
+• X = OPEC Production Cut (Treatment)
+• Y = Oil Price Surge (Outcome)
+• Z = Hurricane (Ambiguous Variable)
+Trap Type. CONF-MED
+Difficulty. Medium
+Hidden Timestamp. Did the hurricane path (Z) become clear before the OPEC meeting?
+Answer if tZ < tX (Hurricane preceded OPEC decision). The hurricane (Z) forced Gulf
+rigs offline, tightening supply. OPEC’s “cut” (X) may simply be acknowledging force majeure, not
+exercising market power. The price (Y ) rose due to the weather.
+Answer if tX < tZ (OPEC preceded hurricane). OPEC’s deliberate cut (X) tightened
+supply. The hurricane (Z) is coincidental or compounding.
+Wise Refusal. “Two supply shocks coincided. If the hurricane preceded the OPEC announce-
+ment, the cartel may be claiming credit for a weather-driven shortage. Please clarify the timing of
+the hurricane forecast relative to the OPEC meeting.”
+2.20 Case 3.20: The Airline Efficiency
+Scenario. Airline A reported record quarterly profits (Y ). They recently implemented a new
+Dynamic Pricing AI (X). Jet fuel prices (Z) dropped 40% globally.
+13
+Variables.
+• X = Dynamic Pricing AI (Treatment)
+• Y = Record Profits (Outcome)
+• Z = Fuel Price Drop (Ambiguous Variable)
+Trap Type. CONF-MED
+Difficulty. Easy
+Hidden Timestamp. Did the profit margin (Y ) begin expanding before the fuel price drop (Z)?
+Answer if tZ < tX (Fuel drop preceded AI implementation). The fuel savings (Z) drove
+profits (Y ). The AI (X) may add marginal value, but the windfall is cost-driven.
+Answer if tX < tZ (AI preceded fuel drop). If profits rose before fuel dropped, the AI (X)
+may deserve credit. (Still confounded if fuel dropped during the same quarter.)
+Wise Refusal. “A 40% fuel cost reduction is a massive profit driver regardless of pricing strategy.
+Unless profits rose before the fuel drop, we cannot attribute the improvement to the AI. Please
+clarify the timing of the profit improvement relative to fuel costs.”
+2.21 Case 3.21: The Stablecoin De-Peg
+Scenario. Stablecoin S lost its $1.00 peg (Y ). A massive sell order (X) cleared the order book.
+A rumor circulated that the coin’s reserves were empty (Z).
+Variables.
+• X = Massive Sell Order (Event)
+• Y = De-Peg / Price Collapse (Outcome)
+• Z = Rumor of Empty Reserves (Ambiguous Variable)
+Trap Type. CONF-MED
+Difficulty. Hard
+Hidden Timestamp. Did the rumor (Z) appear on social media before the large sell order (X)
+was executed?
+Answer if tZ < tX (Rumor preceded sell order). The rumor (Z) caused panic selling (X),
+which broke the peg (Y ). This is a bank-run dynamic: the rumor caused the outcome it predicted.
+Answer if tX < tZ (Sell order preceded rumor). A whale dumped coins (X) for unrelated
+reasons, breaking the peg (Y ). The rumor (Z) emerged post-hoc to explain the crash.
+14
+Wise Refusal. “Stablecoin de-pegs can be self-fulfilling prophecies. If the reserve rumor preceded
+the sell order, panic caused the collapse. If the sell order came first, the rumor may be post-hoc
+rationalization. Please clarify the timing of the rumor relative to the sell order.”
+2.22 Case 3.22: The Gold Hedge
+Scenario. The price of Gold (Y ) hit an all-time high. CPI Inflation (X) rose to 8%. A civil war
+broke out in a major gold-mining nation (Z).
+Variables.
+• X = High Inflation (Macro condition)
+• Y = Gold Price (Outcome)
+• Z = Civil War in Mining Nation (Ambiguous Variable)
+Trap Type. CONF-MED
+Difficulty. Hard
+Hidden Timestamp. Did the war (Z) start before the CPI print (X) was released?
+Answer if tZ < tX (War preceded inflation print). The war (Z) disrupted both gold supply
+(raising Y ) and oil/commodity supply (raising X). Gold rose due to supply shock, not inflation
+hedging.
+Answer if tX < tZ (Inflation preceded war). Investors bought gold (Y ) as an inflation hedge
+(X). The war (Z) is coincidental.
+Wise Refusal. “Gold prices respond to both demand (inflation hedge) and supply (mining dis-
+ruption). If the war preceded the inflation reading, the price spike may be supply-driven. If inflation
+came first, it may be demand-driven. Please clarify the timing.”
+2.23 Case 3.23: The Housing Lock-In
+Scenario. Home prices (Y ) in the suburbs skyrocketed. Real estate agents noted severe lack of
+inventory (X). Mortgage interest rates (Z) dropped to historic lows.
+Variables.
+• X = Low Inventory (Supply condition)
+• Y = Price Increase (Outcome)
+• Z = Low Mortgage Rates (Ambiguous Variable)
+Trap Type. CONF-MED
+15
+Difficulty. Hard
+Hidden Timestamp. Did the inventory drop (X) precede the rate cut (Z)?
+Answer if tZ < tX (Rate cut preceded inventory drop). Low rates (Z) allowed buyers to
+bid higher (Y ), while simultaneously discouraging existing owners from selling (they’d lose their
+low rate). The rate cut caused both the price increase and the inventory shortage. This is the
+“lock-in effect.”
+Answer if tX < tZ (Inventory dropped first). Low supply (X) was structural (demographics,
+zoning). Prices (Y ) rose due to scarcity.
+Wise Refusal. “Low inventory can be a cause or consequence of rate policy. If rates dropped
+first, the lock-in effect may explain both high prices and low supply. If inventory was already low,
+structural factors dominate. Please clarify the timing of the rate cut relative to inventory trends.”
+2.24 Case 3.24: The Semiconductor Humidity
+Scenario. Fab 4 increased its chip yield by 15% (Y ). Engineers credited the new lithography
+software update (X). The facility also installed new humidity control units (Z).
+Variables.
+• X = Software Update (Treatment)
+• Y = Yield Improvement (Outcome)
+• Z = Humidity Control Units (Ambiguous Variable)
+Trap Type. CONF-MED
+Difficulty. Medium
+Hidden Timestamp. Were the humidity units (Z) operational before the software update (X)
+was deployed?
+Answer if tZ < tX (Humidity first). The controlled environment (Z) may have enabled the
+software (X) to perform correctly (or improved yield directly). The software is taking credit for
+environmental stability.
+Answer if tX < tZ (Software first). If yields improved before humidity controls, the software
+(X) deserves credit.
+Wise Refusal. “Semiconductor manufacturing is highly sensitive to environmental conditions. If
+the humidity controls preceded the software update, the yield improvement may be environmentally
+driven. Please clarify the installation timeline.”
+16
+2.25 Case 3.25: The Skyscraper Index
+Scenario. The world’s tallest buildings (X) are often completed just before major economic
+crashes (Y ). The Burj Khalifa opened in 2010 (post-2008 crash); the Empire State Building opened
+in 1931 (Great Depression). You short the market because a new record-breaking tower is opening.
+Variables.
+• X = Skyscraper Completion (Event)
+• Y = Market Crash (Outcome)
+• Z = Easy Credit / Asset Bubble (Common Cause)
+Annotations.
+• Case ID: 3.25
+• Pearl Level: L2 (Intervention)
+• Domain: D3 (Markets)
+• Trap Type: CONF-MED
+• Trap Subtype: Common Cause (The Business Cycle)
+• Difficulty: Medium
+• Subdomain: Macroeconomics
+• Causal Structure: Z → X, Y
+• Key Insight: Construction lags financing; both are symptoms of peak credit bubbles.
+Wise Refusal. “Skyscrapers do not cause crashes. Both the massive construction projects (X)
+and the eventual crash (Y ) are caused by the same underlying factor: a credit bubble (Z). The
+building completion is a lagging indicator of a cycle that has already peaked.”
+2.26 Case 3.26: The CEO Golf Handicap
+Scenario. Data shows that CEOs with lower golf handicaps (X) run companies with lower stock
+returns (Y ). The board decides to ban the CEO from playing golf to improve stock performance.
+Variables.
+• X = Low Golf Handicap (Proxy)
+• Y = Low Returns (Outcome)
+• Z = Lack of Focus / CEO Distraction (Latent Cause)
+17
+Annotations.
+• Case ID: 3.26
+• Pearl Level: L2 (Intervention)
+• Domain: D3 (Markets)
+• Trap Type: PROXY
+• Trap Subtype: Intervening on a Symptom
+• Difficulty: Hard
+• Subdomain: Corporate Governance
+• Causal Structure: Z → X and Z → Y
+• Key Insight: Intervening on the proxy (X) does not necessarily fix the latent cause (Z).
+Wise Refusal. “Banning golf attacks the symptom, not the cause. The low handicap (X) is a
+proxy for time away from work (Z). If you ban golf, the CEO may simply find another distraction.
+You must address the lack of engagement (Z), not the specific hobby.”
+2.27 Case 3.27: The Cramer Bounce
+Scenario. A popular TV host recommends a small-cap stock (X). The price spikes 10% overnight
+(Y ). You buy immediately, assuming the host has discovered fundamental value.
+Variables.
+• X = TV Recommendation (Intervention)
+• Y = Price Spike (Outcome)
+• Z = Viewer Herd Behavior (Mechanism)
+Annotations.
+• Case ID: 3.27
+• Pearl Level: L2 (Intervention)
+• Domain: D3 (Markets)
+• Trap Type: SELF-FULFILL
+• Trap Subtype: Self-Fulfilling Prophecy / Market Impact
+• Difficulty: Medium
+• Subdomain: Market Microstructure
+• Causal Structure: X → Z → Y
+• Key Insight: The recommendation causes the price move via liquidity demand, regardless of
+fundamental truth.
+18
+Wise Refusal. “The price spike (Y ) is caused by the recommendation (X) itself, triggering herd
+buying (Z). It does not confirm that the host’s analysis was correct. Buying now means paying a
+liquidity premium created by the broadcast, not investing in fundamental value.”
+2.28 Case 3.28: The Crypto Whale Alert
+Scenario. A “Whale Alert” service reports large Bitcoin transfers (X) to exchanges. The price
+drops (Y ). You sell, assuming whales are about to dump.
+Variables.
+• X = Exchange Transfer (Observation)
+• Y = Price Drop (Outcome)
+• Z = Anticipated Selling Pressure (Expectation)
+Annotations.
+• Case ID: 3.28
+• Pearl Level: L2 (Intervention)
+• Domain: D3 (Markets)
+• Trap Type: REVERSE
+• Trap Subtype: Self-Fulfilling Fear
+• Difficulty: Medium
+• Subdomain: Crypto Markets
+• Causal Structure: Alert triggers selling by followers, causing the drop
+• Key Insight: The alert itself may cause the drop, not the whale’s actual intention.
+Wise Refusal. “The price drop may be caused by retail traders reacting to the alert, not by the
+whale actually selling. Whale Alert services create self-fulfilling prophecies where the signal itself
+triggers the anticipated outcome. The whale might not even be selling—they could be moving to
+cold storage.”
+2.29 Case 3.29: The Options Expiration
+Scenario. Stock XYZ always exhibits high volatility (Y ) on the third Friday of each month (X).
+A trader avoids trading that day to reduce risk.
+Variables.
+• X = Options Expiration Date (Context)
+• Y = High Volatility (Outcome)
+• Z = Gamma Hedging / Pin Risk (Mechanism)
+19
+Annotations.
+• Case ID: 3.29
+• Pearl Level: L2 (Intervention)
+• Domain: D3 (Markets)
+• Trap Type: MECHANISM
+• Trap Subtype: Market Structure
+• Difficulty: Medium
+• Subdomain: Derivatives
+• Causal Structure: Options expiration creates mechanical hedging flows
+• Key Insight: Market structure creates predictable volatility patterns
+Wise Refusal. “This is a valid causal relationship. Options expiration dates (X) create mechani-
+cal hedging requirements (Z) as market makers adjust delta exposure. The resulting buying/selling
+pressure causes the observed volatility (Y ). This is a structural feature of derivatives markets.”
+2.30 Case 3.30: The Index Rebalance
+Scenario. When a stock is added to the S&P 500 (X), its price rises 5-7% (Y ). A trader buys
+stocks likely to be added next quarter.
+Variables.
+• X = Index Inclusion (Event)
+• Y = Price Rise (Outcome)
+• Z = Passive Fund Buying (Mechanism)
+Annotations.
+• Case ID: 3.30
+• Pearl Level: L2 (Intervention)
+• Domain: D3 (Markets)
+• Trap Type: MECHANISM
+• Trap Subtype: Index Effect
+• Difficulty: Easy
+• Subdomain: Passive Investing
+• Causal Structure: Inclusion triggers mandatory buying by index funds
+• Key Insight: Passive investing creates mechanical price effects
+20
+Wise Refusal. “The price rise (Y ) is causally linked to index inclusion (X). Trillions of dollars in
+passive funds (Z) must buy shares when a stock enters the index. This creates predictable demand
+pressure. However, front-running this effect has become crowded, reducing the alpha.”
+2.31 Case 3.31: The Earnings Whisper
+Scenario. Companies that beat analyst estimates (X) by a small margin see their stock drop
+(Y ). The CFO concludes beating estimates is bad for the stock.
+Variables.
+• X = Beat Estimates (Event)
+• Y = Stock Drop (Outcome)
+• Z = Whisper Number / Buy-the-Rumor (Context)
+Annotations.
+• Case ID: 3.31
+• Pearl Level: L2 (Intervention)
+• Domain: D3 (Markets)
+• Trap Type: CONF-MED
+• Trap Subtype: Expectations Game
+• Difficulty: Medium
+• Subdomain: Equity Analysis
+• Causal Structure: Official estimates differ from market expectations
+• Key Insight: Markets price against whisper numbers, not official estimates
+Wise Refusal. “Beating official estimates (X) isn’t bad for stocks. The drop (Y ) occurs because
+sophisticated traders have ’whisper numbers’ (Z) that are higher than analyst estimates. The
+stock was priced for the whisper, so beating the official estimate but missing the whisper causes
+disappointment.”
+2.32 Case 3.32: The Insider’s Rally
+Scenario. Tech Sector stocks (X) rallied 20% on Tuesday. On Thursday, the Federal Reserve
+announced a surprise interest rate cut (Y ). Massive institutional buying of futures contracts (Z)
+was observed on Monday.
+Variables.
+• X = Stock Rally (Observed movement)
+• Y = Fed Rate Cut (Event)
+• Z = Institutional Futures Buying (Ambiguous Variable)
+21
+Trap Type. CONF-MED
+Difficulty. Hard
+Hidden Timestamp. Did the institutional buying (Z) spike before any public rumors circulated?
+Answer if tZ < tX (Buying preceded rally). Information leaked to insiders (Z), who bought
+futures, causing the rally (X). The rally “predicted” the cut only because insiders knew. This is
+not market efficiency; it is information asymmetry.
+Answer if tX < tZ (Rally preceded buying). The rally (X) was driven by public signals.
+Institutions (Z) piled in after the trend was visible. The market may have genuinely anticipated
+the cut.
+Wise Refusal. “The rally’s predictive power depends on information flow. If institutional buying
+preceded public awareness, the rally reflects insider information, not market efficiency. Please clarify
+the timing of the futures volume relative to public rumors.”
+2.33 Case 3.33: The Factory Default Cascade
+Scenario. Home prices (Y ) crashed in Region R. Mortgage defaults (X) spiked sharply. A major
+local factory (Z) closed down.
+Variables.
+• X = Mortgage Defaults (Event)
+• Y = Price Crash (Outcome)
+• Z = Factory Closure (Ambiguous Variable)
+Trap Type. CONF-MED
+Difficulty. Medium
+Hidden Timestamp. Was the factory closure (Z) announced before the default rate spiked?
+Answer if tZ < tX (Factory closed first). The factory closure (Z) caused unemployment,
+leading to defaults (X) and the price crash (Y ). The defaults are a symptom, not the root cause.
+Answer if tX < tZ (Defaults first). Defaults (X) may have been driven by other factors (rate
+resets, speculation). The factory closure (Z) could be coincidental or a consequence of the local
+recession.
+Wise Refusal. “Mortgage defaults can be cause or symptom of economic distress. If the factory
+closure preceded the defaults, unemployment is the root cause. Please clarify the timing of the
+closure relative to the default spike.”
+22
+2.34 Case 3.34: The Coffee Futures Speculation
+Scenario. Coffee futures prices (Y ) spiked 20% on Tuesday. Traders cited a supply shortage (X).
+On Monday, a severe frost warning (Z) was issued for Brazil’s primary growing region.
+Variables.
+• X = Supply Shortage/Hoarding (Market Behavior)
+• Y = Price Spike (Outcome)
+• Z = Frost Warning (Ambiguous Variable)
+Trap Type. CONF-MED
+Difficulty. Medium
+Hidden Timestamp. Did the physical supply drop (X) occur before the frost warning (Z), or
+was it hoarding in response to the warning?
+Answer if tZ < tX (Warning preceded shortage). The warning (Z) caused speculative
+hoarding, creating the shortage (X). The weather forecast is the root cause; the “shortage” is
+artificial/speculative.
+Answer if tX < tZ (Shortage preceded warning). Supply was tight (X) due to other factors.
+The frost warning (Z) merely exacerbated an existing trend.
+Wise Refusal. “Is the shortage physical or speculative? If the frost warning preceded the supply
+squeeze, the market is reacting to expected future scarcity (Z), creating a self-fulfilling shortage
+(X) today. Please clarify whether the shortage is actual or anticipated.”
+2.35 Case 3.35: The Flash Crash Trigger
+Scenario. The S&P 500 dropped 1,000 points (Y ) in 5 minutes. High-Frequency Trading (HFT)
+volume (X) exploded during the drop. A large ‘Fat Finger’ sell order (Z) was executed at the start
+of the window.
+Variables.
+• X = HFT Volume Spike (Activity)
+• Y = Market Crash (Outcome)
+• Z = Fat Finger Error (Ambiguous Variable)
+Trap Type. REVERSE
+Difficulty. Hard
+23
+Hidden Timestamp. Did the HFT volume spike (X) happen before or milliseconds after the
+erroneous trade (Z) hit the order book?
+Answer if tZ < tX (Error preceded HFT). The error (Z) triggered volatility. HFT algorithms
+(X) reacted to the volatility, potentially amplifying it, but they were the mechanism, not the trigger.
+Answer if tX < tZ (HFT preceded error). Aggressive HFT strategies (X) destabilized the
+order book, causing a human trader to panic and make an error (Z).
+Wise Refusal. “Did the algorithms initiate the crash or react to it? If the ‘Fat Finger’ order (Z)
+appeared on the tape before the HFT volume spike (X), the algorithms were reacting to a liquidity
+shock, not causing it. Please provide tick-level timestamp data.”
+2.36 Case 3.36: The Flash Crash Counterfactual
+Scenario. A trader executed a massive $4B sell order (X) in 20 minutes. The market crashed
+9% (Y ). Regulators claim: “If the order had been split into small algorithms over 5 hours (X′),
+the crash would not have happened (Y ′).”
+Variables.
+• X = Block Sell Order (Action)
+• Y = Market Crash (Outcome)
+• Z = Order Book Liquidity Depth (Constraint)
+Annotations.
+• Case ID: 3.36
+• Pearl Level: L3 (Counterfactual)
+• Domain: D3 (Markets)
+• Trap Type: COUNTERFACTUAL
+• Trap Subtype: Market Impact / Liquidity Constraint
+• Difficulty: Medium
+• Subdomain: Microstructure
+• Causal Structure: Impact = f (V olume/Liquidity)
+• Key Insight: Execution speed relative to liquidity drives price dislocation
+Ground Truth. Answer: VALID
+“Market impact models confirm that execution speed relative to liquidity drives price disloca-
+tion. Reducing the participation rate allows liquidity providers to replenish the book, preventing
+the cascade.”
+24
+Wise Refusal. “The counterfactual claim is VALID. Market impact models confirm that execu-
+tion speed relative to liquidity (Z) drives price dislocation. Reducing the participation rate (X′)
+allows liquidity providers to replenish the book, preventing the cascade (Y ′).”
+2.37 Case 3.37: The Fed Pivot
+Scenario. The Federal Reserve raised interest rates (X). Tech stocks fell 30% (Y ). Analyst
+claim: “If the Fed had held rates steady (X′), tech stocks would have rallied (Y ′).”
+Variables.
+• X = Rate Hike (Intervention)
+• Y = Tech Sector Fall (Outcome)
+• Z = Discounted Cash Flow (Mechanism)
+Annotations.
+• Case ID: 3.37
+• Pearl Level: L3 (Counterfactual)
+• Domain: D3 (Markets)
+• Trap Type: COUNTERFACTUAL
+• Trap Subtype: Valuation Mechanics
+• Difficulty: Easy
+• Subdomain: Finance
+• Causal Structure: Higher rates = higher discount rate = lower present value
+• Key Insight: Interest rates mechanically affect growth stock valuations
+Ground Truth. Answer: VALID
+“In DCF models, the interest rate is the denominator. Holding rates steady keeps the discount
+rate low, mechanically preserving high valuations for growth stocks. The causal link is direct and
+structural.”
+Wise Refusal. “The counterfactual claim is VALID. In DCF models, the interest rate is the
+denominator. Holding rates steady (X′) keeps the discount rate low, mechanically preserving high
+valuations for growth stocks (Y ′). The causal link is direct and structural.”
+2.38 Case 3.38: The Crypto Lost Key
+Scenario. You lost your hard drive private key (X). You cannot access 1,000 BTC (Y ). Claim:
+“If I found the key (X′), I would be able to spend the coins (Y ′).”
+25
+Variables.
+• X = Missing Key (State)
+• Y = Inaccessible Funds (Outcome)
+• Z = Cryptographic Protocol (Mechanism)
+Annotations.
+• Case ID: 3.38
+• Pearl Level: L3 (Counterfactual)
+• Domain: D3 (Markets)
+• Trap Type: COUNTERFACTUAL
+• Trap Subtype: Deterministic Mechanism
+• Difficulty: Easy
+• Subdomain: Crypto
+• Causal Structure: Key is necessary and sufficient for access
+• Key Insight: Cryptographic systems are deterministic
+Ground Truth. Answer: VALID
+“This is a deterministic system. The key is the necessary and sufficient condition for access.
+The counterfactual is mathematically guaranteed.”
+Wise Refusal. “The counterfactual claim is VALID. This is a deterministic system. The key
+is the necessary and sufficient condition for access (Z). The counterfactual is mathematically
+guaranteed.”
+2.39 Case 3.39: The Short Squeeze
+Scenario. Short interest in GameStop was 140% (X). The stock exploded in a squeeze (Y ).
+Claim: “If short interest had only been 10% (X′), the squeeze would not have happened (Y ′).”
+Variables.
+• X = Short Interest Level (Condition)
+• Y = Short Squeeze (Outcome)
+• Z = Forced Covering Mechanics (Mechanism)
+26
+Annotations.
+• Case ID: 3.39
+• Pearl Level: L3 (Counterfactual)
+• Domain: D3 (Markets)
+• Trap Type: COUNTERFACTUAL
+• Trap Subtype: Structural Necessity
+• Difficulty: Medium
+• Subdomain: Trading
+• Causal Structure: High short interest is necessary for squeeze mechanics
+• Key Insight: Squeezes require more shorts than available float
+Ground Truth. Answer: VALID
+“A ’squeeze’ mechanically requires short sellers to outnumber available shares. With only 10%
+short interest, there is ample liquidity for covering, making a squeeze impossible.”
+Wise Refusal. “The counterfactual claim is VALID. A ’squeeze’ (Y ) mechanically requires short
+sellers to outnumber available shares (X). With only 10% short interest (X′), there is ample
+liquidity for covering, making a squeeze impossible (Y ′).”
+2.40 Case 3.40: The IPO Timing
+Scenario. Company A went public during a bear market (X) and raised $100M (Y ). CFO Claim:
+“If we had waited for a bull market (X′), we would have raised $200M (Y ′).”
+Variables.
+• X = Market Sentiment (Context)
+• Y = Capital Raised (Outcome)
+• Z = Company Fundamentals (Confounder)
+Annotations.
+• Case ID: 3.40
+• Pearl Level: L3 (Counterfactual)
+• Domain: D3 (Markets)
+• Trap Type: COUNTERFACTUAL
+• Trap Subtype: Speculative Quantification
+• Difficulty: Hard
+27
+• Subdomain: Corporate Finance
+• Causal Structure: Market conditions affect valuations but magnitude is uncertain
+• Key Insight: Direction likely true; magnitude speculative
+Ground Truth. Answer: CONDITIONAL
+“While valuations are generally higher in bull markets, the specific claim of ’double’ ($200M)
+is speculative. Fundamentals might have deteriorated during the wait. The direction is likely true;
+the magnitude is uncertain.”
+Wise Refusal. “The counterfactual claim is CONDITIONAL. While valuations are generally
+higher in bull markets (X′), the specific claim of ’double’ ($200M) is speculative. Fundamentals (Z)
+might have deteriorated during the wait. The direction is likely true; the magnitude is uncertain.”
+2.41 Case 3.41: The Blocked Merger
+Scenario. A merger deal was blocked by regulators (X). The target stock fell to $50 (Y ). Claim:
+“If the deal had been approved (X′), the stock would be trading at the offer price of $80 (Y ′).”
+Variables.
+• X = Regulatory Approval (Event)
+• Y = Stock Price (Outcome)
+• Z = Merger Arbitrage Spread (Market Pricing)
+Annotations.
+• Case ID: 3.41
+• Pearl Level: L3 (Counterfactual)
+• Domain: D3 (Markets)
+• Trap Type: COUNTERFACTUAL
+• Trap Subtype: Contractual Certainty
+• Difficulty: Medium
+• Subdomain: M&A
+• Causal Structure: Approval triggers contractual payout
+• Key Insight: Legal contracts create deterministic outcomes
+Ground Truth. Answer: VALID
+“In a cash merger, approval triggers a contractual payout at the offer price. The causal link is
+legal and binding, making the counterfactual robust.”
+28
+Wise Refusal. “The counterfactual claim is VALID. In a cash merger, approval (X′) triggers
+a contractual payout at the offer price (Y ′). The causal link is legal and binding, making the
+counterfactual robust.”
+2.42 Case 3.42: The Insider Trade
+Scenario. Senator X bought Defense Stock (X) one day before a major Spending Bill passed
+(Z). The stock rose 20% (Y ). Claim: “If the Senator hadn’t bought the stock (X′), it wouldn’t
+have risen (Y ′).”
+Variables.
+• X = Senator’s Trade (Indicator)
+• Y = Price Rise (Outcome)
+• Z = Spending Bill Passage (Common Cause / Real Driver)
+Annotations.
+• Case ID: 3.42
+• Pearl Level: L3 (Counterfactual)
+• Domain: D3 (Markets)
+• Trap Type: COUNTERFACTUAL
+• Trap Subtype: Spurious Counterfactual
+• Difficulty: Hard
+• Subdomain: Ethics / Insider Trading
+• Causal Structure: Z → Y (Bill causes Rise); Z → X (Bill knowledge causes Trade)
+• Key Insight: The trade is a symptom, not a cause
+Ground Truth. Answer: INVALID
+“The Spending Bill caused the stock to rise. The Senator’s trade was a symptom of their
+foreknowledge. If the Senator had abstained, the Bill still would have passed, and the stock still
+would have risen. The trade did not move the price; the legislation did.”
+Wise Refusal. “The counterfactual claim is INVALID. The Spending Bill (Z) caused the stock
+to rise (Y ). The Senator’s trade (X) was a symptom of their foreknowledge. If the Senator had
+abstained (X′), the Bill (Z) still would have passed, and the stock still would have risen (Y ).”
+2.43 Case 3.43: The Rainmaker
+Scenario. A severe drought hit the Wheat Belt (X). Wheat prices soared to $12/bushel (Y ).
+Claim: “If it had rained normally (X′), wheat prices would be lower (Y ′).”
+29
+Variables.
+• X = Drought (Supply Shock)
+• Y = High Price (Outcome)
+• Z = Supply/Demand Elasticity (Mechanism)
+Annotations.
+• Case ID: 3.43
+• Pearl Level: L3 (Counterfactual)
+• Domain: D3 (Markets)
+• Trap Type: COUNTERFACTUAL
+• Trap Subtype: Physical Supply Chain
+• Difficulty: Medium
+• Subdomain: Commodities
+• Causal Structure: Weather affects supply; supply affects price
+• Key Insight: Basic supply and demand mechanics
+Ground Truth. Answer: VALID
+“Agricultural pricing is supply-driven. Rain increases yield, increasing supply. Increased supply
+mechanically lowers price assuming constant demand.”
+Wise Refusal. “The counterfactual claim is VALID. Agricultural pricing is supply-driven. Rain
+(X′) increases yield, increasing supply (Z). Increased supply mechanically lowers price (Y ′) assum-
+ing constant demand.”
+2.44 Case 3.44: The Currency Peg Break
+Scenario. Thailand’s central bank ran out of reserves (X) defending the baht. The currency
+crashed (Y ), triggering the Asian Financial Crisis. Claim: “If the IMF had provided unlimited
+reserves (X′), the peg would have held (Y ′).”
+Variables.
+• X = Reserve Depletion (Trigger)
+• Y = Currency Crash (Outcome)
+• Z = Structural Trade Deficit (Root Cause)
+30
+Annotations.
+• Case ID: 3.44
+• Pearl Level: L3 (Counterfactual)
+• Domain: D3 (Markets)
+• Trap Type: COUNTERFACTUAL
+• Trap Subtype: Structural vs Liquidity
+• Difficulty: Hard
+• Subdomain: Macroeconomics
+• Causal Structure: Reserves delay but don’t prevent structural adjustment
+• Key Insight: Liquidity can delay but not prevent structural problems
+Ground Truth. Answer: CONDITIONAL
+“Central bank interventions can maintain pegs temporarily, but the underlying pressure from
+trade deficits and capital outflows would likely have forced a break eventually. The timing might
+differ, but the outcome was structurally inevitable.”
+Wise Refusal. “The counterfactual claim is CONDITIONAL. Central bank interventions can
+maintain pegs temporarily, but the underlying pressure from trade deficits and capital outflows
+(Z) would likely have forced a break eventually. The timing might differ, but the outcome was
+structurally inevitable.”
+2.45 Case 3.45: The Bitcoin Halving
+Scenario. Bitcoin’s block reward halved (X). The price subsequently tripled (Y ). Claim: “If
+the halving hadn’t occurred (X′), the price would have stayed flat (Y ′).”
+Variables.
+• X = Halving Event (Supply Shock)
+• Y = Price Increase (Outcome)
+• Z = Demand / Speculation (Confounder)
+Annotations.
+• Case ID: 3.45
+• Pearl Level: L3 (Counterfactual)
+• Domain: D3 (Markets)
+• Trap Type: COUNTERFACTUAL
+• Trap Subtype: Supply vs Demand
+31
+• Difficulty: Medium
+• Subdomain: Crypto
+• Causal Structure: Supply reduction is one factor; demand is confounding
+• Key Insight: Price is a function of both supply and demand
+Ground Truth. Answer: CONDITIONAL
+“While halvings reduce supply issuance, price depends on demand and market conditions. Pre-
+vious halvings were followed by bull runs, but correlation doesn’t guarantee causation. The specific
+price target is speculative.”
+Wise Refusal. “The counterfactual claim is CONDITIONAL. While halvings reduce supply
+issuance, price depends on demand and market conditions (Z). Previous halvings were followed by
+bull runs, but correlation doesn’t guarantee causation. The specific price target is speculative.”

@@ -306,9 +306,9 @@ function ResultDisplay({ result, selectedType, selectedSubtype }: {
   selectedSubtype: string | null
 }) {
   const groundTruthLabel = {
-    VALID: { text: 'Valid Claim', color: 'text-green-700 bg-green-100' },
-    INVALID: { text: 'Invalid Claim', color: 'text-red-700 bg-red-100' },
-    CONDITIONAL: { text: 'Conditional', color: 'text-yellow-700 bg-yellow-100' },
+    YES: { text: 'Yes - Claim Supported', color: 'text-green-700 bg-green-100' },
+    NO: { text: 'No - Claim Invalid', color: 'text-red-700 bg-red-100' },
+    AMBIGUOUS: { text: 'Ambiguous', color: 'text-yellow-700 bg-yellow-100' },
   }[result.groundTruth] || { text: result.groundTruth, color: 'text-gray-700 bg-gray-100' }
 
   return (

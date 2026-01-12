@@ -235,6 +235,20 @@ export default function AdminDashboard() {
               Export →
             </button>
           </div>
+
+          <div className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow">
+            <div className="text-4xl mb-4">🔍</div>
+            <h3 className="text-xl font-semibold mb-2">Evaluate Questions</h3>
+            <p className="text-gray-600 mb-4">
+              AI-powered proofreading and quality assessment for generated questions
+            </p>
+            <button
+              onClick={() => router.push('/admin/evaluate')}
+              className="w-full bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700"
+            >
+              Evaluate →
+            </button>
+          </div>
         </div>
 
         {/* Back to Main */}

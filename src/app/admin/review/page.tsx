@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { CHEATSHEET_TAXONOMY } from '@/lib/cheatsheet-taxonomy';
 
 interface Question {
   id: string;
@@ -21,6 +22,13 @@ interface Question {
   wiseRefusal: string | null;
   reviewNotes: string | null;
   sourceCase: string | null;
+  dataset: string;
+}
+
+interface Dataset {
+  name: string;
+  totalCount: number;
+  verifiedCount: number;
 }
 
 interface Filters {
@@ -35,22 +43,46 @@ export default function ReviewPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showQuestionList, setShowQuestionList] = useState(false);
+  const [approvedIds, setApprovedIds] = useState<Set<string>>(new Set());
 
   // Filter state
   const [filterLevel, setFilterLevel] = useState<string>('all');
   const [filterDomain, setFilterDomain] = useState<string>('all');
   const [filterGroundTruth, setFilterGroundTruth] = useState<string>('all');
   const [filterTrapType, setFilterTrapType] = useState<string>('all');
+  const [filterDataset, setFilterDataset] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('newest');
   const [availableFilters, setAvailableFilters] = useState<Filters>({ domains: [], trapTypes: [] });
+  const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [total, setTotal] = useState(0);
 
   // Form state
   const [formData, setFormData] = useState<Partial<Question>>({});
 
+  // Challenge AI state
+  const [showChallengeModal, setShowChallengeModal] = useState(false);
+  const [challengeText, setChallengeText] = useState('');
+  const [isRevising, setIsRevising] = useState(false);
+
   useEffect(() => {
     fetchQuestions();
-  }, [filterLevel, filterDomain, filterGroundTruth, filterTrapType, sortBy]);
+  }, [filterLevel, filterDomain, filterGroundTruth, filterTrapType, filterDataset, sortBy]);
+
+  useEffect(() => {
+    fetchDatasets();
+  }, []);
+
+  const fetchDatasets = async () => {
+    try {
+      const res = await fetch('/api/admin/datasets');
+      if (res.ok) {
+        const data = await res.json();
+        setDatasets(data.datasets || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch datasets:', error);
+    }
+  };
 
   useEffect(() => {
     if (questions.length > 0) {
@@ -66,6 +98,7 @@ export default function ReviewPage() {
       if (filterDomain !== 'all') params.set('domain', filterDomain);
       if (filterGroundTruth !== 'all') params.set('groundTruth', filterGroundTruth);
       if (filterTrapType !== 'all') params.set('trapType', filterTrapType);
+      if (filterDataset !== 'all') params.set('dataset', filterDataset);
       params.set('sortBy', sortBy);
       params.set('limit', '500');
 
@@ -100,14 +133,13 @@ export default function ReviewPage() {
 
       if (res.ok) {
         if (approve) {
-          // Move to next question
-          const newQuestions = questions.filter((_, i) => i !== currentIndex);
-          setQuestions(newQuestions);
-          if (newQuestions.length === 0) {
-            alert('All questions reviewed!');
-            router.push('/admin/generate');
-          } else {
-            setCurrentIndex(Math.min(currentIndex, newQuestions.length - 1));
+          // Track approved ID and move to next question
+          setApprovedIds(prev => new Set(prev).add(formData.id!));
+          // Move to next question (but keep in list with approved badge)
+          if (currentIndex < questions.length - 1) {
+            setCurrentIndex(currentIndex + 1);
+          } else if (currentIndex > 0) {
+            setCurrentIndex(currentIndex - 1);
           }
         } else {
           alert('Saved as draft');
@@ -149,7 +181,48 @@ export default function ReviewPage() {
   };
 
   const updateField = (field: keyof Question, value: any) => {
-    setFormData({ ...formData, [field]: value });
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const updateFields = (updates: Partial<Question>) => {
+    setFormData(prev => ({ ...prev, ...updates }));
+  };
+
+  const handleChallenge = async () => {
+    if (!challengeText.trim() || !formData.id) return;
+
+    setIsRevising(true);
+    try {
+      const res = await fetch('/api/admin/questions/revise', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: formData,
+          challenge: challengeText,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        // Update form with revised data, keeping the id
+        setFormData({
+          ...formData,
+          ...data.revised,
+          id: formData.id,
+        });
+        setShowChallengeModal(false);
+        setChallengeText('');
+        alert('Question revised based on your feedback!');
+      } else {
+        const error = await res.json();
+        alert(`Failed to revise: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Challenge error:', error);
+      alert('Failed to revise question');
+    } finally {
+      setIsRevising(false);
+    }
   };
 
   if (isLoading) {
@@ -200,6 +273,22 @@ export default function ReviewPage() {
         {/* Filters Bar */}
         <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
           <div className="flex flex-wrap gap-3 items-center">
+            {/* Dataset Filter - prominent */}
+            <select
+              value={filterDataset}
+              onChange={(e) => setFilterDataset(e.target.value)}
+              className="border-2 border-blue-400 bg-blue-50 rounded-lg px-3 py-1.5 text-sm font-medium"
+            >
+              <option value="all">📁 All Datasets</option>
+              {datasets.map(d => (
+                <option key={d.name} value={d.name}>
+                  📁 {d.name} ({d.totalCount - d.verifiedCount} pending)
+                </option>
+              ))}
+            </select>
+
+            <div className="border-l border-gray-300 h-6 mx-1" />
+
             <span className="text-sm font-medium text-gray-700">Filters:</span>
 
             <select
@@ -219,9 +308,9 @@ export default function ReviewPage() {
               className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
             >
               <option value="all">All Validity</option>
-              <option value="VALID">✓ Valid</option>
-              <option value="INVALID">✗ Invalid</option>
-              <option value="CONDITIONAL">? Conditional</option>
+              <option value="YES">✓ Yes</option>
+              <option value="NO">✗ No</option>
+              <option value="AMBIGUOUS">? Ambiguous</option>
             </select>
 
             <select
@@ -256,6 +345,7 @@ export default function ReviewPage() {
             >
               <option value="newest">Newest First</option>
               <option value="oldest">Oldest First</option>
+              <option value="random">🎲 Random</option>
               <option value="level-asc">Level (L1→L3)</option>
               <option value="level-desc">Level (L3→L1)</option>
               <option value="domain">Domain (A→Z)</option>
@@ -285,6 +375,9 @@ export default function ReviewPage() {
           <div className="flex items-center gap-3">
             <span className="text-gray-700 font-medium">
               {currentIndex + 1} / {questions.length}
+              {approvedIds.size > 0 && (
+                <span className="ml-2 text-green-600">({approvedIds.size} ✓)</span>
+              )}
             </span>
             <input
               type="number"
@@ -313,40 +406,46 @@ export default function ReviewPage() {
         {showQuestionList && (
           <div className="bg-white rounded-lg shadow-sm p-4 mb-4 max-h-64 overflow-y-auto">
             <h3 className="text-sm font-semibold text-gray-700 mb-2">
-              Jump to Question ({questions.length} total)
+              Jump to Question ({questions.length} total{approvedIds.size > 0 ? `, ${approvedIds.size} approved` : ''})
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-              {questions.map((q, idx) => (
-                <button
-                  key={q.id}
-                  onClick={() => setCurrentIndex(idx)}
-                  className={`text-left text-xs p-2 rounded border truncate ${
-                    idx === currentIndex
-                      ? 'bg-primary-100 border-primary-500 text-primary-800'
-                      : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
-                  }`}
-                >
-                  <span className="font-mono text-gray-500">#{idx + 1}</span>
-                  {' '}
-                  <span className={`px-1 rounded ${
-                    q.pearlLevel === 'L1' ? 'bg-blue-100 text-blue-700' :
-                    q.pearlLevel === 'L2' ? 'bg-purple-100 text-purple-700' :
-                    'bg-orange-100 text-orange-700'
-                  }`}>
-                    {q.pearlLevel}
-                  </span>
-                  {' '}
-                  <span className={`px-1 rounded ${
-                    q.groundTruth === 'VALID' ? 'bg-green-100 text-green-700' :
-                    q.groundTruth === 'INVALID' ? 'bg-red-100 text-red-700' :
-                    'bg-yellow-100 text-yellow-700'
-                  }`}>
-                    {q.groundTruth?.charAt(0)}
-                  </span>
-                  {' '}
-                  <span className="text-gray-600">{q.domain}</span>
-                </button>
-              ))}
+              {questions.map((q, idx) => {
+                const isApproved = approvedIds.has(q.id);
+                return (
+                  <button
+                    key={q.id}
+                    onClick={() => setCurrentIndex(idx)}
+                    className={`text-left text-xs p-2 rounded border truncate ${
+                      isApproved
+                        ? 'bg-green-50 border-green-400'
+                        : idx === currentIndex
+                          ? 'bg-primary-100 border-primary-500 text-primary-800'
+                          : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                    }`}
+                  >
+                    {isApproved && <span className="text-green-600">✓ </span>}
+                    <span className="font-mono text-gray-500">#{idx + 1}</span>
+                    {' '}
+                    <span className={`px-1 rounded ${
+                      q.pearlLevel === 'L1' ? 'bg-blue-100 text-blue-700' :
+                      q.pearlLevel === 'L2' ? 'bg-purple-100 text-purple-700' :
+                      'bg-orange-100 text-orange-700'
+                    }`}>
+                      {q.pearlLevel}
+                    </span>
+                    {' '}
+                    <span className={`px-1 rounded ${
+                      q.groundTruth === 'YES' ? 'bg-green-100 text-green-700' :
+                      q.groundTruth === 'NO' ? 'bg-red-100 text-red-700' :
+                      'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {q.groundTruth?.charAt(0)}
+                    </span>
+                    {' '}
+                    <span className="text-gray-600">{q.domain}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -394,6 +493,34 @@ export default function ReviewPage() {
                   <span className="font-semibold text-gray-700">Difficulty:</span>
                   <span className="ml-2 text-gray-900 capitalize">{current.difficulty}</span>
                 </div>
+              </div>
+
+              {/* AI Reasoning */}
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <h3 className="font-semibold text-gray-700 mb-2">🤖 AI Reasoning</h3>
+
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-3">
+                  <div className="font-medium text-amber-800 mb-1">Explanation</div>
+                  <p className="text-amber-900 text-sm">{current.explanation || '(No explanation provided)'}</p>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="font-medium text-blue-800 mb-1">Wise Refusal Response</div>
+                  <p className="text-blue-900 text-sm">{current.wiseRefusal || '(No response provided)'}</p>
+                </div>
+
+                {current.keyInsight && (
+                  <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3">
+                    <div className="font-medium text-green-800 mb-1">Key Insight</div>
+                    <p className="text-green-900 text-sm">{current.keyInsight}</p>
+                  </div>
+                )}
+
+                {current.causalStructure && (
+                  <div className="mt-3 text-sm text-gray-600">
+                    <span className="font-medium">Causal Structure:</span> {current.causalStructure}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -452,9 +579,9 @@ export default function ReviewPage() {
                     onChange={(e) => updateField('groundTruth', e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2"
                   >
-                    <option value="VALID">VALID</option>
-                    <option value="INVALID">INVALID</option>
-                    <option value="CONDITIONAL">CONDITIONAL</option>
+                    <option value="YES">YES</option>
+                    <option value="NO">NO</option>
+                    <option value="AMBIGUOUS">AMBIGUOUS</option>
                   </select>
                 </div>
               </div>
@@ -488,22 +615,45 @@ export default function ReviewPage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Trap Type
                   </label>
-                  <input
+                  <select
                     value={current.trapType || ''}
-                    onChange={(e) => updateField('trapType', e.target.value)}
+                    onChange={(e) => {
+                      const newTrapType = e.target.value;
+                      // Update both trapType and trapSubtype atomically
+                      if (newTrapType === 'NONE') {
+                        updateFields({ trapType: 'NONE', trapSubtype: 'NONE' });
+                      } else {
+                        const trapDef = CHEATSHEET_TAXONOMY.find(t => t.type === newTrapType);
+                        const firstSubtype = trapDef?.subtypes[0]?.name || 'NONE';
+                        updateFields({ trapType: newTrapType, trapSubtype: firstSubtype });
+                      }
+                    }}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  />
+                  >
+                    <option value="NONE">NONE (for YES/AMBIGUOUS)</option>
+                    {CHEATSHEET_TAXONOMY.map(t => (
+                      <option key={t.type} value={t.type}>{t.label} ({t.type})</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Trap Subtype
                   </label>
-                  <input
+                  <select
                     value={current.trapSubtype || ''}
                     onChange={(e) => updateField('trapSubtype', e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  />
+                    disabled={!current.trapType || current.trapType === 'NONE'}
+                  >
+                    <option value="NONE">NONE</option>
+                    {current.trapType && current.trapType !== 'NONE' && (
+                      CHEATSHEET_TAXONOMY.find(t => t.type === current.trapType)?.subtypes.map(s => (
+                        <option key={s.name} value={s.name}>{s.name.replace(/_/g, ' ')} ({s.pearlLevel})</option>
+                      ))
+                    )}
+                  </select>
                 </div>
               </div>
 
@@ -579,7 +729,7 @@ export default function ReviewPage() {
                   onChange={(e) => updateField('wiseRefusal', e.target.value)}
                   rows={3}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                  placeholder="The claim is [VALID/INVALID/CONDITIONAL]..."
+                  placeholder="YES/NO/AMBIGUOUS - The claim is..."
                 />
               </div>
 
@@ -612,6 +762,22 @@ export default function ReviewPage() {
 
             <div className="flex gap-3">
               <button
+                onClick={() => {
+                  const jsonData = JSON.stringify(formData, null, 2);
+                  navigator.clipboard.writeText(jsonData);
+                  alert('JSON copied to clipboard!');
+                }}
+                className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700"
+              >
+                📋 Copy JSON
+              </button>
+              <button
+                onClick={() => setShowChallengeModal(true)}
+                className="bg-orange-600 text-white px-6 py-3 rounded-lg hover:bg-orange-700"
+              >
+                🤔 Challenge AI
+              </button>
+              <button
                 onClick={() => handleSave(false)}
                 disabled={isSaving}
                 className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 disabled:bg-gray-400"
@@ -629,6 +795,59 @@ export default function ReviewPage() {
           </div>
         </div>
       </div>
+
+      {/* Challenge AI Modal */}
+      {showChallengeModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <h2 className="text-2xl font-bold mb-4">🤔 Challenge AI Response</h2>
+              <p className="text-gray-600 mb-4">
+                Explain why you think the current answer is incorrect or incomplete.
+                The AI will revise the question based on your feedback.
+              </p>
+
+              <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-500 mb-1">Current Ground Truth:</p>
+                <p className={`font-bold ${
+                  formData.groundTruth === 'YES' ? 'text-green-600' :
+                  formData.groundTruth === 'NO' ? 'text-red-600' : 'text-yellow-600'
+                }`}>
+                  {formData.groundTruth}
+                </p>
+                <p className="text-sm text-gray-500 mt-2 mb-1">Trap Type:</p>
+                <p className="font-medium">{formData.trapType} / {formData.trapSubtype}</p>
+              </div>
+
+              <textarea
+                value={challengeText}
+                onChange={(e) => setChallengeText(e.target.value)}
+                placeholder="Example: The study only looks at surviving companies that are still listed. Companies that failed during 2010-2015 when consumer sentiment dropped would be excluded from the sample, creating survivorship bias. This makes the observed correlation unreliable..."
+                className="w-full h-48 p-3 border rounded-lg resize-none"
+              />
+
+              <div className="flex justify-end gap-3 mt-4">
+                <button
+                  onClick={() => {
+                    setShowChallengeModal(false);
+                    setChallengeText('');
+                  }}
+                  className="px-6 py-2 border rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleChallenge}
+                  disabled={isRevising || !challengeText.trim()}
+                  className="bg-orange-600 text-white px-6 py-2 rounded-lg hover:bg-orange-700 disabled:bg-gray-400"
+                >
+                  {isRevising ? 'Revising...' : '🔄 Revise Question'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

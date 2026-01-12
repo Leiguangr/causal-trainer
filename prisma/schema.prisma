@@ -33,7 +33,7 @@ model Question {
   trapSubtype       String      // More specific subtype
   explanation       String
   difficulty        String      @default("medium") // easy, medium, hard
-  groundTruth       String      @default("INVALID") // VALID, INVALID, CONDITIONAL
+  groundTruth       String      @default("NO") // YES, NO, AMBIGUOUS
   variables         String?     // JSON string for SQLite: { X, Y, Z[] }
   causalStructure   String?     // Brief description of causal graph
   keyInsight        String?     // One-line takeaway
@@ -43,12 +43,14 @@ model Question {
   sourceCase        String?     // e.g., "3.15" from BucketLarge-G
   generationBatchId String?     // Track which batch this came from
   reviewNotes       String?     // Admin notes during review
+  dataset           String      @default("default") // Dataset identifier for grouping questions
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
   answers           Answer[]
   corrections       Correction[]
   generationBatch   GenerationBatch? @relation(fields: [generationBatchId], references: [id])
+  evaluations       CaseEvaluation[]
 }
 
 model QuizSession {
@@ -115,5 +117,73 @@ model GenerationBatch {
   createdBy       User?       @relation(fields: [createdById], references: [id])
 
   questions       Question[]
+}
+
+// Evaluation Agent observations for proofreading and report aggregation
+model CaseEvaluation {
+  id              String      @id @default(cuid())
+  questionId      String
+  question        Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  evaluationBatchId String?
+  evaluationBatch EvaluationBatch? @relation(fields: [evaluationBatchId], references: [id])
+
+  // Structural Analysis
+  pearlLevelAssessment    String?   // Agent's assessment: CORRECT, INCORRECT, UNCERTAIN
+  suggestedPearlLevel     String?   // If incorrect, what should it be?
+  trapTypeAssessment      String?   // CORRECT, INCORRECT, UNCERTAIN
+  suggestedTrapType       String?   // If incorrect, what should it be?
+  trapSubtypeAssessment   String?   // CORRECT, INCORRECT, UNCERTAIN
+  suggestedTrapSubtype    String?   // If incorrect, what should it be?
+  groundTruthAssessment   String?   // CORRECT, INCORRECT, UNCERTAIN
+  suggestedGroundTruth    String?   // If incorrect, what should it be?
+
+  // Quality Flags
+  hasAmbiguity            Boolean   @default(false) // Is the scenario/claim ambiguous?
+  ambiguityNotes          String?   // Description of ambiguity
+  hasLogicalIssues        Boolean   @default(false) // Logical inconsistencies?
+  logicalIssueNotes       String?   // Description of issues
+  hasDomainErrors         Boolean   @default(false) // Factual/domain errors?
+  domainErrorNotes        String?   // Description of errors
+  clarityScore            Int       @default(3)     // 1-5 clarity rating
+  difficultyAssessment    String?   // Agent's assessment of difficulty
+
+  // Detailed Analysis
+  structuralNotes         String?   // Free-form structural analysis
+  causalGraphNotes        String?   // Notes on causal structure accuracy
+  variableNotes           String?   // Notes on X, Y, Z variable accuracy
+
+  // Model Testing (optional)
+  modelTestResults        String?   // JSON: { model: string, response: string, correct: boolean }[]
+
+  // Recommendations
+  overallVerdict          String    @default("NEEDS_REVIEW") // APPROVED, NEEDS_REVIEW, REJECTED
+  suggestedCorrections    String?   // Markdown summary of recommended fixes
+  priorityLevel           Int       @default(2) // 1=urgent, 2=normal, 3=minor
+
+  // Report Aggregation Tags
+  reportTags              String?   // JSON array of tags for report categorization
+
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+}
+
+// Batch tracking for evaluation runs
+model EvaluationBatch {
+  id              String      @id @default(cuid())
+  dataset         String?     // Which dataset to evaluate
+  questionFilter  String?     // JSON filter criteria
+  totalCount      Int         // How many questions to evaluate
+  completedCount  Int         @default(0)
+  status          String      @default("pending") // pending, running, completed, failed
+  errorMessage    String?
+
+  // Report generation
+  reportGenerated Boolean     @default(false)
+  reportContent   String?     // Generated markdown report
+
+  createdAt       DateTime    @default(now())
+  completedAt     DateTime?
+
+  evaluations     CaseEvaluation[]
 }
 

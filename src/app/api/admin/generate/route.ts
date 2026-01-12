@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import OpenAI from 'openai';
 import { CHEATSHEET_TAXONOMY, getTrapTypesForLevel, getSubtypesForTypeAndLevel } from '@/lib/cheatsheet-taxonomy';
+import { formatExamplesForPrompt } from '@/lib/trap-examples';
 import { PearlLevel } from '@/types';
 
 const openai = new OpenAI({
@@ -124,7 +125,76 @@ async function selectNextTrap(targetLevel?: PearlLevel): Promise<TrapSelection> 
   };
 }
 
-type ValidityType = 'VALID' | 'INVALID' | 'CONDITIONAL';
+/**
+ * Get detailed explanation of how each trap type works
+ */
+function getTrapMechanism(trapType: string): string {
+  const mechanisms: Record<string, string> = {
+    'CONFOUNDING': `A hidden variable Z causes BOTH X and Y independently.
+- Causal structure: Z → X, Z → Y (no direct X → Y link)
+- The observed correlation between X and Y is spurious
+- Example: Ice cream sales (X) correlate with drowning (Y) because summer heat (Z) causes both
+- To identify: Look for an uncontrolled common cause that affects both variables`,
+
+    'REVERSE': `The assumed causal direction is backwards: Y causes X, not X causes Y.
+- What looks like: X → Y
+- What's actually happening: Y → X (or Z → X, Z → Y)
+- Example: Fire trucks (X) at fire scenes (Y) - trucks don't cause fires; fires cause truck presence
+- To identify: Ask "could the outcome be driving the supposed cause?"`,
+
+    'SELECTION': `Non-random sampling distorts the relationship between X and Y.
+- Only certain cases are observed (e.g., survivors, successes, published studies)
+- The sample is not representative of the full population
+- Example: "MBA graduates earn more" - but only successful applicants are studied
+- To identify: Ask "who is missing from this dataset?"`,
+
+    'COLLIDER': `Conditioning on a variable Z that is caused by BOTH X and Y creates spurious correlation.
+- Causal structure: X → Z ← Y (Z is a "collision" of X and Y)
+- When you condition on Z, X and Y become spuriously correlated
+- Example: Among admitted students (Z), test scores (X) and essays (Y) appear negatively correlated
+- To identify: Is the analysis restricted to a subset defined by a common effect?`,
+
+    'SIMPSONS': `A trend in aggregated data reverses when data is stratified by a confounding variable.
+- Aggregate: X appears to help Y
+- Stratified: Within each subgroup, X hurts Y (or vice versa)
+- Example: Hospital A looks worse overall but better within each severity level
+- To identify: Ask "are the groups being compared compositionally different?"`,
+
+    'REGRESSION': `Extreme values tend to move toward the average on subsequent measurements.
+- Selecting based on extreme performance guarantees regression toward mean
+- Not a causal effect, just statistical artifact
+- Example: "Sophomore slump" - rookies of year had unusually good first years
+- To identify: Was selection based on extreme values of the outcome variable?`,
+
+    'SURVIVORSHIP': `Only analyzing entities that "survived" a selection process, ignoring those that didn't.
+- Failed companies, dead patients, unpublished studies are invisible
+- Remaining sample is biased toward success
+- Example: "Old buildings are sturdier" - no, weak old buildings already collapsed
+- To identify: Ask "what happened to the failures?"`,
+
+    'GOODHART': `When a measure becomes a target, it ceases to be a good measure.
+- Optimizing a proxy metric (Z) at the expense of the true goal (Y)
+- Agents game the metric rather than improving outcomes
+- Example: Teaching to the test improves scores but not learning
+- To identify: Is there incentive to optimize the metric independent of the goal?`,
+
+    'FEEDBACK': `X affects Y, but Y also affects X, creating circular causation.
+- Standard causal inference assumes no feedback loops
+- With feedback, isolating the effect of X on Y becomes impossible
+- Example: Police presence and crime rate affect each other
+- To identify: Could the outcome influence future values of the treatment?`,
+
+    'COUNTERFACTUAL': `Reasoning about what would have happened under different conditions.
+- Valid when mechanism is deterministic or structurally necessary
+- Invalid when counterfactual world is undefined or multiple causes exist
+- Example: "If the dam hadn't been there, the flood would have destroyed the town" (valid if dam was only barrier)
+- To identify: Is there a clear, isolatable mechanism connecting X to Y?`,
+  };
+
+  return mechanisms[trapType] || `This trap type involves a violation of causal assumptions. The scenario must clearly reveal the specific flaw.`;
+}
+
+type ValidityType = 'YES' | 'NO' | 'AMBIGUOUS';
 
 function buildPrompt(
   trap: TrapSelection,
@@ -148,25 +218,50 @@ function buildPrompt(
   };
 
   // Different instructions based on validity type
-  if (validity === 'VALID') {
-    return `You are an expert in causal reasoning and Pearl's Causality Hierarchy. Generate ONE high-quality causal reasoning question where the claim IS VALID.
+  if (validity === 'YES') {
+    return `You are an expert in causal reasoning and Pearl's Causality Hierarchy. Generate ONE high-quality causal reasoning question where the claim IS SUPPORTED (YES).
 
 MANDATORY SPECIFICATIONS:
 - Pearl Level: ${trap.pearlLevel} (${levelDescription[trap.pearlLevel]})
 - The reasoning should AVOID common traps like ${trap.trapTypeLabel}
 ${domain ? `- Domain: ${domain} (e.g., ${domainExamples[domain] || 'relevant scenarios'})` : '- Domain: Choose from Markets, Medicine, Law, Technology, or Education'}
 
-REQUIREMENTS:
-- Create a realistic, detailed scenario with specific numbers, names, and context
-- The causal structure must be appropriate for Pearl Level ${trap.pearlLevel}
-- Include clear causal variables (X, Y, Z, etc.)
-- The scenario should have PROPER causal identification - no confounding, selection bias, or other traps
-- The claim MUST be VALID and correctly follow from the evidence
-- Examples of valid reasoning:
-  * Randomized controlled trial with proper design → causal claim is valid
-  * Instrumental variable properly excludes confounders → causal claim is valid
-  * Natural experiment with clear exogenous variation → causal claim is valid
-  * Proper counterfactual comparison with parallel trends → causal claim is valid
+SCENARIO STYLE - BE CONCISE (2-3 sentences, 40-80 words max):
+Use inline variable notation (X), (Y), (Z) directly in the scenario text.
+
+CRITICAL: Describe ONLY observable behaviors and outcomes. NEVER describe intentions, motivations, or mental states.
+- BAD: "Brokers engage in excessive trading merely to meet targets rather than to make profitable investments"
+- GOOD: "Brokers engage in excessive trading (Z). Trading volume increased 300% while profit per trade decreased 50%."
+The reader should infer the trap from observable patterns, not from stated intentions.
+
+GOOD EXAMPLE (L2, YES):
+"A randomized controlled trial assigned 500 patients to receive Drug X or placebo. After 12 weeks, Drug X patients (X) showed 40% greater improvement in symptoms (Y) compared to placebo, with proper blinding and no dropouts."
+
+GOOD EXAMPLE (L3, YES):
+"The Federal Reserve raised interest rates (X). Tech stocks fell 30% (Y). DCF valuation models show higher discount rates mechanically reduce present value of future cash flows."
+
+BAD EXAMPLE (too long):
+"In a groundbreaking study conducted by researchers at Stanford University in collaboration with major pharmaceutical companies, a comprehensive randomized controlled trial was designed to evaluate the efficacy of a novel treatment approach..." [too much narrative padding]
+
+GROUND TRUTH LABEL RULES:
+| Label     | Definition                                                                                      | Trap Type |
+|-----------|------------------------------------------------------------------------------------------------|-----------|
+| YES       | The claim is supported as stated by the given scenario under the appropriate Pearl level.       | NONE      |
+| NO        | The claim is invalid as stated due to a violated causal or statistical assumption.              | Exactly 1 |
+| AMBIGUOUS | The claim cannot be definitively evaluated given the available information.                     | NONE      |
+
+CRITICAL: The claim's validity is determined ONLY from information in the scenario. Do NOT use external domain knowledge.
+
+CLAIM LANGUAGE MUST MATCH PEARL LEVEL:
+- L1 (Association): Use "is associated with", "is correlated with", "predicts" - NO causal language
+- L2 (Intervention): Use "causes", "leads to", "increases/decreases" - causal language OK
+- L3 (Counterfactual): Use "would have", "had X not occurred" - counterfactual language
+
+FOR YES CASES:
+- The scenario MUST provide sufficient detail to support the claim
+- If the claim is associational (L1), show a valid observed correlation
+- If the claim is causal (L2), describe proper causal identification (RCT, natural experiment, etc.)
+- If the claim is counterfactual (L3), provide basis for counterfactual reasoning (deterministic mechanism, structural necessity)
 
 ${promptNotes ? `\nADDITIONAL INSTRUCTIONS:\n${promptNotes}\n` : ''}
 
@@ -174,49 +269,77 @@ ${existingSummaries ? `\nEXISTING SCENARIOS TO AVOID DUPLICATING:\n${existingSum
 
 OUTPUT FORMAT (valid JSON only):
 {
-  "scenario": "Detailed scenario (150-300 words) showing proper causal identification...",
-  "claim": "The specific causal claim to evaluate (this claim IS valid and follows from evidence)...",
+  "scenario": "CONCISE scenario (2-3 sentences, 40-80 words) using inline (X), (Y), (Z) notation. Get straight to the causal pattern.",
+  "claim": "The specific claim to evaluate - language MUST match Pearl level.",
   "variables": {
     "X": "Primary treatment/cause variable",
-    "Y": "Outcome variable",
-    "Z": "Control/Instrument variable (if applicable)"
+    "Y": "Outcome variable"
   },
   "annotations": {
     "pearlLevel": "${trap.pearlLevel}",
     "domain": "Markets or Medicine or Law or Technology or Education",
     "subdomain": "Specific area within domain",
     "trapType": "NONE",
-    "trapSubtype": "None",
+    "trapSubtype": "NONE",
     "difficulty": "easy or medium or hard",
-    "causalStructure": "Brief DAG description showing why identification is valid",
+    "causalStructure": "Causal diagram edges only, e.g. 'X -> Y' or 'Z -> X, Z -> Y'. No descriptions.",
     "keyInsight": "One-line key takeaway about why this reasoning is sound"
   },
-  "groundTruth": "VALID",
-  "explanation": "Detailed explanation (100-200 words) of why the claim IS valid. Explain how confounders are controlled, why there's no selection bias, etc.",
-  "wiseRefusal": "Complete answer starting with 'The claim is VALID.' followed by clear reasoning about why the causal identification is sound."
+  "groundTruth": "YES",
+  "explanation": "Explanation (50-100 words) of why the claim IS supported based ONLY on scenario information.",
+  "wiseRefusal": "Complete answer starting with 'YES - the claim is supported.' followed by clear reasoning about why the causal identification is sound."
 }
 
 Generate the question now. Return ONLY valid JSON, no other text.`;
   }
 
-  if (validity === 'CONDITIONAL') {
-    return `You are an expert in causal reasoning and Pearl's Causality Hierarchy. Generate ONE high-quality causal reasoning question where the claim is CONDITIONALLY valid.
+  if (validity === 'AMBIGUOUS') {
+    return `You are an expert in causal reasoning and Pearl's Causality Hierarchy. Generate ONE high-quality causal reasoning question where the claim is AMBIGUOUS.
 
 MANDATORY SPECIFICATIONS:
 - Pearl Level: ${trap.pearlLevel} (${levelDescription[trap.pearlLevel]})
-- Related trap to consider: ${trap.trapTypeLabel} (${trap.trapType})
 ${domain ? `- Domain: ${domain} (e.g., ${domainExamples[domain] || 'relevant scenarios'})` : '- Domain: Choose from Markets, Medicine, Law, Technology, or Education'}
 
-REQUIREMENTS:
-- Create a realistic, detailed scenario with specific numbers, names, and context
-- The causal structure must be appropriate for Pearl Level ${trap.pearlLevel}
-- The claim should be VALID ONLY IF certain assumptions hold
-- Make the assumptions explicit but reasonable to question
-- Examples of conditional validity:
-  * Claim is valid IF we assume no unmeasured confounders
-  * Claim is valid IF the parallel trends assumption holds
-  * Claim is valid IF the exclusion restriction is satisfied
-  * Claim is valid IF there's no measurement error in the treatment
+SCENARIO STYLE - BE CONCISE (2-3 sentences, 40-80 words max):
+Use inline variable notation (X), (Y), (Z) directly in the scenario text.
+
+CRITICAL: Describe ONLY observable behaviors and outcomes. NEVER describe intentions, motivations, or mental states.
+- BAD: "Brokers engage in excessive trading merely to meet targets rather than to make profitable investments"
+- GOOD: "Brokers engage in excessive trading (Z). Trading volume increased 300% while profit per trade decreased 50%."
+The reader should infer the trap from observable patterns, not from stated intentions.
+
+GOOD EXAMPLE (AMBIGUOUS with hidden timestamp):
+"Electric Vehicle sales (Y) surged in Q3. The government launched a $7,500 tax credit (X). Gasoline prices (Z) hit $5.00/gallon during the same quarter."
+[AMBIGUOUS because: timing unclear - did gas spike before or after credit? Cannot determine primary driver.]
+
+GOOD EXAMPLE (AMBIGUOUS with missing mechanism):
+"Company A went public during a bear market (X) and raised $100M (Y). CFO claims waiting for a bull market would have raised $200M."
+[AMBIGUOUS because: direction likely true but specific magnitude is speculative.]
+
+GROUND TRUTH LABEL RULES:
+| Label     | Definition                                                                                      | Trap Type |
+|-----------|------------------------------------------------------------------------------------------------|-----------|
+| YES       | The claim is supported as stated by the given scenario under the appropriate Pearl level.       | NONE      |
+| NO        | The claim is invalid as stated due to a violated causal or statistical assumption.              | Exactly 1 |
+| AMBIGUOUS | The claim cannot be definitively evaluated given the available information.                     | NONE      |
+
+CRITICAL DISTINCTION - AMBIGUOUS vs NO:
+- NO: The scenario EXPLICITLY reveals a causal flaw. A reader can point to specific text showing the problem.
+- AMBIGUOUS: The scenario does NOT provide enough information. Key details are MISSING.
+
+KEY PRINCIPLE: If the scenario mentions a potential problem (confounder, selection issue), that's NO, not AMBIGUOUS.
+AMBIGUOUS means we genuinely cannot tell - the scenario is silent on key details like timing, mechanism, or magnitude.
+
+FOR AMBIGUOUS CASES, the scenario should be MISSING key information:
+- No timing information (which came first?)
+- No mechanism details (how would this work?)
+- Speculative quantification (direction may be right but magnitude uncertain)
+- Multiple plausible explanations with no way to distinguish
+
+CLAIM LANGUAGE MUST MATCH PEARL LEVEL:
+- L1 (Association): Use "is associated with", "is correlated with", "predicts"
+- L2 (Intervention): Use "causes", "leads to", "increases/decreases"
+- L3 (Counterfactual): Use "would have", "had X not occurred"
 
 ${promptNotes ? `\nADDITIONAL INSTRUCTIONS:\n${promptNotes}\n` : ''}
 
@@ -224,50 +347,96 @@ ${existingSummaries ? `\nEXISTING SCENARIOS TO AVOID DUPLICATING:\n${existingSum
 
 OUTPUT FORMAT (valid JSON only):
 {
-  "scenario": "Detailed scenario (150-300 words) with ambiguous causal identification...",
-  "claim": "The specific causal claim to evaluate (validity depends on assumptions)...",
+  "scenario": "CONCISE scenario (2-3 sentences, 40-80 words) using inline (X), (Y), (Z) notation. Present facts without enough info to determine validity.",
+  "claim": "The claim to evaluate - language MUST match Pearl level.",
   "variables": {
     "X": "Primary treatment/cause variable",
     "Y": "Outcome variable",
-    "Z": "Potential confounder or control variable"
+    "Z": "Ambiguous variable (timing unclear, role uncertain)"
   },
   "annotations": {
     "pearlLevel": "${trap.pearlLevel}",
     "domain": "Markets or Medicine or Law or Technology or Education",
     "subdomain": "Specific area within domain",
-    "trapType": "${trap.trapType}",
-    "trapSubtype": "${trap.trapSubtype || 'None'}",
+    "trapType": "NONE",
+    "trapSubtype": "NONE",
     "difficulty": "medium or hard",
-    "causalStructure": "Brief DAG description",
-    "keyInsight": "One-line key takeaway about the required assumptions"
+    "causalStructure": "Causal diagram edges only, e.g. 'X -> Y, Z -> X'. No descriptions.",
+    "keyInsight": "One-line key takeaway about what information is missing"
   },
-  "groundTruth": "CONDITIONAL",
-  "explanation": "Detailed explanation (100-200 words) of what assumptions must hold for the claim to be valid, and why those assumptions might be questionable.",
-  "wiseRefusal": "Complete answer starting with 'The claim is CONDITIONAL.' followed by clear reasoning about the required assumptions."
+  "groundTruth": "AMBIGUOUS",
+  "explanation": "Explanation (50-100 words) of what information is MISSING and why we cannot definitively evaluate the claim.",
+  "wiseRefusal": "Complete answer starting with 'AMBIGUOUS - cannot definitively evaluate.' followed by clear reasoning about what information is missing and what would be needed to resolve it."
 }
 
 Generate the question now. Return ONLY valid JSON, no other text.`;
   }
 
-  // Default: INVALID case with trap
-  return `You are an expert in causal reasoning and Pearl's Causality Hierarchy. Generate ONE high-quality causal reasoning question.
+  // Default: NO case with trap
+  return `You are an expert in causal reasoning and Pearl's Causality Hierarchy. Generate ONE high-quality causal reasoning question where the claim is INVALID (NO).
 
 MANDATORY SPECIFICATIONS (you MUST follow these exactly):
 - Pearl Level: ${trap.pearlLevel} (${levelDescription[trap.pearlLevel]})
 - Trap Type: ${trap.trapTypeLabel} (${trap.trapType})
-  Definition: ${trap.trapTypeDescription}
-${trap.trapSubtype ? `- Trap Subtype: ${trap.trapSubtype.replace(/_/g, ' ')}
-  Definition: ${trap.subtypeDescription}` : ''}
 ${domain ? `- Domain: ${domain} (e.g., ${domainExamples[domain] || 'relevant scenarios'})` : '- Domain: Choose from Markets, Medicine, Law, Technology, or Education'}
 
-REQUIREMENTS:
-- Create a realistic, detailed scenario with specific numbers, names, and context
-- The scenario MUST clearly exhibit the specified trap type${trap.trapSubtype ? ' and subtype' : ''}
-- The causal structure must be appropriate for Pearl Level ${trap.pearlLevel}
-- Include clear causal variables (X, Y, Z, etc.)
-- Provide a specific causal claim that a naive analyst might make
-- The claim should be INVALID due to the specified trap
-- Give detailed explanation of why the trap applies
+=== TRAP DEFINITION: ${trap.trapTypeLabel.toUpperCase()} ===
+${trap.trapTypeDescription}
+${trap.trapSubtype ? `
+Subtype: ${trap.trapSubtype.replace(/_/g, ' ')}
+${trap.subtypeDescription}
+` : ''}
+HOW THIS TRAP WORKS:
+${getTrapMechanism(trap.trapType)}
+
+=== END TRAP DEFINITION ===
+
+SCENARIO STYLE - BE CONCISE (2-3 sentences, 40-80 words max):
+Use inline variable notation (X), (Y), (Z) directly in the scenario text.
+
+CRITICAL: Describe ONLY observable behaviors and outcomes. NEVER describe intentions, motivations, or mental states.
+- BAD: "Brokers engage in excessive trading merely to meet targets rather than to make profitable investments"
+- GOOD: "Brokers engage in excessive trading (Z). Trading volume increased 300% while profit per trade decreased 50%."
+The reader should infer the trap from observable patterns, not from stated intentions.
+
+CRITICAL: Variables X, Y, and Z must be DISTINCT concepts. X and Z should NOT overlap or describe the same thing.
+- BAD: X = "Trading compliance", Z = "Compliance with strategy" (these are the same!)
+- GOOD: X = "Trading strategy used", Y = "Profits", Z = "Survived 10+ years (Collider)"
+
+${formatExamplesForPrompt(trap.trapType) || `GOOD EXAMPLE (L1, REVERSE CAUSATION):
+"Historical data suggests that when small 'odd lot' retail investors buy heavily (X), the market tops out and crashes (Y). A trader sees retail buying surge and sells immediately."
+Variables: X = Retail Buying, Y = Market Crash, Z = Late-Cycle Euphoria (Latent Cause)
+Causal Structure: Z → X and Z → Y`}
+
+BAD EXAMPLE (too long):
+"In a comprehensive study conducted by researchers at a prestigious university, examining the relationship between environmental sustainability initiatives and corporate financial performance over a multi-year period spanning from 2015 to 2022..." [too much narrative padding - get to the point!]
+
+GROUND TRUTH LABEL RULES:
+| Label     | Definition                                                                                      | Trap Type |
+|-----------|------------------------------------------------------------------------------------------------|-----------|
+| YES       | The claim is supported as stated by the given scenario under the appropriate Pearl level.       | NONE      |
+| NO        | The claim is invalid as stated due to a violated causal or statistical assumption.              | Exactly 1 |
+| AMBIGUOUS | The claim cannot be definitively evaluate given the available information.                     | NONE      |
+
+CRITICAL DISTINCTION - NO vs AMBIGUOUS:
+- NO: The scenario EXPLICITLY reveals a causal flaw. The reader can point to specific text showing the problem.
+- AMBIGUOUS: The scenario does NOT provide enough information. We cannot identify a specific flaw.
+
+KEY PRINCIPLE: For NO, the trap MUST be identifiable from scenario text. The reader should be able to quote the problematic part.
+
+FOR NO CASES, the scenario MUST EXPLICITLY reveal the trap (in 2-3 sentences):
+- CONFOUNDING: State an uncontrolled variable affects both X and Y
+- SURVIVORSHIP: State only surviving/current entities were studied
+- SELECTION: State how the sample was non-randomly selected
+- REVERSE: Show that Y (or its causes) influence X
+- COLLIDER: Show conditioning on a common effect
+- SIMPSON'S: Show aggregation reversal
+- REGRESSION: Show extreme group selection
+
+CLAIM LANGUAGE MUST MATCH PEARL LEVEL:
+- L1 (Association): Use "is associated with", "is correlated with", "predicts"
+- L2 (Intervention): Use "causes", "leads to", "increases/decreases"
+- L3 (Counterfactual): Use "would have", "had X not occurred"
 
 ${promptNotes ? `\nADDITIONAL INSTRUCTIONS:\n${promptNotes}\n` : ''}
 
@@ -275,29 +444,36 @@ ${existingSummaries ? `\nEXISTING SCENARIOS TO AVOID DUPLICATING:\n${existingSum
 
 OUTPUT FORMAT (valid JSON only):
 {
-  "scenario": "Detailed scenario (150-300 words) with specific context, numbers, and setting...",
-  "claim": "The specific causal claim to evaluate (as a quote from someone in the scenario)...",
+  "scenario": "CONCISE scenario (2-3 sentences, 40-80 words) using inline (X), (Y), (Z) notation. EXPLICITLY reveal the trap.",
+  "claim": "The claim to evaluate - language MUST match Pearl level.",
   "variables": {
     "X": "Primary treatment/cause variable",
     "Y": "Outcome variable",
-    "Z": "Confounder/Mediator/Collider (depending on trap type)"
+    "Z": "Confounder/Mediator/Collider that causes the trap (describe role: Latent Cause, Confounder, Condition, Context, etc.)"
   },
   "annotations": {
     "pearlLevel": "${trap.pearlLevel}",
     "domain": "Markets or Medicine or Law or Technology or Education",
     "subdomain": "Specific area within domain",
     "trapType": "${trap.trapType}",
-    "trapSubtype": "${trap.trapSubtype || 'None'}",
+    "trapSubtype": "${trap.trapSubtype || 'NONE'}",
     "difficulty": "easy or medium or hard",
-    "causalStructure": "Brief DAG description (e.g., 'Z → X, Z → Y' for confounding)",
+    "causalStructure": "Causal diagram edges only, e.g. 'Z -> X, Z -> Y'. No descriptions.",
     "keyInsight": "One-line key takeaway"
   },
-  "groundTruth": "INVALID",
-  "explanation": "Detailed explanation (100-200 words) of why the claim is invalid due to ${trap.trapTypeLabel}${trap.trapSubtype ? ` (${trap.trapSubtype.replace(/_/g, ' ')})` : ''}. Explain the causal mechanism.",
-  "wiseRefusal": "Complete answer starting with 'The claim is INVALID.' followed by clear reasoning about the ${trap.trapTypeLabel} trap."
+  "groundTruth": "NO",
+  "explanation": "Explanation (50-100 words) citing SPECIFIC text from scenario that reveals the ${trap.trapTypeLabel} trap.",
+  "wiseRefusal": "Complete answer starting with 'NO - the claim is invalid.' followed by clear reasoning about the ${trap.trapTypeLabel} trap."
 }
 
 Generate the question now. Return ONLY valid JSON, no other text.`;
+}
+
+// Distribution matrix: specify exact counts for each Pearl level × validity combination
+interface DistributionMatrix {
+  L1?: { yes?: number; no?: number; ambiguous?: number };
+  L2?: { yes?: number; no?: number; ambiguous?: number };
+  L3?: { yes?: number; no?: number; ambiguous?: number };
 }
 
 interface GenerateRequest {
@@ -305,11 +481,21 @@ interface GenerateRequest {
   domain?: string;
   batchSize: number;
   promptNotes?: string;
+  dataset?: string;  // Dataset identifier for grouping questions
   validityMix?: {
-    valid: number;      // percentage of VALID cases (0-100)
-    invalid: number;    // percentage of INVALID cases (0-100)
-    conditional: number; // percentage of CONDITIONAL cases (0-100)
+    yes: number;        // percentage of YES cases (0-100)
+    no: number;         // percentage of NO cases (0-100)
+    ambiguous: number;  // percentage of AMBIGUOUS cases (0-100)
   };
+  // New: specify exact distribution across Pearl levels and validity types
+  // If provided, batchSize and validityMix are ignored
+  distributionMatrix?: DistributionMatrix;
+}
+
+// A single generation task with specific pearl level and validity
+interface GenerationTask {
+  pearlLevel: PearlLevel;
+  validity: ValidityType;
 }
 
 interface GeneratedQuestion {
@@ -338,18 +524,46 @@ interface GeneratedQuestion {
 
 // Helper to select validity type based on mix percentages
 function selectValidity(
-  validityMix: { valid: number; invalid: number; conditional: number },
+  validityMix: { yes: number; no: number; ambiguous: number },
   index: number,
   total: number
 ): ValidityType {
   // Calculate how many of each type we need
-  const validCount = Math.round((validityMix.valid / 100) * total);
-  const invalidCount = Math.round((validityMix.invalid / 100) * total);
-  // Rest goes to conditional
+  const yesCount = Math.round((validityMix.yes / 100) * total);
+  const noCount = Math.round((validityMix.no / 100) * total);
+  // Rest goes to ambiguous
 
-  if (index < validCount) return 'VALID';
-  if (index < validCount + invalidCount) return 'INVALID';
-  return 'CONDITIONAL';
+  if (index < yesCount) return 'YES';
+  if (index < yesCount + noCount) return 'NO';
+  return 'AMBIGUOUS';
+}
+
+// Expand distribution matrix into a list of generation tasks
+function expandDistributionMatrix(matrix: DistributionMatrix): GenerationTask[] {
+  const tasks: GenerationTask[] = [];
+  const levels: PearlLevel[] = ['L1', 'L2', 'L3'];
+  const validities: ValidityType[] = ['YES', 'NO', 'AMBIGUOUS'];
+
+  for (const level of levels) {
+    const levelConfig = matrix[level];
+    if (!levelConfig) continue;
+
+    for (const validity of validities) {
+      const key = validity.toLowerCase() as 'yes' | 'no' | 'ambiguous';
+      const count = levelConfig[key] || 0;
+      for (let i = 0; i < count; i++) {
+        tasks.push({ pearlLevel: level, validity });
+      }
+    }
+  }
+
+  // Shuffle tasks to randomize generation order
+  for (let i = tasks.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [tasks[i], tasks[j]] = [tasks[j], tasks[i]];
+  }
+
+  return tasks;
 }
 
 // Background generation function - runs detached from the request
@@ -360,9 +574,16 @@ async function runBackgroundGeneration(
   domain: string | undefined,
   promptNotes: string | undefined,
   existingSummaries: string,
-  validityMix: { valid: number; invalid: number; conditional: number }
+  validityMix: { yes: number; no: number; ambiguous: number },
+  dataset: string,
+  tasks?: GenerationTask[]  // Optional: explicit task list from distribution matrix
 ) {
-  console.log(`[Batch ${batchId}] Starting background generation of ${batchSize} questions (mix: ${validityMix.valid}% valid, ${validityMix.invalid}% invalid, ${validityMix.conditional}% conditional)`);
+  const totalTasks = tasks?.length || batchSize;
+  if (tasks) {
+    console.log(`[Batch ${batchId}] Starting matrix-based generation of ${totalTasks} questions`);
+  } else {
+    console.log(`[Batch ${batchId}] Starting background generation of ${batchSize} questions (mix: ${validityMix.yes}% YES, ${validityMix.no}% NO, ${validityMix.ambiguous}% AMBIGUOUS)`);
+  }
 
   try {
     // Mark as running
@@ -374,25 +595,49 @@ async function runBackgroundGeneration(
     let successCount = 0;
     let errorCount = 0;
 
-    // Shuffle indices to randomize validity distribution
-    const indices = Array.from({ length: batchSize }, (_, i) => i);
-    for (let i = indices.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [indices[i], indices[j]] = [indices[j], indices[i]];
+    // If not using explicit tasks, shuffle indices to randomize validity distribution
+    let indices: number[] = [];
+    if (!tasks) {
+      indices = Array.from({ length: batchSize }, (_, i) => i);
+      for (let i = indices.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [indices[i], indices[j]] = [indices[j], indices[i]];
+      }
     }
 
-    for (let i = 0; i < batchSize; i++) {
+    for (let i = 0; i < totalTasks; i++) {
+      // Check if batch was cancelled
+      const currentBatch = await prisma.generationBatch.findUnique({
+        where: { id: batchId },
+        select: { status: true },
+      });
+      if (currentBatch?.status === 'cancelled') {
+        console.log(`[Batch ${batchId}] Cancelled by user at ${i + 1}/${totalTasks}`);
+        break;
+      }
+
       // Update current index
       await prisma.generationBatch.update({
         where: { id: batchId },
         data: { currentIndex: i + 1 },
       });
 
-      // Select validity type based on shuffled index
-      const validity = selectValidity(validityMix, indices[i], batchSize);
+      // Determine validity and pearl level for this iteration
+      let validity: ValidityType;
+      let taskPearlLevel: PearlLevel | undefined;
+
+      if (tasks) {
+        // Use explicit task
+        validity = tasks[i].validity;
+        taskPearlLevel = tasks[i].pearlLevel;
+      } else {
+        // Use validity mix (old behavior)
+        validity = selectValidity(validityMix, indices[i], batchSize);
+        taskPearlLevel = pearlLevel as PearlLevel | undefined;
+      }
 
       // Select trap type/subtype based on current distribution
-      const trap = await selectNextTrap(pearlLevel as PearlLevel | undefined);
+      const trap = await selectNextTrap(taskPearlLevel);
       console.log(`[Batch ${batchId}] Generating ${i + 1}/${batchSize}: ${validity} - ${trap.pearlLevel} - ${trap.trapType} - ${trap.trapSubtype || 'No subtype'}`);
 
       const prompt = buildPrompt(trap, validity, domain, existingSummaries, promptNotes);
@@ -422,6 +667,29 @@ async function runBackgroundGeneration(
 
         const generated: GeneratedQuestion = JSON.parse(content);
 
+        // Validate: Check for duplicate/overlapping variables
+        const varValues = Object.values(generated.variables || {}).map(v =>
+          String(v).toLowerCase().replace(/[^a-z]/g, '')
+        );
+        const uniqueVars = new Set(varValues);
+        if (varValues.length > uniqueVars.size) {
+          console.log(`[Batch ${batchId}] Skipping: duplicate variable definitions - ${JSON.stringify(generated.variables)}`);
+          errorCount++;
+          continue;
+        }
+
+        // Validate: Check if X and Z are too similar (common LLM error)
+        if (generated.variables?.X && generated.variables?.Z) {
+          const xWords = String(generated.variables.X).toLowerCase().split(/\s+/);
+          const zWords = String(generated.variables.Z).toLowerCase().split(/\s+/);
+          const commonWords = xWords.filter(w => w.length > 3 && zWords.includes(w));
+          if (commonWords.length >= 2) {
+            console.log(`[Batch ${batchId}] Skipping: X and Z too similar - X="${generated.variables.X}", Z="${generated.variables.Z}"`);
+            errorCount++;
+            continue;
+          }
+        }
+
         // Get the next case ID
         const lastQuestion = await prisma.question.findFirst({
           where: { sourceCase: { startsWith: 'G.' } },
@@ -448,7 +716,7 @@ async function runBackgroundGeneration(
             domain: generated.annotations.domain,
             subdomain: generated.annotations.subdomain,
             trapType: finalTrapType,
-            trapSubtype: finalTrapSubtype !== 'None' ? finalTrapSubtype : null,
+            trapSubtype: finalTrapSubtype || 'NONE',
             explanation: generated.explanation,
             difficulty: generated.annotations.difficulty?.toLowerCase() || 'medium',
             groundTruth: generated.groundTruth,
@@ -460,6 +728,7 @@ async function runBackgroundGeneration(
             isLLMGenerated: true,
             isVerified: false,
             generationBatchId: batchId,
+            dataset: dataset,
           },
         });
 
@@ -477,17 +746,31 @@ async function runBackgroundGeneration(
       }
     }
 
-    // Mark as completed
-    await prisma.generationBatch.update({
+    // Check final status (may have been cancelled)
+    const finalBatch = await prisma.generationBatch.findUnique({
       where: { id: batchId },
-      data: {
-        status: 'completed',
-        completedAt: new Date(),
-        generatedCount: successCount,
-      },
+      select: { status: true },
     });
 
-    console.log(`[Batch ${batchId}] Completed: ${successCount} generated, ${errorCount} errors`);
+    if (finalBatch?.status === 'cancelled') {
+      // Just update the generated count, keep cancelled status
+      await prisma.generationBatch.update({
+        where: { id: batchId },
+        data: { generatedCount: successCount },
+      });
+      console.log(`[Batch ${batchId}] Cancelled: ${successCount} generated before cancellation`);
+    } else {
+      // Mark as completed
+      await prisma.generationBatch.update({
+        where: { id: batchId },
+        data: {
+          status: 'completed',
+          completedAt: new Date(),
+          generatedCount: successCount,
+        },
+      });
+      console.log(`[Batch ${batchId}] Completed: ${successCount} generated, ${errorCount} errors`);
+    }
 
   } catch (error) {
     console.error(`[Batch ${batchId}] Fatal error:`, error);
@@ -505,29 +788,70 @@ async function runBackgroundGeneration(
 export async function POST(req: NextRequest) {
   try {
     const body: GenerateRequest = await req.json();
-    const { pearlLevel, domain, batchSize, promptNotes, validityMix } = body;
+    const { pearlLevel, domain, batchSize, promptNotes, validityMix, dataset, distributionMatrix } = body;
 
     console.log('Generate request body:', JSON.stringify(body));
 
-    const size = typeof batchSize === 'number' ? batchSize : parseInt(String(batchSize), 10);
-    if (!size || isNaN(size) || size < 1 || size > 200) {
-      console.log('Invalid batch size:', batchSize, 'parsed as:', size);
-      return NextResponse.json({ error: 'Batch size must be between 1 and 200' }, { status: 400 });
+    // If distributionMatrix is provided, use it instead of batchSize + validityMix
+    let tasks: GenerationTask[] | undefined;
+    let effectiveSize: number;
+    let matrixSummary = '';
+
+    if (distributionMatrix) {
+      tasks = expandDistributionMatrix(distributionMatrix);
+      effectiveSize = tasks.length;
+
+      if (effectiveSize === 0) {
+        return NextResponse.json({ error: 'Distribution matrix results in 0 questions. Check your configuration.' }, { status: 400 });
+      }
+
+      if (effectiveSize > 500) {
+        return NextResponse.json({ error: 'Distribution matrix exceeds 500 questions. Please reduce counts.' }, { status: 400 });
+      }
+
+      // Build summary for logging
+      const summaryParts: string[] = [];
+      for (const level of ['L1', 'L2', 'L3'] as const) {
+        const cfg = distributionMatrix[level];
+        if (cfg) {
+          const counts = [];
+          if (cfg.yes) counts.push(`${cfg.yes} YES`);
+          if (cfg.no) counts.push(`${cfg.no} NO`);
+          if (cfg.ambiguous) counts.push(`${cfg.ambiguous} AMB`);
+          if (counts.length > 0) {
+            summaryParts.push(`${level}: ${counts.join(', ')}`);
+          }
+        }
+      }
+      matrixSummary = summaryParts.join(' | ');
+      console.log(`Distribution matrix: ${matrixSummary} (total: ${effectiveSize})`);
+    } else {
+      // Original behavior: use batchSize
+      const size = typeof batchSize === 'number' ? batchSize : parseInt(String(batchSize), 10);
+      if (!size || isNaN(size) || size < 1 || size > 200) {
+        console.log('Invalid batch size:', batchSize, 'parsed as:', size);
+        return NextResponse.json({ error: 'Batch size must be between 1 and 200' }, { status: 400 });
+      }
+      effectiveSize = size;
     }
 
-    // Default validity mix: 30% valid, 50% invalid, 20% conditional
-    const mix = validityMix || { valid: 30, invalid: 50, conditional: 20 };
+    // Use provided dataset name or default
+    const datasetName = dataset?.trim() || 'default';
+
+    // Default validity mix: 30% YES, 50% NO, 20% AMBIGUOUS (only used if no matrix)
+    const mix = validityMix || { yes: 30, no: 50, ambiguous: 20 };
     // Normalize percentages to sum to 100
-    const total = mix.valid + mix.invalid + mix.conditional;
+    const total = mix.yes + mix.no + mix.ambiguous;
     if (total !== 100) {
       const scale = 100 / total;
-      mix.valid = Math.round(mix.valid * scale);
-      mix.invalid = Math.round(mix.invalid * scale);
-      mix.conditional = 100 - mix.valid - mix.invalid;
+      mix.yes = Math.round(mix.yes * scale);
+      mix.no = Math.round(mix.no * scale);
+      mix.ambiguous = 100 - mix.yes - mix.no;
     }
 
-    // Get existing scenarios to avoid duplication
+    // Get existing scenarios to avoid duplication (within same dataset)
     const existingScenarios = await prisma.question.findMany({
+      where: { dataset: datasetName },
       select: { scenario: true },
       take: 50,
       orderBy: { createdAt: 'desc' },
@@ -540,13 +864,13 @@ export async function POST(req: NextRequest) {
     // Create generation batch record
     const batch = await prisma.generationBatch.create({
       data: {
-        pearlLevel: pearlLevel || null,
+        pearlLevel: distributionMatrix ? 'MATRIX' : (pearlLevel || null),
         domain: domain || null,
-        requestedCount: size,
+        requestedCount: effectiveSize,
         generatedCount: 0,
         status: 'pending',
         currentIndex: 0,
-        promptNotes: promptNotes || null,
+        promptNotes: distributionMatrix ? `Matrix: ${matrixSummary}` : (promptNotes || null),
         createdById: null,
       },
     });
@@ -556,23 +880,32 @@ export async function POST(req: NextRequest) {
     setImmediate(() => {
       runBackgroundGeneration(
         batch.id,
-        size,
+        effectiveSize,
         pearlLevel,
         domain,
         promptNotes,
         existingSummaries,
-        mix
+        mix,
+        datasetName,
+        tasks  // Pass tasks if using distribution matrix
       ).catch(err => {
         console.error(`[Batch ${batch.id}] Unhandled error:`, err);
       });
     });
 
     // Return immediately with batch ID
+    const message = distributionMatrix
+      ? `Matrix generation started for ${effectiveSize} questions in dataset "${datasetName}" (${matrixSummary}). Poll /api/admin/generate/${batch.id}/status for progress.`
+      : `Generation started for ${effectiveSize} questions in dataset "${datasetName}" (${mix.yes}% YES, ${mix.no}% NO, ${mix.ambiguous}% AMBIGUOUS). Poll /api/admin/generate/${batch.id}/status for progress.`;
+
     return NextResponse.json({
       success: true,
       batchId: batch.id,
+      dataset: datasetName,
       status: 'pending',
-      message: `Generation started for ${size} questions (${mix.valid}% valid, ${mix.invalid}% invalid, ${mix.conditional}% conditional). Poll /api/admin/generate/${batch.id}/status for progress.`,
+      totalQuestions: effectiveSize,
+      distributionMatrix: distributionMatrix || null,
+      message,
     });
 
   } catch (error) {

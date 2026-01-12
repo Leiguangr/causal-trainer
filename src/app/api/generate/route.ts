@@ -27,7 +27,7 @@ export interface GeneratedQuestion {
   trapSubtype: string;
   explanation: string;
   difficulty: 'easy' | 'medium' | 'hard';
-  groundTruth: 'VALID' | 'INVALID' | 'CONDITIONAL';
+  groundTruth: 'YES' | 'NO' | 'AMBIGUOUS';
   variables: {
     X: string;
     Y: string;
@@ -100,11 +100,16 @@ export async function POST(req: Request) {
 function buildSystemPrompt(): string {
   return `You are an expert in causal inference and Pearl's causal hierarchy. Your task is to generate realistic practice problems that test understanding of causal reasoning traps.
 
+Ground Truth Label Rules:
+- YES: The claim is supported as stated by the given scenario. trapType MUST be "NONE".
+- NO: The claim is invalid due to a violated causal/statistical assumption. trapType MUST specify exactly one trap.
+- AMBIGUOUS: The claim cannot be definitively evaluated given available information. trapType MUST be "NONE".
+
 Each problem should:
 1. Present a realistic scenario from the specified domain
 2. Make a causal claim that contains the specified reasoning trap
 3. Be clearly analyzable using causal DAG reasoning
-4. Include groundTruth: VALID (claim is correct), INVALID (claim has a flaw), or CONDITIONAL (depends on assumptions)
+4. Include groundTruth: YES (claim is supported), NO (claim has an identifiable flaw), or AMBIGUOUS (cannot be evaluated)
 5. Ensure the correct answer (groundTruth) is one of the three options users can select
 
 Always respond with valid JSON in this exact format:
@@ -114,7 +119,7 @@ Always respond with valid JSON in this exact format:
       "scenario": "2-4 sentences describing a realistic situation",
       "claim": "The specific causal claim being made (1 sentence)",
       "subdomain": "A specific subdomain (e.g., 'Behavioral Finance', 'Cardiology', etc.)",
-      "groundTruth": "VALID|INVALID|CONDITIONAL",
+      "groundTruth": "YES|NO|AMBIGUOUS",
       "difficulty": "easy|medium|hard",
       "variables": {
         "X": "The exposure/treatment variable (brief description)",
@@ -123,8 +128,8 @@ Always respond with valid JSON in this exact format:
       },
       "causalStructure": "Brief description of the causal graph (e.g., 'X → Y is confounded by Z' or 'Z is a collider between X and Y')",
       "keyInsight": "One-line takeaway lesson (e.g., 'Conditioning on a collider induces spurious correlation')",
-      "explanation": "2-3 sentence explanation of why the claim is valid/invalid",
-      "wiseRefusal": "Complete 3-4 sentence answer that: 1) States the verdict (VALID/INVALID/CONDITIONAL), 2) Identifies the trap, 3) Explains the correct causal reasoning, 4) Provides the key insight"
+      "explanation": "2-3 sentence explanation of why the claim is YES/NO/AMBIGUOUS",
+      "wiseRefusal": "Complete 3-4 sentence answer that: 1) States the verdict (YES/NO/AMBIGUOUS), 2) Identifies the trap (if NO), 3) Explains the correct causal reasoning, 4) Provides the key insight"
     }
   ]
 }`;
@@ -158,7 +163,8 @@ function buildUserPrompt(
   }
 
   // Determine expected groundTruth based on trap type
-  const expectedGroundTruth = trapDef.type === 'MECHANISM' ? 'VALID' : 'INVALID';
+  // MECHANISM traps typically have valid causal claims (YES), others are invalid (NO)
+  const expectedGroundTruth = trapDef.type === 'MECHANISM' ? 'YES' : 'NO';
 
   prompt += `
 **Expected groundTruth**: ${expectedGroundTruth}

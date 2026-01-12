@@ -8,6 +8,7 @@ export async function GET(req: NextRequest) {
     const domain = searchParams.get('domain');
     const groundTruth = searchParams.get('groundTruth');
     const trapType = searchParams.get('trapType');
+    const dataset = searchParams.get('dataset');
     const sortBy = searchParams.get('sortBy') || 'newest';
     const limit = parseInt(searchParams.get('limit') || '500');
     const offset = parseInt(searchParams.get('offset') || '0');
@@ -25,9 +26,13 @@ export async function GET(req: NextRequest) {
     if (trapType && trapType !== 'all') {
       where.trapType = trapType;
     }
+    if (dataset && dataset !== 'all') {
+      where.dataset = dataset;
+    }
 
     // Determine sort order
     let orderBy: any = { createdAt: 'desc' };
+    let useRandomSort = false;
     switch (sortBy) {
       case 'oldest':
         orderBy = { createdAt: 'asc' };
@@ -44,17 +49,34 @@ export async function GET(req: NextRequest) {
       case 'groundTruth':
         orderBy = { groundTruth: 'asc' };
         break;
+      case 'random':
+        useRandomSort = true;
+        break;
     }
 
     // Get total count for pagination info
     const total = await prisma.question.count({ where });
 
-    const questions = await prisma.question.findMany({
-      where,
-      orderBy,
-      take: Math.min(limit, 500), // Max 500 at a time
-      skip: offset,
-    });
+    let questions;
+    if (useRandomSort) {
+      // For random sort, fetch all matching questions and shuffle
+      const allQuestions = await prisma.question.findMany({
+        where,
+      });
+      // Fisher-Yates shuffle
+      for (let i = allQuestions.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [allQuestions[i], allQuestions[j]] = [allQuestions[j], allQuestions[i]];
+      }
+      questions = allQuestions.slice(offset, offset + Math.min(limit, 500));
+    } else {
+      questions = await prisma.question.findMany({
+        where,
+        orderBy,
+        take: Math.min(limit, 500), // Max 500 at a time
+        skip: offset,
+      });
+    }
 
     // Get distinct values for filter dropdowns
     const distinctDomains = await prisma.question.findMany({

@@ -50,14 +50,13 @@ export const CHEATSHEET_TAXONOMY: TrapTypeDefinition[] = [
   {
     type: 'SELECTION',
     label: 'Selection Bias',
-    description: 'The sample is not representative of the population due to selection on outcome or exposure.',
+    description: 'Conditioning on a non-random subset distorts inference.',
     pearlLevels: ['L1', 'L2', 'L3'],
     subtypes: [
-      { name: 'Sampling-on-the-Outcome', pearlLevel: 'L1', description: 'Sample includes only cases with a specific outcome.' },
-      { name: 'Attrition_Bias', pearlLevel: 'L1', description: 'Differential dropout creates non-representative sample.' },
-      { name: 'Conditioning_on_Participation', pearlLevel: 'L1', description: 'Analysis conditions on study participation, which is affected by exposure or outcome.' },
-      { name: 'Post-intervention_Selection', pearlLevel: 'L2', description: 'Selection occurs after intervention, affected by treatment assignment.' },
-      { name: 'Counterfactual_Conditioning', pearlLevel: 'L3', description: 'Knowing the outcome constrains the counterfactual.' },
+      { name: 'Sampling_on_the_Outcome', pearlLevel: 'L1', description: 'Only cases with a specific outcome are analyzed (e.g., only successful startups).' },
+      { name: 'Attrition_Bias', pearlLevel: 'L1', description: 'Lower-performing subjects drop out of the study.' },
+      { name: 'Post_intervention_Selection', pearlLevel: 'L2', description: 'Only compliant patients are analyzed after intervention.' },
+      { name: 'Counterfactual_Conditioning', pearlLevel: 'L3', description: 'Conditioning on survival when asking what would have happened.' },
     ],
   },
   {
@@ -66,8 +65,9 @@ export const CHEATSHEET_TAXONOMY: TrapTypeDefinition[] = [
     description: 'Conditioning on a common effect of X and Y induces spurious association between them.',
     pearlLevels: ['L1', 'L2'],
     subtypes: [
-      { name: 'Case-Control_Sampling', pearlLevel: 'L1', description: 'Sampling based on disease status (a collider) creates spurious associations.' },
-      { name: 'Conditioning_on_Compliance', pearlLevel: 'L2', description: 'Analyzing only compliers conditions on a post-treatment collider.' },
+      { name: 'Conditioning_on_Participation', pearlLevel: 'L1', description: 'Among admitted students, test scores and essays appear correlated.' },
+      { name: 'Case_Control_Sampling', pearlLevel: 'L1', description: 'Cases and controls are selected based on disease status.' },
+      { name: 'Conditioning_on_Compliance', pearlLevel: 'L2', description: 'Among those who followed treatment, outcomes differ.' },
     ],
   },
   {
