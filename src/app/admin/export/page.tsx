@@ -4,9 +4,9 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface Stats {
-  L1: { current: number; target: number };
-  L2: { current: number; target: number };
-  L3: { current: number; target: number };
+  L1: { current: number; verified: number; target: number };
+  L2: { current: number; verified: number; target: number };
+  L3: { current: number; verified: number; target: number };
 }
 
 export default function ExportPage() {
@@ -16,9 +16,9 @@ export default function ExportPage() {
   const [includeL3, setIncludeL3] = useState(true);
   const [verifiedOnly, setVerifiedOnly] = useState(true);
   const [stats, setStats] = useState<Stats>({
-    L1: { current: 0, target: 50 },
-    L2: { current: 0, target: 297 },
-    L3: { current: 0, target: 103 },
+    L1: { current: 0, verified: 0, target: 50 },
+    L2: { current: 0, verified: 0, target: 297 },
+    L3: { current: 0, verified: 0, target: 103 },
   });
   const [preview, setPreview] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -81,9 +81,10 @@ export default function ExportPage() {
 
   const getTotalQuestions = () => {
     let total = 0;
-    if (includeL1) total += stats.L1.current;
-    if (includeL2) total += stats.L2.current;
-    if (includeL3) total += stats.L3.current;
+    const key = verifiedOnly ? 'verified' : 'current';
+    if (includeL1) total += stats.L1[key];
+    if (includeL2) total += stats.L2[key];
+    if (includeL3) total += stats.L3[key];
     return total;
   };
 
@@ -112,7 +113,10 @@ export default function ExportPage() {
                     onChange={(e) => setIncludeL1(e.target.checked)}
                     className="mr-2"
                   />
-                  <span>Include L1 ({stats.L1.current} questions)</span>
+                  <span>
+                    Include L1 — <span className="text-green-600 font-medium">{stats.L1.verified} verified</span>
+                    <span className="text-gray-400"> / {stats.L1.current} total</span>
+                  </span>
                 </label>
                 <label className="flex items-center">
                   <input
@@ -121,7 +125,10 @@ export default function ExportPage() {
                     onChange={(e) => setIncludeL2(e.target.checked)}
                     className="mr-2"
                   />
-                  <span>Include L2 ({stats.L2.current} questions)</span>
+                  <span>
+                    Include L2 — <span className="text-green-600 font-medium">{stats.L2.verified} verified</span>
+                    <span className="text-gray-400"> / {stats.L2.current} total</span>
+                  </span>
                 </label>
                 <label className="flex items-center">
                   <input
@@ -130,7 +137,10 @@ export default function ExportPage() {
                     onChange={(e) => setIncludeL3(e.target.checked)}
                     className="mr-2"
                   />
-                  <span>Include L3 ({stats.L3.current} questions)</span>
+                  <span>
+                    Include L3 — <span className="text-green-600 font-medium">{stats.L3.verified} verified</span>
+                    <span className="text-gray-400"> / {stats.L3.current} total</span>
+                  </span>
                 </label>
               </div>
             </div>
@@ -152,8 +162,13 @@ export default function ExportPage() {
 
             <div className="pt-4 border-t">
               <p className="text-lg font-semibold">
-                Total: {getTotalQuestions()} questions
+                Export: {getTotalQuestions()} {verifiedOnly ? 'verified' : 'total'} questions
               </p>
+              {verifiedOnly && getTotalQuestions() === 0 && (
+                <p className="text-sm text-yellow-600 mt-1">
+                  ⚠️ No verified questions yet. Review and approve questions first.
+                </p>
+              )}
             </div>
           </div>
         </div>

@@ -23,20 +23,34 @@ interface Question {
   sourceCase: string | null;
 }
 
+interface Filters {
+  domains: string[];
+  trapTypes: string[];
+}
+
 export default function ReviewPage() {
   const router = useRouter();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [showQuestionList, setShowQuestionList] = useState(false);
+
+  // Filter state
   const [filterLevel, setFilterLevel] = useState<string>('all');
-  
+  const [filterDomain, setFilterDomain] = useState<string>('all');
+  const [filterGroundTruth, setFilterGroundTruth] = useState<string>('all');
+  const [filterTrapType, setFilterTrapType] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<string>('newest');
+  const [availableFilters, setAvailableFilters] = useState<Filters>({ domains: [], trapTypes: [] });
+  const [total, setTotal] = useState(0);
+
   // Form state
   const [formData, setFormData] = useState<Partial<Question>>({});
 
   useEffect(() => {
     fetchQuestions();
-  }, [filterLevel]);
+  }, [filterLevel, filterDomain, filterGroundTruth, filterTrapType, sortBy]);
 
   useEffect(() => {
     if (questions.length > 0) {
@@ -48,14 +62,19 @@ export default function ReviewPage() {
     setIsLoading(true);
     try {
       const params = new URLSearchParams();
-      if (filterLevel !== 'all') {
-        params.set('pearlLevel', filterLevel);
-      }
-      
+      if (filterLevel !== 'all') params.set('pearlLevel', filterLevel);
+      if (filterDomain !== 'all') params.set('domain', filterDomain);
+      if (filterGroundTruth !== 'all') params.set('groundTruth', filterGroundTruth);
+      if (filterTrapType !== 'all') params.set('trapType', filterTrapType);
+      params.set('sortBy', sortBy);
+      params.set('limit', '500');
+
       const res = await fetch(`/api/admin/questions/unverified?${params}`);
       if (res.ok) {
         const data = await res.json();
         setQuestions(data.questions);
+        setTotal(data.total);
+        setAvailableFilters(data.filters || { domains: [], trapTypes: [] });
         setCurrentIndex(0);
       }
     } catch (error) {
@@ -161,37 +180,101 @@ export default function ReviewPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-6xl mx-auto px-4">
+      <div className="max-w-7xl mx-auto px-4">
         {/* Header */}
-        <div className="mb-6 flex justify-between items-center">
+        <div className="mb-4 flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Review Questions</h1>
             <p className="text-gray-600 mt-1">
-              Question {currentIndex + 1} of {questions.length} • Case {current.sourceCase || 'N/A'}
+              {total} unverified total • Showing {questions.length} matching filters
             </p>
           </div>
-          <div className="flex gap-2 items-center">
+          <button
+            onClick={() => router.push('/admin/generate')}
+            className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
+          >
+            Back to Generate
+          </button>
+        </div>
+
+        {/* Filters Bar */}
+        <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
+          <div className="flex flex-wrap gap-3 items-center">
+            <span className="text-sm font-medium text-gray-700">Filters:</span>
+
             <select
               value={filterLevel}
               onChange={(e) => setFilterLevel(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2"
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
             >
               <option value="all">All Levels</option>
-              <option value="L1">L1 Only</option>
-              <option value="L2">L2 Only</option>
-              <option value="L3">L3 Only</option>
+              <option value="L1">L1</option>
+              <option value="L2">L2</option>
+              <option value="L3">L3</option>
             </select>
-            <button
-              onClick={() => router.push('/admin/generate')}
-              className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
+
+            <select
+              value={filterGroundTruth}
+              onChange={(e) => setFilterGroundTruth(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
             >
-              Back to Generate
+              <option value="all">All Validity</option>
+              <option value="VALID">✓ Valid</option>
+              <option value="INVALID">✗ Invalid</option>
+              <option value="CONDITIONAL">? Conditional</option>
+            </select>
+
+            <select
+              value={filterDomain}
+              onChange={(e) => setFilterDomain(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+            >
+              <option value="all">All Domains</option>
+              {availableFilters.domains.map(d => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+
+            <select
+              value={filterTrapType}
+              onChange={(e) => setFilterTrapType(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+            >
+              <option value="all">All Trap Types</option>
+              {availableFilters.trapTypes.map(t => (
+                <option key={t} value={t}>{t || 'NONE'}</option>
+              ))}
+            </select>
+
+            <div className="border-l border-gray-300 h-6 mx-2" />
+
+            <span className="text-sm font-medium text-gray-700">Sort:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+            >
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="level-asc">Level (L1→L3)</option>
+              <option value="level-desc">Level (L3→L1)</option>
+              <option value="domain">Domain (A→Z)</option>
+              <option value="groundTruth">Validity</option>
+            </select>
+
+            <button
+              onClick={() => setShowQuestionList(!showQuestionList)}
+              className={`ml-auto px-3 py-1.5 rounded-lg text-sm ${
+                showQuestionList ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-700'
+              }`}
+            >
+              📋 Question List
             </button>
           </div>
         </div>
 
         {/* Navigation */}
-        <div className="bg-white rounded-lg shadow-sm p-4 mb-6 flex justify-between items-center">
+        <div className="bg-white rounded-lg shadow-sm p-4 mb-4 flex justify-between items-center">
           <button
             onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
             disabled={currentIndex === 0}
@@ -199,9 +282,24 @@ export default function ReviewPage() {
           >
             ← Previous
           </button>
-          <span className="text-gray-700 font-medium">
-            {currentIndex + 1} / {questions.length}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-gray-700 font-medium">
+              {currentIndex + 1} / {questions.length}
+            </span>
+            <input
+              type="number"
+              min={1}
+              max={questions.length}
+              value={currentIndex + 1}
+              onChange={(e) => {
+                const val = parseInt(e.target.value);
+                if (val >= 1 && val <= questions.length) {
+                  setCurrentIndex(val - 1);
+                }
+              }}
+              className="w-16 border border-gray-300 rounded px-2 py-1 text-center text-sm"
+            />
+          </div>
           <button
             onClick={() => setCurrentIndex(Math.min(questions.length - 1, currentIndex + 1))}
             disabled={currentIndex === questions.length - 1}
@@ -210,6 +308,48 @@ export default function ReviewPage() {
             Next →
           </button>
         </div>
+
+        {/* Question List Sidebar (collapsible) */}
+        {showQuestionList && (
+          <div className="bg-white rounded-lg shadow-sm p-4 mb-4 max-h-64 overflow-y-auto">
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">
+              Jump to Question ({questions.length} total)
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+              {questions.map((q, idx) => (
+                <button
+                  key={q.id}
+                  onClick={() => setCurrentIndex(idx)}
+                  className={`text-left text-xs p-2 rounded border truncate ${
+                    idx === currentIndex
+                      ? 'bg-primary-100 border-primary-500 text-primary-800'
+                      : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                  }`}
+                >
+                  <span className="font-mono text-gray-500">#{idx + 1}</span>
+                  {' '}
+                  <span className={`px-1 rounded ${
+                    q.pearlLevel === 'L1' ? 'bg-blue-100 text-blue-700' :
+                    q.pearlLevel === 'L2' ? 'bg-purple-100 text-purple-700' :
+                    'bg-orange-100 text-orange-700'
+                  }`}>
+                    {q.pearlLevel}
+                  </span>
+                  {' '}
+                  <span className={`px-1 rounded ${
+                    q.groundTruth === 'VALID' ? 'bg-green-100 text-green-700' :
+                    q.groundTruth === 'INVALID' ? 'bg-red-100 text-red-700' :
+                    'bg-yellow-100 text-yellow-700'
+                  }`}>
+                    {q.groundTruth?.charAt(0)}
+                  </span>
+                  {' '}
+                  <span className="text-gray-600">{q.domain}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Main Content */}
         <div className="grid grid-cols-2 gap-6">

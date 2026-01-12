@@ -3,11 +3,42 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+interface TrapDistribution {
+  [trapType: string]: {
+    count: number;
+    subtypes: { [subtype: string]: number };
+  };
+}
+
 interface Stats {
   L1: { current: number; target: number };
   L2: { current: number; target: number };
   L3: { current: number; target: number };
+  trapDistribution?: {
+    L1: TrapDistribution;
+    L2: TrapDistribution;
+    L3: TrapDistribution;
+  };
+  coverage?: {
+    trapTypes: { covered: number; total: number };
+    subtypes: { covered: number; total: number };
+  };
 }
+
+const TRAP_TYPE_LABELS: Record<string, string> = {
+  CONFOUNDING: 'Confounding',
+  REVERSE: 'Reverse Causation',
+  SELECTION: 'Selection Bias',
+  COLLIDER: 'Collider Bias',
+  SIMPSONS: "Simpson's Paradox",
+  REGRESSION: 'Regression to Mean',
+  SURVIVORSHIP: 'Survivorship Bias',
+  BASE_RATE: 'Base-rate Neglect',
+  GOODHART: "Goodhart's Law",
+  FEEDBACK: 'Feedback Loops',
+  PREEMPTION: 'Preemption',
+  CONFOUNDER_MEDIATOR: 'Confounder-Mediator',
+};
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -16,6 +47,7 @@ export default function AdminDashboard() {
     L2: { current: 0, target: 297 },
     L3: { current: 0, target: 103 },
   });
+  const [showDistribution, setShowDistribution] = useState(false);
 
   useEffect(() => {
     fetchStats();
@@ -98,6 +130,66 @@ export default function AdminDashboard() {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Trap Type Coverage */}
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-semibold">Trap Type Coverage</h2>
+            <button
+              onClick={() => setShowDistribution(!showDistribution)}
+              className="text-sm text-primary-600 hover:text-primary-700"
+            >
+              {showDistribution ? 'Hide Details' : 'Show Details'}
+            </button>
+          </div>
+
+          {stats.coverage && (
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="bg-green-50 p-3 rounded-lg">
+                <div className="text-sm text-green-600 font-medium">Trap Types Covered</div>
+                <div className="text-xl font-bold text-green-900">
+                  {stats.coverage.trapTypes.covered} / {stats.coverage.trapTypes.total}
+                </div>
+              </div>
+              <div className="bg-teal-50 p-3 rounded-lg">
+                <div className="text-sm text-teal-600 font-medium">Subtypes Covered</div>
+                <div className="text-xl font-bold text-teal-900">
+                  {stats.coverage.subtypes.covered} / {stats.coverage.subtypes.total}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showDistribution && stats.trapDistribution && (
+            <div className="space-y-6">
+              {(['L1', 'L2', 'L3'] as const).map(level => (
+                <div key={level} className="border-t pt-4">
+                  <h3 className="text-lg font-medium mb-3">
+                    {level} - {level === 'L1' ? 'Association' : level === 'L2' ? 'Intervention' : 'Counterfactual'}
+                  </h3>
+                  <div className="grid gap-2">
+                    {Object.entries(stats.trapDistribution![level]).map(([trapType, data]) => (
+                      <div key={trapType} className="flex items-center gap-3">
+                        <div className="w-40 text-sm font-medium text-gray-700 truncate">
+                          {TRAP_TYPE_LABELS[trapType] || trapType}
+                        </div>
+                        <div className="flex-1 bg-gray-200 rounded-full h-3 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              data.count === 0 ? 'bg-red-400' : data.count < 3 ? 'bg-yellow-400' : 'bg-green-500'
+                            }`}
+                            style={{ width: `${Math.min(100, (data.count / 10) * 100)}%` }}
+                          />
+                        </div>
+                        <div className="w-8 text-sm text-gray-600 text-right">{data.count}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Quick Actions */}
