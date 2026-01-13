@@ -179,7 +179,10 @@ ${scenarioStructure}
 
   if (subtypeDef) {
     prompt += `**Subtype**: ${subtypeDef.name}
-**Subtype Description**: ${subtypeDef.description}
+**Definition**: ${subtypeDef.description}
+${subtypeDef.minimalGraph ? `**Causal Graph**: ${subtypeDef.minimalGraph}` : ''}
+${subtypeDef.mathSignature ? `**What Goes Wrong**: ${subtypeDef.mathSignature}` : ''}
+${subtypeDef.howItHappens ? `**Practical Example**: ${subtypeDef.howItHappens}` : ''}
 `;
   }
 

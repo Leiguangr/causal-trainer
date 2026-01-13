@@ -23,6 +23,9 @@ interface TrapSelection {
   trapTypeDescription: string;
   trapSubtype: string;
   subtypeDescription: string;
+  subtypeMinimalGraph?: string;
+  subtypeMathSignature?: string;
+  subtypeHowItHappens?: string;
 }
 
 // Select underrepresented trap type/subtype based on current distribution
@@ -106,13 +109,20 @@ async function selectNextTrap(targetLevel?: PearlLevel): Promise<TrapSelection> 
   // Select least represented subtype (or random if no subtypes)
   let selectedSubtype = '';
   let subtypeDescription = '';
+  let subtypeMinimalGraph: string | undefined;
+  let subtypeMathSignature: string | undefined;
+  let subtypeHowItHappens: string | undefined;
   if (subtypes.length > 0) {
     const subtypeEntries = Object.entries(subtypeCounts);
     subtypeEntries.sort((a, b) => a[1] - b[1]);
     // Pick from bottom 2 with randomization
     const subCandidates = subtypeEntries.slice(0, Math.min(2, subtypeEntries.length));
     selectedSubtype = subCandidates[Math.floor(Math.random() * subCandidates.length)][0];
-    subtypeDescription = subtypes.find(s => s.name === selectedSubtype)?.description || '';
+    const selectedSubtypeDef = subtypes.find(s => s.name === selectedSubtype);
+    subtypeDescription = selectedSubtypeDef?.description || '';
+    subtypeMinimalGraph = selectedSubtypeDef?.minimalGraph;
+    subtypeMathSignature = selectedSubtypeDef?.mathSignature;
+    subtypeHowItHappens = selectedSubtypeDef?.howItHappens;
   }
 
   return {
@@ -122,6 +132,9 @@ async function selectNextTrap(targetLevel?: PearlLevel): Promise<TrapSelection> 
     trapTypeDescription: trapDef.description,
     trapSubtype: selectedSubtype,
     subtypeDescription,
+    subtypeMinimalGraph,
+    subtypeMathSignature,
+    subtypeHowItHappens,
   };
 }
 
@@ -450,8 +463,11 @@ ${scenarioStructureByLevel[trap.pearlLevel]}
 === TRAP DEFINITION: ${trap.trapTypeLabel.toUpperCase()} ===
 ${trap.trapTypeDescription}
 ${trap.trapSubtype ? `
-Subtype: ${trap.trapSubtype.replace(/_/g, ' ')}
-${trap.subtypeDescription}
+**Subtype**: ${trap.trapSubtype.replace(/_/g, ' ')}
+**Definition**: ${trap.subtypeDescription}
+${trap.subtypeMinimalGraph ? `**Causal Graph**: ${trap.subtypeMinimalGraph}` : ''}
+${trap.subtypeMathSignature ? `**What Goes Wrong**: ${trap.subtypeMathSignature}` : ''}
+${trap.subtypeHowItHappens ? `**Practical Example**: ${trap.subtypeHowItHappens}` : ''}
 ` : ''}
 HOW THIS TRAP WORKS:
 ${getTrapMechanism(trap.trapType)}
