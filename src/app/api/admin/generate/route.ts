@@ -16,6 +16,53 @@ const LEVEL_DISTRIBUTION = {
   L3: 0.23,
 };
 
+// Domains for systematic rotation to ensure diversity
+const GENERATION_DOMAINS = ['Markets', 'Medicine', 'Law', 'Technology', 'Education'] as const;
+type GenerationDomain = typeof GENERATION_DOMAINS[number];
+
+// Subdomains for within-domain diversity (rotated through)
+const DOMAIN_SUBDOMAINS: Record<GenerationDomain, string[]> = {
+  Markets: [
+    'cryptocurrency trading', 'forex markets', 'commodity futures', 'equity derivatives',
+    'real estate investment', 'hedge fund strategies', 'retail banking', 'insurance underwriting',
+    'venture capital', 'bond markets', 'algorithmic trading', 'pension funds'
+  ],
+  Medicine: [
+    'oncology treatment', 'psychiatric care', 'epidemiology studies', 'surgical outcomes',
+    'drug interactions', 'mental health interventions', 'vaccine efficacy', 'chronic disease management',
+    'emergency medicine', 'pediatric care', 'geriatric health', 'preventive medicine'
+  ],
+  Law: [
+    'tort liability', 'contract disputes', 'criminal sentencing', 'regulatory compliance',
+    'intellectual property', 'employment discrimination', 'antitrust cases', 'environmental law',
+    'medical malpractice', 'product liability', 'securities fraud', 'immigration policy'
+  ],
+  Technology: [
+    'A/B testing', 'recommendation algorithms', 'cybersecurity incidents', 'cloud migration',
+    'machine learning models', 'user engagement metrics', 'system reliability', 'mobile app analytics',
+    'API performance', 'data pipeline optimization', 'autonomous systems', 'social media platforms'
+  ],
+  Education: [
+    'curriculum design', 'standardized testing', 'online learning', 'tutoring interventions',
+    'teacher effectiveness', 'school funding', 'early childhood education', 'college admissions',
+    'vocational training', 'special education', 'STEM programs', 'educational technology'
+  ],
+};
+
+// Get next domain in rotation based on index
+function getRotatedDomain(index: number, fixedDomain?: string): GenerationDomain {
+  if (fixedDomain && GENERATION_DOMAINS.includes(fixedDomain as GenerationDomain)) {
+    return fixedDomain as GenerationDomain;
+  }
+  return GENERATION_DOMAINS[index % GENERATION_DOMAINS.length];
+}
+
+// Get a specific subdomain for extra diversity
+function getRotatedSubdomain(domain: GenerationDomain, index: number): string {
+  const subdomains = DOMAIN_SUBDOMAINS[domain];
+  return subdomains[index % subdomains.length];
+}
+
 interface TrapSelection {
   pearlLevel: PearlLevel;
   trapType: string;
@@ -212,8 +259,9 @@ type ValidityType = 'YES' | 'NO' | 'AMBIGUOUS';
 function buildPrompt(
   trap: TrapSelection,
   validity: ValidityType,
-  domain?: string,
-  existingSummaries?: string,
+  domain: GenerationDomain,
+  subdomain: string,
+  recentScenarios: string[],
   promptNotes?: string
 ): string {
   const levelDescription = {
@@ -245,13 +293,20 @@ function buildPrompt(
 - Example structure: "After [X happened], [role] claims that if [X had not happened], then [counterfactual Y]."`,
   };
 
-  const domainExamples: Record<string, string> = {
-    Markets: 'stock trading, commodities, currency, crypto, macroeconomics',
-    Medicine: 'clinical trials, public health, epidemiology, treatment effects',
-    Law: 'legal causation, liability, evidence, precedent',
-    Technology: 'A/B testing, product metrics, user behavior, system performance',
-    Education: 'learning outcomes, teaching methods, student performance',
-  };
+  // Build diversity instructions based on recent scenarios
+  const diversityBlock = recentScenarios.length > 0 ? `
+DIVERSITY REQUIREMENTS - CRITICAL:
+You MUST create a scenario that is DISTINCTLY DIFFERENT from these recent scenarios:
+${recentScenarios.slice(0, 10).map((s, i) => `${i + 1}. ${s}`).join('\n')}
+
+To ensure diversity, vary along these dimensions:
+- Industry/sector: Choose a DIFFERENT specific industry than those above
+- Time horizon: Mix short-term (days), medium-term (months), long-term (years) effects
+- Geographic context: Vary between US, Europe, Asia, global, local contexts
+- Stakeholder type: Vary who makes the claim (CEO, analyst, doctor, regulator, researcher, etc.)
+- Scale: Vary between individual, company, industry, national, global scale
+- Era: Consider historical, current, or emerging/future contexts
+` : '';
 
   // Different instructions based on validity type
   if (validity === 'YES') {
@@ -260,7 +315,8 @@ function buildPrompt(
 MANDATORY SPECIFICATIONS:
 - Pearl Level: ${trap.pearlLevel} (${levelDescription[trap.pearlLevel]})
 - The reasoning should AVOID common traps like ${trap.trapTypeLabel}
-${domain ? `- Domain: ${domain} (e.g., ${domainExamples[domain] || 'relevant scenarios'})` : '- Domain: Choose from Markets, Medicine, Law, Technology, or Education'}
+- Domain: ${domain}
+- REQUIRED Subdomain: ${subdomain} (YOU MUST set this scenario specifically in ${subdomain})
 
 ${scenarioStructureByLevel[trap.pearlLevel]}
 
@@ -318,7 +374,7 @@ FOR YES CASES - STRICT REQUIREMENTS BY PEARL LEVEL:
 
 ${promptNotes ? `\nADDITIONAL INSTRUCTIONS:\n${promptNotes}\n` : ''}
 
-${existingSummaries ? `\nEXISTING SCENARIOS TO AVOID DUPLICATING:\n${existingSummaries}\n` : ''}
+${diversityBlock}
 
 OUTPUT FORMAT (valid JSON only):
 {
@@ -351,7 +407,8 @@ Generate the question now. Return ONLY valid JSON, no other text.`;
 
 MANDATORY SPECIFICATIONS:
 - Pearl Level: ${trap.pearlLevel} (${levelDescription[trap.pearlLevel]})
-${domain ? `- Domain: ${domain} (e.g., ${domainExamples[domain] || 'relevant scenarios'})` : '- Domain: Choose from Markets, Medicine, Law, Technology, or Education'}
+- Domain: ${domain}
+- REQUIRED Subdomain: ${subdomain} (YOU MUST set this scenario specifically in ${subdomain})
 
 ${scenarioStructureByLevel[trap.pearlLevel]}
 
@@ -408,7 +465,7 @@ CLAIM LANGUAGE MUST MATCH PEARL LEVEL:
 
 ${promptNotes ? `\nADDITIONAL INSTRUCTIONS:\n${promptNotes}\n` : ''}
 
-${existingSummaries ? `\nEXISTING SCENARIOS TO AVOID DUPLICATING:\n${existingSummaries}\n` : ''}
+${diversityBlock}
 
 AMBIGUOUS CASES REQUIRE TWO ADDITIONAL FIELDS:
 1. "hiddenTimestamp": A question that would reveal temporal/causal ordering to disambiguate the case.
@@ -456,7 +513,8 @@ Generate the question now. Return ONLY valid JSON, no other text.`;
 MANDATORY SPECIFICATIONS (you MUST follow these exactly):
 - Pearl Level: ${trap.pearlLevel} (${levelDescription[trap.pearlLevel]})
 - Trap Type: ${trap.trapTypeLabel} (${trap.trapType})
-${domain ? `- Domain: ${domain} (e.g., ${domainExamples[domain] || 'relevant scenarios'})` : '- Domain: Choose from Markets, Medicine, Law, Technology, or Education'}
+- Domain: ${domain}
+- REQUIRED Subdomain: ${subdomain} (YOU MUST set this scenario specifically in ${subdomain})
 
 ${scenarioStructureByLevel[trap.pearlLevel]}
 
@@ -523,7 +581,7 @@ CLAIM LANGUAGE MUST MATCH PEARL LEVEL:
 
 ${promptNotes ? `\nADDITIONAL INSTRUCTIONS:\n${promptNotes}\n` : ''}
 
-${existingSummaries ? `\nEXISTING SCENARIOS TO AVOID DUPLICATING:\n${existingSummaries}\n` : ''}
+${diversityBlock}
 
 OUTPUT FORMAT (valid JSON only):
 {
@@ -657,9 +715,9 @@ async function runBackgroundGeneration(
   batchId: string,
   batchSize: number,
   pearlLevel: string | undefined,
-  domain: string | undefined,
+  fixedDomain: string | undefined,
   promptNotes: string | undefined,
-  existingSummaries: string,
+  initialScenarios: string[],
   validityMix: { yes: number; no: number; ambiguous: number },
   dataset: string,
   tasks?: GenerationTask[]  // Optional: explicit task list from distribution matrix
@@ -680,6 +738,10 @@ async function runBackgroundGeneration(
 
     let successCount = 0;
     let errorCount = 0;
+
+    // Track recent scenarios for diversity (dynamically updated during batch)
+    // Keep last 20 scenarios: 10 from DB + up to 10 from current batch
+    const recentScenarios: string[] = [...initialScenarios.slice(0, 10)];
 
     // If not using explicit tasks, shuffle indices to randomize validity distribution
     let indices: number[] = [];
@@ -724,9 +786,15 @@ async function runBackgroundGeneration(
 
       // Select trap type/subtype based on current distribution
       const trap = await selectNextTrap(taskPearlLevel);
-      console.log(`[Batch ${batchId}] Generating ${i + 1}/${batchSize}: ${validity} - ${trap.pearlLevel} - ${trap.trapType} - ${trap.trapSubtype || 'No subtype'}`);
 
-      const prompt = buildPrompt(trap, validity, domain, existingSummaries, promptNotes);
+      // Use domain rotation for diversity (unless a fixed domain was specified)
+      const currentDomain = getRotatedDomain(i, fixedDomain);
+      // Also rotate through subdomains within the domain for extra diversity
+      const currentSubdomain = getRotatedSubdomain(currentDomain, i);
+
+      console.log(`[Batch ${batchId}] Generating ${i + 1}/${batchSize}: ${validity} - ${trap.pearlLevel} - ${trap.trapType} - ${trap.trapSubtype || 'No subtype'} - ${currentDomain}/${currentSubdomain}`);
+
+      const prompt = buildPrompt(trap, validity, currentDomain, currentSubdomain, recentScenarios, promptNotes);
 
       try {
         const completion = await openai.chat.completions.create({
@@ -846,6 +914,12 @@ async function runBackgroundGeneration(
           data: { generatedCount: successCount },
         });
 
+        // Add to recent scenarios for diversity tracking (keep last 20)
+        recentScenarios.unshift(generated.scenario);
+        if (recentScenarios.length > 20) {
+          recentScenarios.pop();
+        }
+
       } catch (error) {
         console.error(`[Batch ${batchId}] Error generating question ${i + 1}:`, error);
         errorCount++;
@@ -955,17 +1029,16 @@ export async function POST(req: NextRequest) {
       mix.ambiguous = 100 - mix.yes - mix.no;
     }
 
-    // Get existing scenarios to avoid duplication (within same dataset)
+    // Get existing scenarios to seed diversity tracking (full scenarios, not truncated)
     const existingScenarios = await prisma.question.findMany({
       where: { dataset: datasetName },
       select: { scenario: true },
-      take: 50,
+      take: 20,
       orderBy: { createdAt: 'desc' },
     });
 
-    const existingSummaries = existingScenarios.map(q =>
-      `${q.scenario.substring(0, 80)}...`
-    ).join('\n');
+    // Pass full scenarios as array for better diversity matching
+    const initialScenarios = existingScenarios.map(q => q.scenario);
 
     // Create generation batch record
     const batch = await prisma.generationBatch.create({
@@ -990,7 +1063,7 @@ export async function POST(req: NextRequest) {
         pearlLevel,
         domain,
         promptNotes,
-        existingSummaries,
+        initialScenarios,
         mix,
         datasetName,
         tasks  // Pass tasks if using distribution matrix
