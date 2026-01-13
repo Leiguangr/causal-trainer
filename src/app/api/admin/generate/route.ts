@@ -437,6 +437,12 @@ CRITICAL: Describe ONLY observable behaviors and outcomes. NEVER describe intent
 - GOOD: "Brokers engage in excessive trading (Z). Trading volume increased 300% while profit per trade decreased 50%."
 The reader should infer the trap from observable patterns, not from stated intentions.
 
+CRITICAL: NEVER use meta-language that describes the analysis or the mistake. The scenario is a factual description of events, NOT a description of someone's flawed reasoning.
+- BAD: "Z is mistakenly treated as a confounder instead of a mediator in this analysis"
+- BAD: "The researcher failed to account for..."
+- BAD: "This analysis incorrectly assumes..."
+- GOOD: Just describe the facts and let the reader identify the flaw.
+
 CRITICAL: Variables X, Y, and Z must be DISTINCT concepts. X and Z should NOT overlap or describe the same thing.
 - BAD: X = "Trading compliance", Z = "Compliance with strategy" (these are the same!)
 - GOOD: X = "Trading strategy used", Y = "Profits", Z = "Survived 10+ years (Collider)"
@@ -482,7 +488,7 @@ ${existingSummaries ? `\nEXISTING SCENARIOS TO AVOID DUPLICATING:\n${existingSum
 
 OUTPUT FORMAT (valid JSON only):
 {
-  "scenario": "CONCISE scenario (2-3 sentences, 40-80 words) using inline (X), (Y), (Z) notation. EXPLICITLY reveal the trap.",
+  "scenario": "CONCISE scenario (2-3 sentences, 40-80 words) using inline (X), (Y), (Z) notation. Show the causal pattern - do NOT describe the mistake or use meta-language.",
   "claim": "The claim to evaluate - language MUST match Pearl level.",
   "variables": {
     "X": "Primary treatment/cause variable",
