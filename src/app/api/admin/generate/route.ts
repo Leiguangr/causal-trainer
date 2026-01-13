@@ -209,6 +209,29 @@ function buildPrompt(
     L3: 'Counterfactual - Reasoning about what-ifs. What would have happened if X had been different?',
   };
 
+  // Scenario structure guidance by Pearl level
+  const scenarioStructureByLevel = {
+    L1: `SCENARIO STRUCTURE FOR L1 (Data-Centric):
+- Focus on describing the DATA PATTERN itself
+- Show observational correlations, associations, or patterns
+- No actor/analyst persona required - the data speaks for itself
+- The trap should be visible in the data structure (e.g., uncontrolled confounders, selected samples)`,
+
+    L2: `SCENARIO STRUCTURE FOR L2 (Actor-Centric):
+- The scenario MUST include someone who TOOK AN ACTION and MAKES A CLAIM about its effect
+- This could be: an analyst, policy maker, CEO, researcher, doctor, manager, etc.
+- Show: (1) what intervention they did, (2) what they observed, (3) their causal conclusion
+- The trap is in their METHODOLOGY or INTERPRETATION, not just the data
+- Example structure: "A [role] implemented [X]. They observed [Y] and concluded that [causal claim]."`,
+
+    L3: `SCENARIO STRUCTURE FOR L3 (Reasoning-Centric):
+- The scenario MUST include someone making a COUNTERFACTUAL CLAIM ("what if" / "had X not happened")
+- This could be: an analyst, investigator, historian, policy evaluator, etc.
+- Show: (1) what happened, (2) their counterfactual reasoning about alternatives
+- The trap is in their COUNTERFACTUAL LOGIC (preemption, cross-world confounding, etc.)
+- Example structure: "After [X happened], [role] claims that if [X had not happened], then [counterfactual Y]."`,
+  };
+
   const domainExamples: Record<string, string> = {
     Markets: 'stock trading, commodities, currency, crypto, macroeconomics',
     Medicine: 'clinical trials, public health, epidemiology, treatment effects',
@@ -225,6 +248,8 @@ MANDATORY SPECIFICATIONS:
 - Pearl Level: ${trap.pearlLevel} (${levelDescription[trap.pearlLevel]})
 - The reasoning should AVOID common traps like ${trap.trapTypeLabel}
 ${domain ? `- Domain: ${domain} (e.g., ${domainExamples[domain] || 'relevant scenarios'})` : '- Domain: Choose from Markets, Medicine, Law, Technology, or Education'}
+
+${scenarioStructureByLevel[trap.pearlLevel]}
 
 SCENARIO STYLE - BE CONCISE (2-3 sentences, 40-80 words max):
 Use inline variable notation (X), (Y), (Z) directly in the scenario text.
@@ -314,6 +339,8 @@ Generate the question now. Return ONLY valid JSON, no other text.`;
 MANDATORY SPECIFICATIONS:
 - Pearl Level: ${trap.pearlLevel} (${levelDescription[trap.pearlLevel]})
 ${domain ? `- Domain: ${domain} (e.g., ${domainExamples[domain] || 'relevant scenarios'})` : '- Domain: Choose from Markets, Medicine, Law, Technology, or Education'}
+
+${scenarioStructureByLevel[trap.pearlLevel]}
 
 SCENARIO STYLE - BE CONCISE (2-3 sentences, 40-80 words max):
 Use inline variable notation (X), (Y), (Z) directly in the scenario text.
@@ -417,6 +444,8 @@ MANDATORY SPECIFICATIONS (you MUST follow these exactly):
 - Pearl Level: ${trap.pearlLevel} (${levelDescription[trap.pearlLevel]})
 - Trap Type: ${trap.trapTypeLabel} (${trap.trapType})
 ${domain ? `- Domain: ${domain} (e.g., ${domainExamples[domain] || 'relevant scenarios'})` : '- Domain: Choose from Markets, Medicine, Law, Technology, or Education'}
+
+${scenarioStructureByLevel[trap.pearlLevel]}
 
 === TRAP DEFINITION: ${trap.trapTypeLabel.toUpperCase()} ===
 ${trap.trapTypeDescription}
