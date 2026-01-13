@@ -148,8 +148,8 @@ export default function ReviewPage() {
 
     setIsSaving(true);
     try {
-      // Use global author if set, otherwise keep existing author
-      const authorToUse = globalAuthor || formData.author;
+      // Always use global author
+      const authorToUse = globalAuthor;
 
       const res = await fetch(`/api/admin/questions/${formData.id}`, {
         method: 'PATCH',
