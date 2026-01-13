@@ -701,11 +701,20 @@ async function runBackgroundGeneration(
           : 1;
         const caseId = `G.${nextCaseNumber}`;
 
-        // Use the requested trap type/subtype (override LLM if it deviated)
-        const finalTrapType = generated.annotations.trapType === trap.trapType
-          ? generated.annotations.trapType
-          : trap.trapType;
-        const finalTrapSubtype = trap.trapSubtype || generated.annotations.trapSubtype;
+        // For YES and AMBIGUOUS cases, trapType should be NONE
+        // For NO cases, use the requested trap type (override LLM if it deviated)
+        let finalTrapType: string;
+        let finalTrapSubtype: string;
+
+        if (validity === 'YES' || validity === 'AMBIGUOUS') {
+          // No trap for valid or ambiguous claims
+          finalTrapType = 'NONE';
+          finalTrapSubtype = 'NONE';
+        } else {
+          // For NO cases, enforce the requested trap type
+          finalTrapType = trap.trapType;
+          finalTrapSubtype = trap.trapSubtype || 'NONE';
+        }
 
         // Create question in database
         await prisma.question.create({
