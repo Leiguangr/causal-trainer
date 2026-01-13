@@ -23,6 +23,10 @@ interface Question {
   reviewNotes: string | null;
   sourceCase: string | null;
   dataset: string;
+  // New metadata fields
+  author: string | null;
+  hiddenTimestamp: string | null;
+  conditionalAnswers: string | null;
 }
 
 interface Dataset {
@@ -204,15 +208,52 @@ export default function ReviewPage() {
 
       if (res.ok) {
         const data = await res.json();
+        console.log('Revision response:', data);
+        console.log('Revised fields:', Object.keys(data.revised || {}));
+
+        if (!data.revised || Object.keys(data.revised).length === 0) {
+          alert('AI did not suggest any changes. It may have agreed with the current assessment or misunderstood the challenge.');
+          return;
+        }
+
         // Update form with revised data, keeping the id
-        setFormData({
+        const updatedFormData = {
           ...formData,
           ...data.revised,
           id: formData.id,
+        };
+
+        // Auto-save revision as draft to prevent hot-reload from losing changes
+        const savePayload = {
+          ...updatedFormData,
+          isVerified: false, // Keep as draft for review
+          reviewNotes: `[AI Revised] Challenge: ${challengeText.substring(0, 100)}...`,
+        };
+        console.log('Saving revised question with payload:', savePayload);
+        console.log('Revised scenario:', savePayload.scenario?.substring(0, 100));
+        console.log('Revised groundTruth:', savePayload.groundTruth);
+
+        const saveRes = await fetch(`/api/admin/questions/${formData.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(savePayload),
         });
-        setShowChallengeModal(false);
-        setChallengeText('');
-        alert('Question revised based on your feedback!');
+
+        if (saveRes.ok) {
+          // Refresh the question from database
+          await fetchQuestions();
+          setShowChallengeModal(false);
+          setChallengeText('');
+
+          const changedFields = Object.keys(data.revised).join(', ');
+          alert(`Question revised and saved as draft!\n\nChanged fields: ${changedFields}\n\nReview and click "Verify & Save" when ready.`);
+        } else {
+          // Still update form even if save failed
+          setFormData(updatedFormData);
+          setShowChallengeModal(false);
+          setChallengeText('');
+          alert('Revision applied to form but auto-save failed. Please click Save manually.');
+        }
       } else {
         const error = await res.json();
         alert(`Failed to revise: ${error.error || 'Unknown error'}`);
@@ -731,6 +772,83 @@ export default function ReviewPage() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2"
                   placeholder="YES/NO/AMBIGUOUS - The claim is..."
                 />
+              </div>
+
+              {/* AMBIGUOUS-specific fields */}
+              {current.groundTruth === 'AMBIGUOUS' && (
+                <div className="border-t border-b border-yellow-200 bg-yellow-50 p-4 rounded-lg space-y-4">
+                  <h4 className="font-medium text-yellow-800 flex items-center gap-2">
+                    ⚠️ AMBIGUOUS Case Fields
+                  </h4>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Hidden Timestamp Question
+                      <span className="text-gray-400 ml-2 font-normal">
+                        (What temporal/causal ordering would resolve this?)
+                      </span>
+                    </label>
+                    <textarea
+                      value={current.hiddenTimestamp === 'TBD' ? '' : (current.hiddenTimestamp || '')}
+                      onChange={(e) => updateField('hiddenTimestamp', e.target.value || 'TBD')}
+                      rows={2}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                      placeholder="e.g., Did sales lag throughout the quarter (tX effect), or only during the storm window (tZ effect)?"
+                    />
+                    {current.hiddenTimestamp === 'TBD' && (
+                      <p className="text-xs text-yellow-600 mt-1">⚠️ Needs annotation</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Conditional Answers
+                      <span className="text-gray-400 ml-2 font-normal">
+                        (JSON: &quot;Answer if...&quot; sections)
+                      </span>
+                    </label>
+                    <textarea
+                      value={current.conditionalAnswers === 'TBD' ? '' : (current.conditionalAnswers || '')}
+                      onChange={(e) => updateField('conditionalAnswers', e.target.value || 'TBD')}
+                      rows={4}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 font-mono text-sm"
+                      placeholder={`{
+  "ifScenarioA": "Answer if tZ dominates: The storm (Z) prevented shoppers...",
+  "ifScenarioB": "Answer if tX dominates: Sales were bad (Y) due to mix (X)..."
+}`}
+                    />
+                    {current.conditionalAnswers === 'TBD' && (
+                      <p className="text-xs text-yellow-600 mt-1">⚠️ Needs annotation</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Author field */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Author/Annotator
+                  </label>
+                  <input
+                    value={current.author || ''}
+                    onChange={(e) => updateField('author', e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    placeholder="LLM, admin@example.com, etc."
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Source Case
+                  </label>
+                  <input
+                    value={current.sourceCase || ''}
+                    onChange={(e) => updateField('sourceCase', e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    placeholder="e.g., 3.15"
+                    disabled
+                  />
+                </div>
               </div>
 
               <div>

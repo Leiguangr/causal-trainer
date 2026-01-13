@@ -35,9 +35,15 @@ model Question {
   difficulty        String      @default("medium") // easy, medium, hard
   groundTruth       String      @default("NO") // YES, NO, AMBIGUOUS
   variables         String?     // JSON string for SQLite: { X, Y, Z[] }
-  causalStructure   String?     // Brief description of causal graph
+  causalStructure   String?     // Brief description of causal graph (null for AMBIGUOUS)
   keyInsight        String?     // One-line takeaway
   wiseRefusal       String?     // Complete answer with verdict
+
+  // New metadata fields
+  author            String?     // Who made/reviewed the annotation (e.g., "LLM", "admin@example.com")
+  hiddenTimestamp   String?     // For AMBIGUOUS: temporal/causal ordering question. "N/A" for YES/NO.
+  conditionalAnswers String?    // For AMBIGUOUS: JSON with "Answer if..." sections. "N/A" for YES/NO.
+
   isVerified        Boolean     @default(false)
   isLLMGenerated    Boolean     @default(false)
   sourceCase        String?     // e.g., "3.15" from BucketLarge-G

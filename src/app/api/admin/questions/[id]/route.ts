@@ -27,6 +27,10 @@ export async function PATCH(
         causalStructure: body.causalStructure,
         keyInsight: body.keyInsight,
         wiseRefusal: body.wiseRefusal,
+        // New metadata fields
+        author: body.author,
+        hiddenTimestamp: body.hiddenTimestamp,
+        conditionalAnswers: body.conditionalAnswers,
         reviewNotes: body.reviewNotes,
         isVerified: body.isVerified ?? false,
       },
