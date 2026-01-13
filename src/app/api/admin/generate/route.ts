@@ -370,6 +370,15 @@ ${promptNotes ? `\nADDITIONAL INSTRUCTIONS:\n${promptNotes}\n` : ''}
 
 ${existingSummaries ? `\nEXISTING SCENARIOS TO AVOID DUPLICATING:\n${existingSummaries}\n` : ''}
 
+AMBIGUOUS CASES REQUIRE TWO ADDITIONAL FIELDS:
+1. "hiddenTimestamp": A question that would reveal temporal/causal ordering to disambiguate the case.
+   Example: "Did sales lag throughout the quarter (tX effect), or only during the storm window (tZ effect)?"
+2. "conditionalAnswers": JSON object with "Answer if..." sections for different scenarios.
+   Example: {
+     "ifScenarioA": "Answer if tZ dominates (storm drove results): The storm (Z) prevented shoppers...",
+     "ifScenarioB": "Answer if tX dominates (sales lagged before storm): Sales were bad (Y) due to mix (X)..."
+   }
+
 OUTPUT FORMAT (valid JSON only):
 {
   "scenario": "CONCISE scenario (2-3 sentences, 40-80 words) using inline (X), (Y), (Z) notation. Present facts without enough info to determine validity.",
@@ -386,12 +395,16 @@ OUTPUT FORMAT (valid JSON only):
     "trapType": "NONE",
     "trapSubtype": "NONE",
     "difficulty": "medium or hard",
-    "causalStructure": "Causal diagram edges only, e.g. 'X -> Y, Z -> X'. No descriptions.",
     "keyInsight": "One-line key takeaway about what information is missing"
   },
   "groundTruth": "AMBIGUOUS",
   "explanation": "Explanation (50-100 words) of what information is MISSING and why we cannot definitively evaluate the claim.",
-  "wiseRefusal": "Complete answer starting with 'AMBIGUOUS - cannot definitively evaluate.' followed by clear reasoning about what information is missing and what would be needed to resolve it."
+  "wiseRefusal": "Complete answer starting with 'AMBIGUOUS - cannot definitively evaluate.' followed by clear reasoning about what information is missing and what would be needed to resolve it.",
+  "hiddenTimestamp": "A question that reveals temporal/causal ordering needed to resolve ambiguity.",
+  "conditionalAnswers": {
+    "ifScenarioA": "Answer if [condition A]: [reasoning under that assumption]...",
+    "ifScenarioB": "Answer if [condition B]: [reasoning under that assumption]..."
+  }
 }
 
 Generate the question now. Return ONLY valid JSON, no other text.`;
@@ -539,12 +552,15 @@ interface GeneratedQuestion {
     trapType: string;
     trapSubtype: string;
     difficulty: string;
-    causalStructure: string;
+    causalStructure?: string; // Optional - not used for AMBIGUOUS
     keyInsight: string;
   };
   groundTruth: string;
   explanation: string;
   wiseRefusal: string;
+  // AMBIGUOUS-specific fields
+  hiddenTimestamp?: string;
+  conditionalAnswers?: Record<string, string>;
 }
 
 // Helper to select validity type based on mix percentages
@@ -741,6 +757,10 @@ async function runBackgroundGeneration(
           finalTrapSubtype = trap.trapSubtype || 'NONE';
         }
 
+        // For AMBIGUOUS cases, don't include causalStructure (it doesn't make sense)
+        // and include the new AMBIGUOUS-specific fields
+        const isAmbiguous = generated.groundTruth === 'AMBIGUOUS';
+
         // Create question in database
         await prisma.question.create({
           data: {
@@ -755,9 +775,16 @@ async function runBackgroundGeneration(
             difficulty: generated.annotations.difficulty?.toLowerCase() || 'medium',
             groundTruth: generated.groundTruth,
             variables: JSON.stringify(generated.variables),
-            causalStructure: generated.annotations.causalStructure,
+            // No causalStructure for AMBIGUOUS cases
+            causalStructure: isAmbiguous ? null : generated.annotations.causalStructure,
             keyInsight: generated.annotations.keyInsight,
             wiseRefusal: generated.wiseRefusal,
+            // AMBIGUOUS-specific fields
+            hiddenTimestamp: isAmbiguous ? (generated.hiddenTimestamp || 'TBD') : 'N/A',
+            conditionalAnswers: isAmbiguous
+              ? (generated.conditionalAnswers ? JSON.stringify(generated.conditionalAnswers) : 'TBD')
+              : 'N/A',
+            author: 'LLM',
             sourceCase: caseId,
             isLLMGenerated: true,
             isVerified: false,
