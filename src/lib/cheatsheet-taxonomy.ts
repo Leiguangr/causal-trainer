@@ -332,6 +332,7 @@ export const CHEATSHEET_TAXONOMY: TrapTypeDefinition[] = [
         mathSignature: 'Post-policy M increases while T flat/declines because mapping M→T is broken.',
         howItHappens: 'Hospitals reduce "wait time" by redefining waiting; schools inflate scores via test prep.',
       },
+    ],
   },
   {
     type: 'FEEDBACK',
