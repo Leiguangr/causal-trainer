@@ -237,8 +237,17 @@ The reader should infer the trap from observable patterns, not from stated inten
 GOOD EXAMPLE (L2, YES):
 "A randomized controlled trial assigned 500 patients to receive Drug X or placebo. After 12 weeks, Drug X patients (X) showed 40% greater improvement in symptoms (Y) compared to placebo, with proper blinding and no dropouts."
 
-GOOD EXAMPLE (L3, YES):
-"The Federal Reserve raised interest rates (X). Tech stocks fell 30% (Y). DCF valuation models show higher discount rates mechanically reduce present value of future cash flows."
+GOOD EXAMPLE (L3, YES - note the EXPLICIT structural assumption):
+"ASSUME the only factor affecting this stock's price is the discount rate used in valuation models. The Federal Reserve raised interest rates by 2% (X). The stock fell 30% (Y). Claim: Had the Fed held rates steady, the stock would not have fallen."
+[VALID because the scenario EXPLICITLY states a structural assumption that overrides real-world complexity]
+
+GOOD EXAMPLE (L3, YES - note the EXPLICIT counterfactual evidence):
+"A Fed simulation model tested two scenarios with all other economic factors held constant. Scenario A (rate hike) produced 30% stock decline. Scenario B (rates steady) produced 5% stock appreciation. The Fed chose to raise rates (X) and stocks fell 30% (Y). Claim: Had the Fed held rates steady, stocks would have appreciated."
+[VALID because the scenario provides direct counterfactual evidence from the simulation]
+
+BAD EXAMPLE (L3, YES - INVALID because no structural assumption stated):
+"The Federal Reserve raised interest rates (X). Tech stocks fell 30% (Y). Claim: Had rates been steady, stocks would have rallied."
+[INVALID as YES - this should be AMBIGUOUS because nothing in the scenario tells us what would happen in the counterfactual world. Any reasoning requires domain knowledge not stated in scenario.]
 
 BAD EXAMPLE (too long):
 "In a groundbreaking study conducted by researchers at Stanford University in collaboration with major pharmaceutical companies, a comprehensive randomized controlled trial was designed to evaluate the efficacy of a novel treatment approach..." [too much narrative padding]
@@ -250,18 +259,24 @@ GROUND TRUTH LABEL RULES:
 | NO        | The claim is invalid as stated due to a violated causal or statistical assumption.              | Exactly 1 |
 | AMBIGUOUS | The claim cannot be definitively evaluated given the available information.                     | NONE      |
 
-CRITICAL: The claim's validity is determined ONLY from information in the scenario. Do NOT use external domain knowledge.
+CRITICAL EPISTEMOLOGICAL RULE:
+The claim's validity is determined ONLY from information EXPLICITLY stated in the scenario.
+Do NOT use external domain knowledge to fill in gaps.
+If evaluating the claim requires knowledge not in the scenario, the answer is AMBIGUOUS, not YES.
 
 CLAIM LANGUAGE MUST MATCH PEARL LEVEL:
 - L1 (Association): Use "is associated with", "is correlated with", "predicts" - NO causal language
 - L2 (Intervention): Use "causes", "leads to", "increases/decreases" - causal language OK
 - L3 (Counterfactual): Use "would have", "had X not occurred" - counterfactual language
 
-FOR YES CASES:
-- The scenario MUST provide sufficient detail to support the claim
-- If the claim is associational (L1), show a valid observed correlation
-- If the claim is causal (L2), describe proper causal identification (RCT, natural experiment, etc.)
-- If the claim is counterfactual (L3), provide basis for counterfactual reasoning (deterministic mechanism, structural necessity)
+FOR YES CASES - STRICT REQUIREMENTS BY PEARL LEVEL:
+- L1 (Association): Scenario shows a valid observed correlation with sufficient sample/context
+- L2 (Intervention): Scenario describes proper causal identification (RCT, natural experiment, instrumental variable, etc.)
+- L3 (Counterfactual): Scenario MUST provide ONE of the following:
+  * EXPLICIT structural assumption (e.g., "ASSUME X is the only cause of Y")
+  * EXPLICIT counterfactual evidence (e.g., simulation results, parallel world comparison)
+  * EXPLICIT deterministic mechanism stated in scenario (not inferred from domain knowledge)
+  WITHOUT one of these, L3 claims should be AMBIGUOUS, not YES.
 
 ${promptNotes ? `\nADDITIONAL INSTRUCTIONS:\n${promptNotes}\n` : ''}
 
@@ -335,6 +350,16 @@ FOR AMBIGUOUS CASES, the scenario should be MISSING key information:
 - No mechanism details (how would this work?)
 - Speculative quantification (direction may be right but magnitude uncertain)
 - Multiple plausible explanations with no way to distinguish
+
+SPECIAL CASE - L3 (Counterfactual) is often AMBIGUOUS:
+For L3 claims in observational domains (Markets, real-world scenarios), the default should be AMBIGUOUS unless:
+- The scenario explicitly states structural assumptions (e.g., "ASSUME X is the only cause of Y")
+- The scenario provides counterfactual evidence (e.g., simulation results, parallel experiments)
+Without these, we cannot know what would have happened in the counterfactual world.
+
+GOOD L3 AMBIGUOUS EXAMPLE:
+"The Federal Reserve raised interest rates (X). Tech stocks fell 30% (Y). Claim: Had the Fed held rates steady, stocks would have rallied."
+[AMBIGUOUS because: Nothing in the scenario tells us what would happen in the counterfactual. Evaluating this requires domain knowledge not stated in the scenario.]
 
 CLAIM LANGUAGE MUST MATCH PEARL LEVEL:
 - L1 (Association): Use "is associated with", "is correlated with", "predicts"
