@@ -1,0 +1,298 @@
+Below is a **Table-1-keyed checklist**: **one subtype row → one mini “spec”** with (1) definition, (2) minimal causal graph, (3) math signature / what goes wrong, (4) how it happens in practice.
+
+I’ll use:
+
+* L1 (association): (P(Y\mid X)) 
+* L2 (intervention): (P(Y\mid do(X=x))) 
+* L3 (counterfactual): (Y_x) / “what if (X) had been different?” 
+
+---
+
+## L1: Association subtypes (Table 1 rows) 
+
+### Confounding — **Confounding by Indication**
+
+* **Definition:** Treatment/exposure is *chosen because of underlying risk/severity* that also affects the outcome.
+* **Minimal graph:** (U\rightarrow X), (U\rightarrow Y).
+* **Math signature:** (E[Y\mid X{=}1]-E[Y\mid X{=}0]) mixes causal effect with (U):
+  [
+  Y_x \not!\perp!!!\perp X \quad\Rightarrow\quad P(Y\mid do(X))\neq P(Y\mid X).
+  ]
+* **How it happens:** doctors/policymakers/agents assign (X) based on prognosis; the “treated” group starts out systematically different.
+
+### Confounding — **Omitted Variable**
+
+* **Definition:** A missing/unmeasured variable drives both (X) and (Y).
+* **Minimal graph:** (U\rightarrow X), (U\rightarrow Y) (but (U) is unobserved).
+* **Math signature:** same as above; residual correlation remains after observed controls.
+* **How it happens:** you don’t measure temperature, baseline risk, location, seasonality, etc.; “control for everything you have” still leaves the real confounder out.
+
+### Confounding — **Socioeconomic**
+
+* **Definition:** SES/resources jointly influence exposure (access/choice) and outcomes.
+* **Minimal graph:** (SES\rightarrow X), (SES\rightarrow Y).
+* **Math signature:** same confounding violation; often strong because SES touches many mechanisms.
+* **How it happens:** wealth affects tutoring, neighborhood, healthcare access, time, nutrition, stress → outcomes; analyses that ignore SES over-credit (X).
+
+---
+
+### Reverse Causation — **Outcome-driven Selection**
+
+* **Definition:** The outcome (or early outcome trends) influences the exposure decision.
+* **Minimal graph:** (Y\rightarrow X) (or (Y_{t-1}\rightarrow X_t)).
+* **Math signature:** (P(Y\mid X)) reflects “people choose (X) when (Y) is changing,” not (X\rightarrow Y).
+* **How it happens:** firms invest when profits rise; people diet when weight rises; governments intervene when conditions change.
+
+### Reverse Causation — **Policy Endogeneity**
+
+* **Definition:** Policies are adopted in response to economic/social conditions that also affect outcomes.
+* **Minimal graph:** (U\rightarrow X), (U\rightarrow Y) where (U) is “state of the world,” plus often (Y\rightarrow X) through forecasting.
+* **Math signature:** post-policy outcomes confound policy effect with pre-existing trends.
+* **How it happens:** “good times” both enable policy passage and improve (Y), so policy falsely looks beneficial.
+
+---
+
+### Selection Bias — **Sampling-on-the-Outcome**
+
+* **Definition:** Your dataset is conditioned on success/failure (or a function of (Y)).
+* **Minimal graph:** (Y\rightarrow S) (you only observe (S{=}1)).
+* **Math signature:** you estimate (P(Y\mid X, S{=}1)), not (P(Y\mid X)); can induce spurious patterns.
+* **How it happens:** “study only successful startups,” “only published papers,” “only admitted students.”
+
+### Selection Bias — **Attrition Bias**
+
+* **Definition:** Dropout/missingness depends on performance/outcome (or its predictors).
+* **Minimal graph:** (Y\rightarrow R) (response/retention), analyze only (R{=}1).
+* **Math signature:** (E[Y\mid X, R{=}1]) biased if (R) depends on (Y) (MNAR) or on unobserved predictors.
+* **How it happens:** struggling participants stop responding; sicker patients leave the study; churn hides bad outcomes.
+
+---
+
+### Collider — **Conditioning on Participation**
+
+* **Definition:** Participation/admission is a *common effect* of two causes you then analyze.
+* **Minimal graph:** (X\rightarrow S\leftarrow Y) (or (U\rightarrow S\leftarrow V)).
+* **Math signature:** even if (X\perp Y), conditioning creates dependence:
+  [
+  X \not!\perp!!!\perp Y \mid S{=}1.
+  ]
+* **How it happens:** you analyze only admitted, only surveyed, only “engaged users,” only “approved loans.”
+
+### Collider — **Case-Control Sampling**
+
+* **Definition:** You sample conditional on outcome status (cases vs controls).
+* **Minimal graph:** (Y\rightarrow S); compare (X) within (S{=}1) constructed by (Y).
+* **Math signature:** the sample distorts base rates (prevalence). Many naive interpretations of (P(Y\mid X)) break because you observe (P(X\mid Y)) by design.
+* **How it happens:** medical case-control studies; incident reviews; “only flagged fraud cases.”
+
+---
+
+### Simpson’s Paradox — **Aggregation Bias**
+
+* **Definition:** Overall association reverses relative to within-group associations.
+* **Minimal graph:** (Z\rightarrow X), (Z\rightarrow Y) (stratifier changes mix); often confounding-like.
+* **Math signature:**
+  [
+  E[Y\mid X]=\sum_z E[Y\mid X,z];P(z\mid X),
+  ]
+  and differing (P(z\mid X)) can flip signs.
+* **How it happens:** groups have different baseline risk and are unevenly represented across (X).
+
+### Simpson’s Paradox — **Imbalanced Group Composition**
+
+* **Definition:** One group looks worse because it serves “harder cases,” skewing aggregates.
+* **Minimal graph:** severity (Z) affects both assignment to group/option (X) and outcome (Y).
+* **Math signature:** same weighted-average reversal mechanism.
+* **How it happens:** Hospital A treats sicker patients; “Treatment A” used more on high-risk cases → aggregated stats mislead.
+
+---
+
+### Regression to the Mean — **Extreme-Group Selection**
+
+* **Definition:** Selecting extremes makes the next measurement drift toward average even with no real change.
+* **Minimal graph:** no causal (X) required; selection on (Y_1) then observe (Y_2).
+* **Math signature (toy):** if (Y_t=\mu+\epsilon_t), (\text{corr}(Y_1,Y_2)=\rho<1),
+  [
+  E[Y_2\mid Y_1=y]=\mu+\rho(y-\mu),
+  ]
+  so extreme (y) predicts less extreme (Y_2).
+* **How it happens:** “bottom performers improve after intervention” when they were chosen for being bottom.
+
+### Regression to the Mean — **Noise-Induced Extremes**
+
+* **Definition:** Extremeness comes from measurement noise; repeats look less extreme.
+* **Minimal graph:** measured (\tilde Y = Y + \eta); selection on (\tilde Y) picks high (\eta).
+* **Math signature:** conditional on being extreme, noise has nonzero expectation; next measurement has fresh noise → reversion.
+* **How it happens:** A/B tests with small samples; one-time spikes; leaderboard “winners” regress next week.
+
+---
+
+### Survivorship Bias — **Selective Observation**
+
+* **Definition:** Failures are missing because they “die” before being observed.
+* **Minimal graph:** (S\leftarrow Y) (or outcome-related processes), analyze only (S{=}1).
+* **Math signature:** conditioning on survival inflates estimates of success/effect sizes.
+* **How it happens:** study only companies that survived a recession; only funds still operating; only “active users.”
+
+### Survivorship Bias — **Historical Filtering**
+
+* **Definition:** What exists today is a filtered set of what existed in the past.
+* **Minimal graph:** survival (S) is influenced by latent fitness and environment; you only see survivors.
+* **Math signature:** retrospective inference ignores the counterfactual “dead” paths.
+* **How it happens:** “why were past products so high quality?” (you only see the ones remembered).
+
+---
+
+### Base-rate Neglect — **Prior Ignorance**
+
+* **Definition:** Ignore how rare/common the condition/event is.
+* **Minimal graph:** not a DAG issue; it’s probabilistic reasoning failure.
+* **Math signature (Bayes):**
+  [
+  P(D\mid +)=\frac{P(+\mid D)P(D)}{P(+\mid D)P(D)+P(+\mid \neg D)P(\neg D)}.
+  ]
+  Neglecting (P(D)) wildly overestimates (P(D\mid +)) when (D) is rare.
+* **How it happens:** “test is 95% accurate ⇒ positive means you almost surely have it” (false when prevalence is low).
+
+### Base-rate Neglect — **Conditional Fallacy**
+
+* **Definition:** Confuse (P(D\mid +)) with (P(+\mid D)).
+* **Math signature:** swapping conditional directions (a common error) without Bayes correction.
+* **How it happens:** people hear sensitivity and treat it as posterior probability.
+
+---
+
+### Goodhart’s Law — **Static Metric Gaming**
+
+* **Definition:** Optimize the metric directly, breaking its link to the true goal.
+* **Minimal graph:** metric (M) is a proxy for target (T); decision (A) chosen to maximize (M), not (T).
+* **Math signature:** the relationship (P(T\mid M)) changes after optimization; conditional shifts (distribution shift).
+* **How it happens:** teaching to the test; employees optimize KPI; model overfits leaderboard.
+
+### Goodhart’s Law — **Proxy Drift**
+
+* **Definition:** Proxy stops tracking target as environment/users/strategies change.
+* **Minimal graph:** time/environment (E) affects both proxy validity and outcomes.
+* **Math signature:** (P(T\mid M)) nonstationary; drift makes old calibration invalid.
+* **How it happens:** CTR initially correlates with satisfaction, later becomes clickbait / dark patterns.
+
+---
+
+## L2: Intervention subtypes (Table 1 rows) 
+
+### Confounding — **Unblocked Backdoor**
+
+* **Definition:** You claim an intervention effect but a backdoor path remains open.
+* **Minimal graph:** (U\rightarrow X\rightarrow Y) and (U\rightarrow Y) (backdoor (X\leftarrow U\rightarrow Y)).
+* **Math signature:** (P(Y\mid do(X))) not equal to naive (P(Y\mid X)) because (U) still drives both.
+* **How it happens:** “policy caused (Y)” from observational before/after comparisons without blocking confounders.
+
+### Confounding — **Time-varying Confounding**
+
+* **Definition:** Past outcomes/covariates affect future treatment, and treatment affects those covariates.
+* **Minimal graph:** (X_{t-1}\rightarrow L_t\rightarrow X_t) and (L_t\rightarrow Y), plus (X_{t-1}\rightarrow Y).
+* **Math signature:** standard adjustment can bias because (L_t) is both confounder and mediator of past treatment; need g-methods.
+* **How it happens:** adaptive treatment strategies; interventions adjusted based on evolving patient status or economic conditions.
+
+### Reverse Causation — **Reactive Intervention**
+
+* **Definition:** Intervention is triggered because outcomes are worsening (or forecast to worsen).
+* **Minimal graph:** (Y_{t-1}\rightarrow X_t\rightarrow Y_t).
+* **Math signature:** naive effect looks harmful because (X) occurs when trend is already negative.
+* **How it happens:** “we introduced policy, then outcomes were bad” — but policy was a response to worsening.
+
+### Selection Bias — **Post-intervention Selection**
+
+* **Definition:** Analyze only those who remain/comply after treatment assignment.
+* **Minimal graph:** (X\rightarrow S) and also (Y\rightarrow S) or (U\rightarrow S).
+* **Math signature:** you estimate (P(Y\mid do(X), S{=}1)) for a selected subset, not the whole population.
+* **How it happens:** per-protocol analyses; excluding dropouts; “only users who engaged with the feature.”
+
+### Collider — **Conditioning on Compliance**
+
+* **Definition:** Compliance is a collider affected by treatment and by factors tied to outcome.
+* **Minimal graph:** (X\rightarrow C\leftarrow U\rightarrow Y) (often also (X\rightarrow Y)).
+* **Math signature:** conditioning on (C) opens (X \leftrightarrow U \rightarrow Y) association.
+* **How it happens:** “among compliers, treatment works/doesn’t” while complier status is itself post-treatment.
+
+### Confounder–Mediator Error — **Mediator Adjustment Error**
+
+* **Definition:** You control for a mediator while trying to estimate the *total* effect.
+* **Minimal graph:** (X\rightarrow Z\rightarrow Y).
+* **Math signature:** adjusting for (Z) removes the indirect effect:
+
+  * Total effect: (E[Y\mid do(X{=}1)]-E[Y\mid do(X{=}0)])
+  * Adjusted estimate targets (something like) a direct effect instead.
+* **How it happens:** “control for everything” habit; post-treatment covariates incorrectly treated as confounders.
+
+### Simpson’s Paradox — **Stratified Intervention Reversal**
+
+* **Definition:** The intervention looks helpful overall but harmful in every subgroup (or vice versa).
+* **Minimal graph:** effect heterogeneity across (Z) plus changing subgroup weights.
+* **Math signature:** overall effect is weighted average of subgroup effects; weight shifts can flip sign.
+* **How it happens:** policy changes composition (who participates, who is exposed), making aggregate effect misleading.
+
+### Goodhart’s Law — **Policy Target Gaming**
+
+* **Definition:** The policy incentivizes optimizing the metric rather than the real goal.
+* **Minimal graph:** policy (\rightarrow) agent behavior (\rightarrow) metric manipulation; target (T) not improved.
+* **Math signature:** post-policy (M) increases while (T) flat/declines because mapping (M\to T) is broken.
+* **How it happens:** hospitals reduce “wait time” by redefining waiting; schools inflate scores via test prep.
+
+### Feedback Loops — **Policy–Response Loop**
+
+* **Definition:** Intervention changes behavior, which changes the environment, which changes outcomes (and often future interventions).
+* **Minimal graph:** (X\rightarrow Y\rightarrow) behavior/environment (\rightarrow Y) (and sometimes (\rightarrow X) again).
+* **Math signature:** effects are not one-shot; (P(Y\mid do(X))) depends on equilibrium/adaptation path.
+* **How it happens:** congestion pricing → rerouting → new congestion patterns; moderation policy → user migration → new dynamics.
+
+---
+
+## L3: Counterfactual subtypes (Table 1 rows) 
+
+### Preemption — **Early Preemption**
+
+* **Definition:** Cause (A) brings about (Y) first, preventing backup cause (B) from operating.
+* **Minimal graph:** (A\rightarrow Y), (B\rightarrow Y), and (A\rightarrow \neg(\text{B acts})).
+* **Math signature:** simple “but-for” fails: (Y_{A=0}=1) (because (B) would cause it), yet intuitively (A) caused (Y) in the actual world.
+* **How it happens:** sprinkler would have stopped fire, but extinguisher stops it earlier—counterfactual attribution is subtle.
+
+### Preemption — **Late Preemption**
+
+* **Definition:** Backup cause would occur later if primary cause didn’t, so actual cause judgments require modeling timing/contingencies.
+* **Math signature:** same but-for failure, with time ordering key.
+* **How it happens:** backup generator would have kicked in; because primary worked, backup never activates.
+
+### Confounding — **Cross-world Confounder**
+
+* **Definition:** In counterfactual comparisons, a factor differs across “worlds” and confounds the cross-world statement.
+* **Math signature:** many counterfactual/mediation claims rely on cross-world independences (e.g., assumptions tying (Y_x) to (X)); a cross-world confounder breaks those assumptions.
+* **How it happens:** “motivation” changes when imagining different choices; the imagined world isn’t comparable to the actual world.
+
+### Reverse Causation — **Outcome-dependent Worlds**
+
+* **Definition:** The counterfactual world is implicitly constrained by knowing the realized outcome.
+* **Math signature:** conditioning on realized (Y) while asserting statements about (Y_x) can bias reasoning (you restrict feasible histories).
+* **How it happens:** “Given the project succeeded, if we hadn’t done X it still would have succeeded” without allowing that success itself depended on contingencies.
+
+### Confounder–Mediator Error — **Mediator Fixing Error**
+
+* **Definition:** Hold a mediator “fixed” while changing treatment, in a way that’s not well-defined/feasible.
+* **Math signature:** statements like (Y_{x, z}) (set (X) to (x) and force mediator (Z) to (z)) can be ill-posed if (z) isn’t achievable under (x) or if forcing (z) changes the system.
+* **How it happens:** “What if we changed treatment but kept recovery constant?”—recovery is downstream of treatment, so “keeping it constant” can be a logically inconsistent intervention.
+
+### Feedback Loops — **Dynamic World Divergence**
+
+* **Definition:** Small counterfactual changes alter the long-run trajectory via compounding dynamics.
+* **Math signature:** in dynamical systems (S_{t+1}=f(S_t,X_t)), tiny perturbations can lead to large differences; naive “everything else equal” counterfactuals fail.
+* **How it happens:** policy changes incentives → new equilibria; early small differences cascade.
+
+### Selection Bias — **Counterfactual Conditioning**
+
+* **Definition:** Condition on survival/selection in the actual world while asking about counterfactual outcomes.
+* **Math signature:** you want something like (E[Y_x \mid S_x=1]) but you condition on (S=1) (actual survival), which is generally a different set:
+  [
+  E[Y_x\mid S=1]\neq E[Y_x\mid S_x=1].
+  ]
+* **How it happens:** “Among those who survived, what would have happened if treated?”—treatment might change who survives.
+

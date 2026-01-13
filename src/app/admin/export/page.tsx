@@ -15,6 +15,7 @@ export default function ExportPage() {
   const [includeL2, setIncludeL2] = useState(true);
   const [includeL3, setIncludeL3] = useState(true);
   const [verifiedOnly, setVerifiedOnly] = useState(true);
+  const [cleanForEval, setCleanForEval] = useState(false);
   const [stats, setStats] = useState<Stats>({
     L1: { current: 0, verified: 0, target: 50 },
     L2: { current: 0, verified: 0, target: 297 },
@@ -22,6 +23,7 @@ export default function ExportPage() {
   });
   const [preview, setPreview] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     fetchStats();
@@ -64,7 +66,7 @@ export default function ExportPage() {
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     const levels = [];
     if (includeL1) levels.push('L1');
     if (includeL2) levels.push('L2');
@@ -73,10 +75,37 @@ export default function ExportPage() {
     const params = new URLSearchParams({
       pearlLevels: levels.join(','),
       verifiedOnly: verifiedOnly.toString(),
+      cleanForEval: cleanForEval.toString(),
       format: 'json',
     });
 
-    window.open(`/api/admin/export?${params}`, '_blank');
+    if (cleanForEval) {
+      // For eval export, use fetch to show progress (LLM cleaning takes time)
+      setIsExporting(true);
+      try {
+        const res = await fetch(`/api/admin/export?${params}`);
+        if (res.ok) {
+          const blob = await res.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `causal-eval-${new Date().toISOString().split('T')[0]}.json`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        } else {
+          alert('Export failed');
+        }
+      } catch (error) {
+        console.error('Export error:', error);
+        alert('Export failed');
+      } finally {
+        setIsExporting(false);
+      }
+    } else {
+      window.open(`/api/admin/export?${params}`, '_blank');
+    }
   };
 
   const getTotalQuestions = () => {
@@ -160,7 +189,28 @@ export default function ExportPage() {
               </p>
             </div>
 
-            <div className="pt-4 border-t">
+            <div className="pt-4 border-t border-b pb-4">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={cleanForEval}
+                  onChange={(e) => setCleanForEval(e.target.checked)}
+                  className="mr-2"
+                />
+                <span className="font-medium text-purple-700">🧪 Clean for Evaluation</span>
+              </label>
+              <p className="text-sm text-gray-500 ml-6">
+                Use LLM to remove explicit trap hints from scenarios (e.g., &quot;mistakenly treated as confounder&quot;).
+                Also excludes trapType, explanation, and other answer-revealing fields.
+              </p>
+              {cleanForEval && (
+                <p className="text-sm text-yellow-600 ml-6 mt-1">
+                  ⚠️ This will take longer as each scenario is processed by LLM.
+                </p>
+              )}
+            </div>
+
+            <div className="pt-4">
               <p className="text-lg font-semibold">
                 Export: {getTotalQuestions()} {verifiedOnly ? 'verified' : 'total'} questions
               </p>
@@ -178,17 +228,25 @@ export default function ExportPage() {
           <div className="flex gap-3">
             <button
               onClick={handlePreview}
-              disabled={isLoading || getTotalQuestions() === 0}
+              disabled={isLoading || isExporting || getTotalQuestions() === 0}
               className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 disabled:bg-gray-400"
             >
               {isLoading ? 'Loading...' : 'Preview'}
             </button>
             <button
               onClick={handleDownload}
-              disabled={getTotalQuestions() === 0}
-              className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 disabled:bg-gray-400"
+              disabled={isExporting || getTotalQuestions() === 0}
+              className={`text-white px-6 py-3 rounded-lg disabled:bg-gray-400 ${
+                cleanForEval
+                  ? 'bg-purple-600 hover:bg-purple-700'
+                  : 'bg-green-600 hover:bg-green-700'
+              }`}
             >
-              Download JSON
+              {isExporting
+                ? '🔄 Cleaning scenarios...'
+                : cleanForEval
+                  ? '🧪 Export for Eval'
+                  : 'Download JSON'}
             </button>
             <button
               onClick={() => router.push('/admin/generate')}
