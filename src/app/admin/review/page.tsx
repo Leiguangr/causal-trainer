@@ -871,22 +871,24 @@ export default function ReviewPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Author/Annotator
-                    {globalAuthor && !current.author && (
+                    {globalAuthor && (
                       <span className="ml-2 text-green-600 font-normal text-xs">
-                        (will use: {globalAuthor})
+                        ✓ Using: {globalAuthor}
                       </span>
                     )}
                   </label>
-                  <input
-                    value={current.author || ''}
-                    onChange={(e) => updateField('author', e.target.value)}
-                    className={`w-full border rounded-lg px-3 py-2 ${
-                      globalAuthor && !current.author
-                        ? 'border-green-300 bg-green-50'
-                        : 'border-gray-300'
-                    }`}
-                    placeholder={globalAuthor || 'LLM, admin@example.com, etc.'}
-                  />
+                  {globalAuthor ? (
+                    <div className="w-full border border-green-300 bg-green-50 rounded-lg px-3 py-2 text-green-700 font-medium">
+                      {globalAuthor}
+                    </div>
+                  ) : (
+                    <input
+                      value={current.author || ''}
+                      onChange={(e) => updateField('author', e.target.value)}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                      placeholder="Set global author in header →"
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
