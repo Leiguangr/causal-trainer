@@ -68,6 +68,28 @@ export default function ReviewPage() {
   const [challengeText, setChallengeText] = useState('');
   const [isRevising, setIsRevising] = useState(false);
 
+  // Global author setting (persisted in localStorage)
+  const [globalAuthor, setGlobalAuthor] = useState<string>('');
+  const [showAuthorModal, setShowAuthorModal] = useState(false);
+
+  // Load global author from localStorage on mount
+  useEffect(() => {
+    const savedAuthor = localStorage.getItem('causal-trainer-author');
+    if (savedAuthor) {
+      setGlobalAuthor(savedAuthor);
+    }
+  }, []);
+
+  // Save global author to localStorage when changed
+  const updateGlobalAuthor = (author: string) => {
+    setGlobalAuthor(author);
+    if (author) {
+      localStorage.setItem('causal-trainer-author', author);
+    } else {
+      localStorage.removeItem('causal-trainer-author');
+    }
+  };
+
   useEffect(() => {
     fetchQuestions();
   }, [filterLevel, filterDomain, filterGroundTruth, filterTrapType, filterDataset, sortBy]);
@@ -123,14 +145,18 @@ export default function ReviewPage() {
 
   const handleSave = async (approve: boolean = false) => {
     if (!formData.id) return;
-    
+
     setIsSaving(true);
     try {
+      // Use global author if set, otherwise keep existing author
+      const authorToUse = globalAuthor || formData.author;
+
       const res = await fetch(`/api/admin/questions/${formData.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
+          author: authorToUse,
           isVerified: approve,
         }),
       });
@@ -303,12 +329,28 @@ export default function ReviewPage() {
               {total} unverified total • Showing {questions.length} matching filters
             </p>
           </div>
-          <button
-            onClick={() => router.push('/admin/generate')}
-            className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
-          >
-            Back to Generate
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Author indicator */}
+            <button
+              onClick={() => setShowAuthorModal(true)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${
+                globalAuthor
+                  ? 'bg-green-50 border-green-300 text-green-700'
+                  : 'bg-yellow-50 border-yellow-300 text-yellow-700'
+              }`}
+            >
+              <span className="text-lg">{globalAuthor ? '👤' : '⚠️'}</span>
+              <span className="text-sm font-medium">
+                {globalAuthor || 'Set Author'}
+              </span>
+            </button>
+            <button
+              onClick={() => router.push('/admin/generate')}
+              className="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700"
+            >
+              Back to Generate
+            </button>
+          </div>
         </div>
 
         {/* Filters Bar */}
@@ -829,12 +871,21 @@ export default function ReviewPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Author/Annotator
+                    {globalAuthor && !current.author && (
+                      <span className="ml-2 text-green-600 font-normal text-xs">
+                        (will use: {globalAuthor})
+                      </span>
+                    )}
                   </label>
                   <input
                     value={current.author || ''}
                     onChange={(e) => updateField('author', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    placeholder="LLM, admin@example.com, etc."
+                    className={`w-full border rounded-lg px-3 py-2 ${
+                      globalAuthor && !current.author
+                        ? 'border-green-300 bg-green-50'
+                        : 'border-gray-300'
+                    }`}
+                    placeholder={globalAuthor || 'LLM, admin@example.com, etc.'}
                   />
                 </div>
                 <div>
@@ -960,6 +1011,57 @@ export default function ReviewPage() {
                   className="bg-orange-600 text-white px-6 py-2 rounded-lg hover:bg-orange-700 disabled:bg-gray-400"
                 >
                   {isRevising ? 'Revising...' : '🔄 Revise Question'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Author Settings Modal */}
+      {showAuthorModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-6">
+              <h2 className="text-xl font-bold mb-4">👤 Set Your Author Name</h2>
+              <p className="text-gray-600 mb-4">
+                This will be used as the default author for all questions you review.
+                It&apos;s saved in your browser.
+              </p>
+
+              <input
+                type="text"
+                value={globalAuthor}
+                onChange={(e) => setGlobalAuthor(e.target.value)}
+                placeholder="e.g., your-email@stanford.edu"
+                className="w-full p-3 border rounded-lg mb-4"
+                autoFocus
+              />
+
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    updateGlobalAuthor('');
+                    setShowAuthorModal(false);
+                  }}
+                  className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg"
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={() => setShowAuthorModal(false)}
+                  className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    updateGlobalAuthor(globalAuthor);
+                    setShowAuthorModal(false);
+                  }}
+                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+                >
+                  Save
                 </button>
               </div>
             </div>
