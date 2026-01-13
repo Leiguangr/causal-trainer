@@ -6,17 +6,33 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Clean a scenario by removing explicit trap hints using LLM
 async function cleanScenarioForEval(scenario: string, trapType: string): Promise<string> {
-  const prompt = `You are helping prepare a causal reasoning evaluation dataset. The following scenario contains explicit hints about the causal trap (${trapType}) that need to be removed so test-takers must identify the flaw themselves.
+  const prompt = `You are helping prepare a causal reasoning evaluation dataset. The following scenario may contain explicit hints about the causal trap (${trapType}) that need to be removed so test-takers must identify the flaw themselves.
 
 ORIGINAL SCENARIO:
 ${scenario}
 
-TASK: Rewrite this scenario to:
-1. REMOVE any meta-language describing the mistake (e.g., "is mistakenly treated as", "incorrectly assumes", "fails to account for")
-2. REMOVE any explicit labeling of variables as "confounder", "mediator", "collider", etc.
-3. KEEP all the factual information and causal structure intact
-4. KEEP the inline variable notation (X), (Y), (Z)
-5. The scenario should still contain enough information for an expert to identify the trap, but should not explicitly name or describe the trap
+TASK: Rewrite this scenario with MINIMAL changes to:
+1. REMOVE ONLY meta-language that explicitly names or describes the analytical mistake:
+   - Remove: "is mistakenly treated as", "incorrectly assumes", "fails to account for", "is wrongly identified as"
+   - Remove: explicit labels like "Z is a confounder", "the mediator Z", "conditioning on the collider"
+
+2. PRESERVE EVERYTHING ELSE - this is critical:
+   - KEEP all factual information exactly as stated (numbers, percentages, timeframes, sample sizes)
+   - KEEP all causal relationships described in the scenario
+   - KEEP all variables and their descriptions
+   - KEEP the inline variable notation (X), (Y), (Z) exactly as they appear
+   - KEEP the sentence structure where possible
+   - KEEP any study design details (RCT, observational, etc.)
+
+3. DO NOT:
+   - Add any new information
+   - Remove factual details that reveal the trap through the data pattern (this is fine - experts should infer from data)
+   - Change the meaning or implications of any statement
+   - Alter numbers, statistics, or quantitative claims
+   - Remove information that would change whether the claim is valid/invalid
+
+The goal is to remove ONLY the "answer key" language while preserving the full factual scenario.
+If the scenario has no explicit trap hints, return it unchanged.
 
 Return ONLY the cleaned scenario text, nothing else.`;
 
