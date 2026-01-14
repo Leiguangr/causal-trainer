@@ -605,6 +605,22 @@ export default function ReviewPage() {
                   </div>
                 )}
               </div>
+
+              {/* AI Review Notes (if present) */}
+              {current.reviewNotes && current.reviewNotes.includes('[AI Review') && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <h3 className="font-semibold text-gray-700 mb-2">🔍 AI Review</h3>
+                  <div className={`rounded-lg p-3 text-sm whitespace-pre-wrap ${
+                    current.reviewNotes.includes('Verdict: APPROVE')
+                      ? 'bg-green-50 border border-green-200 text-green-900'
+                      : current.reviewNotes.includes('Verdict: REJECT')
+                      ? 'bg-red-50 border border-red-200 text-red-900'
+                      : 'bg-yellow-50 border border-yellow-200 text-yellow-900'
+                  }`}>
+                    {current.reviewNotes}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
