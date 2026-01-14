@@ -335,13 +335,25 @@ GOOD EXAMPLE (L3, YES - note the EXPLICIT structural assumption):
 "ASSUME the only factor affecting this stock's price is the discount rate used in valuation models. The Federal Reserve raised interest rates by 2% (X). The stock fell 30% (Y). Claim: Had the Fed held rates steady, the stock would not have fallen."
 [VALID because the scenario EXPLICITLY states a structural assumption that overrides real-world complexity]
 
-GOOD EXAMPLE (L3, YES - note the EXPLICIT counterfactual evidence):
-"A Fed simulation model tested two scenarios with all other economic factors held constant. Scenario A (rate hike) produced 30% stock decline. Scenario B (rates steady) produced 5% stock appreciation. The Fed chose to raise rates (X) and stocks fell 30% (Y). Claim: Had the Fed held rates steady, stocks would have appreciated."
-[VALID because the scenario provides direct counterfactual evidence from the simulation]
+GOOD EXAMPLE (L3, YES - with MODEL VALIDATION + EXTERNAL VALIDITY):
+"A currency analyst used a DSGE model (Z) calibrated on 30 years of Fed decisions, validated on 10 out-of-sample rate changes with 90% directional accuracy. The model assumes interest rate differentials directly drive capital flows. Simulating the counterfactual, USD/EUR would have remained stable without the rate hike (X). Claim: Had the Fed not raised rates, USD/EUR (Y) would have remained stable."
+[VALID because: (1) Model validated with out-of-sample accuracy, (2) Explicit mechanism stated, (3) Counterfactual derived from validated structural model]
 
-BAD EXAMPLE (L3, YES - INVALID because no structural assumption stated):
+BAD EXAMPLE #1 (L3, YES - REJECTED: method assertion without validation):
+"A currency analyst built a model and simulated alternative scenarios where the rate hike did not occur, showing the USD/EUR exchange rate would have remained stable."
+[REJECTED - Just saying "built a model" and "simulated" is NOT enough. Where is the model validation? What are the structural assumptions? Why should we trust this simulation? This should be AMBIGUOUS.]
+
+BAD EXAMPLE #2 (L3, YES - REJECTED: no structural assumption):
 "The Federal Reserve raised interest rates (X). Tech stocks fell 30% (Y). Claim: Had rates been steady, stocks would have rallied."
-[INVALID as YES - this should be AMBIGUOUS because nothing in the scenario tells us what would happen in the counterfactual world. Any reasoning requires domain knowledge not stated in scenario.]
+[REJECTED - Nothing in the scenario tells us what would happen in the counterfactual world. This should be AMBIGUOUS.]
+
+FOR L3 YES - MANDATORY VALIDATION LANGUAGE (include at least 2):
+- "validated on N out-of-sample predictions with X% accuracy"
+- "calibrated against N years of historical data"
+- "the structural equations assume [explicit mechanism]"
+- "meta-analysis of N studies across M contexts found consistent effects"
+- "replicated across diverse populations including [list]"
+- "field experiment in real-world conditions showed [result]"
 
 BAD EXAMPLE (too long):
 "In a groundbreaking study conducted by researchers at Stanford University in collaboration with major pharmaceutical companies, a comprehensive randomized controlled trial was designed to evaluate the efficacy of a novel treatment approach..." [too much narrative padding]
@@ -365,12 +377,26 @@ CLAIM LANGUAGE MUST MATCH PEARL LEVEL:
 
 FOR YES CASES - STRICT REQUIREMENTS BY PEARL LEVEL:
 - L1 (Association): Scenario shows a valid observed correlation with sufficient sample/context
-- L2 (Intervention): Scenario describes proper causal identification (RCT, natural experiment, instrumental variable, etc.)
-- L3 (Counterfactual): Scenario MUST provide ONE of the following:
-  * EXPLICIT structural assumption (e.g., "ASSUME X is the only cause of Y")
-  * EXPLICIT counterfactual evidence (e.g., simulation results, parallel world comparison)
-  * EXPLICIT deterministic mechanism stated in scenario (not inferred from domain knowledge)
-  WITHOUT one of these, L3 claims should be AMBIGUOUS, not YES.
+- L2 (Intervention): Scenario MUST explicitly describe proper causal identification:
+  * RCT with explicit randomization and control group
+  * Quasi-experiment with SPECIFIC design details (diff-in-diff, regression discontinuity, IV)
+  * Natural experiment with clearly identified exogenous variation
+  WITHOUT explicit method details, L2 should be AMBIGUOUS, not YES.
+- L3 (Counterfactual): THIS IS THE HARDEST LEVEL. Scenario MUST include ALL of:
+  1. VALIDATED MODEL: Not just "built a model" but HOW it was validated:
+     - "validated on N out-of-sample cases with X% accuracy"
+     - "calibrated against N years of data"
+     - "replicated across N independent studies"
+  2. EXPLICIT MECHANISM: State the structural assumption:
+     - "the model assumes X directly causes Y with no confounders"
+     - "the structural equations specify [mechanism]"
+  3. EXTERNAL VALIDITY: Why this applies beyond the specific study:
+     - "tested across diverse populations/conditions"
+     - "meta-analysis of N studies"
+     - "field experiment in real-world settings"
+
+  ⚠️ CRITICAL: "Analyst built a model and simulated X" is NOT sufficient for YES.
+  If any of the 3 requirements above are missing, the scenario should be AMBIGUOUS, not YES.
 
 ${promptNotes ? `\nADDITIONAL INSTRUCTIONS:\n${promptNotes}\n` : ''}
 
@@ -448,15 +474,23 @@ FOR AMBIGUOUS CASES, the scenario should be MISSING key information:
 - Speculative quantification (direction may be right but magnitude uncertain)
 - Multiple plausible explanations with no way to distinguish
 
-SPECIAL CASE - L3 (Counterfactual) is often AMBIGUOUS:
-For L3 claims in observational domains (Markets, real-world scenarios), the default should be AMBIGUOUS unless:
-- The scenario explicitly states structural assumptions (e.g., "ASSUME X is the only cause of Y")
-- The scenario provides counterfactual evidence (e.g., simulation results, parallel experiments)
-Without these, we cannot know what would have happened in the counterfactual world.
+SPECIAL CASE - L3 (Counterfactual) AMBIGUOUS:
+L3 AMBIGUOUS scenarios should NOT just be "we don't know" - they should include A STUDY OR METHOD that was used to make the counterfactual claim, but with UNSTATED ASSUMPTIONS about the approach's validity.
+
+The ambiguity should be about WHETHER THE METHOD SUPPORTS THE CLAIM, not just missing facts.
 
 GOOD L3 AMBIGUOUS EXAMPLE:
+"A research team used a synthetic control method (Z) to estimate what GDP (Y) would have been without the stimulus (X). They constructed a counterfactual from donor economies with similar pre-treatment trends. The study concludes stimulus added 2% GDP growth. Claim: Had stimulus not been implemented, GDP would have been 2% lower."
+[AMBIGUOUS because: The synthetic control method was used, but we don't know if the donor pool was adequate, if there were parallel shocks, or if the pre-treatment fit was good. The APPROACH validity is unclear, not the facts.]
+
+BAD L3 AMBIGUOUS EXAMPLE (too shallow):
 "The Federal Reserve raised interest rates (X). Tech stocks fell 30% (Y). Claim: Had the Fed held rates steady, stocks would have rallied."
-[AMBIGUOUS because: Nothing in the scenario tells us what would happen in the counterfactual. Evaluating this requires domain knowledge not stated in the scenario.]
+[BAD because: No study or method is mentioned. This is just "we don't know" - doesn't help train on counterfactual validity.]
+
+FOR L3 AMBIGUOUS, the scenario MUST include:
+- A study, analysis, or method used to support the counterfactual claim
+- Enough detail that a reviewer can ask "what assumption would need to hold for this to be valid?"
+- The unstated assumptions should relate to external validity (transportability, sample diversity, field conditions)
 
 CLAIM LANGUAGE MUST MATCH PEARL LEVEL:
 - L1 (Association): Use "is associated with", "is correlated with", "predicts"

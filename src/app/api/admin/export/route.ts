@@ -94,8 +94,12 @@ export async function GET(req: NextRequest) {
       // Process in batches to avoid rate limits
       const cleanedQuestions = [];
       for (const q of questions) {
-        const cleanedScenario = await cleanScenarioForEval(q.scenario, q.trapType);
-        cleanedQuestions.push({ ...q, scenario: cleanedScenario });
+        // Clean the combined scenario+claim text
+        const combinedText = q.claim
+          ? `${q.scenario}\n\nClaim: "${q.claim}"`
+          : q.scenario;
+        const cleanedScenario = await cleanScenarioForEval(combinedText, q.trapType);
+        cleanedQuestions.push({ ...q, scenario: cleanedScenario, claim: '' }); // Clear claim since it's now in scenario
       }
       processedQuestions = cleanedQuestions;
     }
@@ -123,32 +127,73 @@ export async function GET(req: NextRequest) {
           variables = q.variables;
         }
 
-        // For eval export, exclude trap-revealing fields
+        // Parse conditional answers if it's a JSON string
+        let conditionalAnswers;
+        try {
+          conditionalAnswers = q.conditionalAnswers ? JSON.parse(q.conditionalAnswers) : null;
+        } catch {
+          conditionalAnswers = q.conditionalAnswers;
+        }
+
+        // Concatenate scenario and claim into a single scenario field
+        const combinedScenario = q.claim
+          ? `${q.scenario}\n\nClaim: "${q.claim}"`
+          : q.scenario;
+
+        // Build export matching required dataset structure
         const baseExport = {
-          caseId: q.sourceCase || q.id,
-          scenario: q.scenario,
-          claim: q.claim,
+          // Scenario: clear description of the situation
+          scenario: combinedScenario,
+
+          // Variables: key variables with their roles
           variables,
+
+          // Annotations: structured metadata
           annotations: {
+            caseId: q.sourceCase || q.id,
             pearlLevel: q.pearlLevel,
             domain: q.domain,
             subdomain: q.subdomain,
+            trapType: q.trapType,
+            trapSubtype: q.trapSubtype,
             difficulty: q.difficulty,
-            // Only include these if NOT cleaning for eval
-            ...(cleanForEval ? {} : {
-              trapType: q.trapType,
-              trapSubtype: q.trapSubtype,
-              causalStructure: q.causalStructure,
-              keyInsight: q.keyInsight,
-            }),
+            causalStructure: q.causalStructure,
+            keyInsight: q.keyInsight,
+            author: q.author || 'Unknown',
           },
+
+          // Ground truth answer
           groundTruth: q.groundTruth,
-          // Only include detailed explanations if NOT cleaning for eval
-          ...(cleanForEval ? {} : {
-            explanation: q.explanation,
-            wiseRefusal: q.wiseRefusal,
-          }),
+
+          // Hidden Timestamp: question that reveals temporal/causal ordering
+          hiddenTimestamp: q.hiddenTimestamp || null,
+
+          // Conditional Answers: "Answer if..." sections for different scenarios
+          conditionalAnswers: conditionalAnswers || null,
+
+          // Wise Refusal: response that identifies missing info or biases
+          wiseRefusal: q.wiseRefusal,
+
+          // Additional explanation
+          explanation: q.explanation,
         };
+
+        // For eval export, exclude trap-revealing fields
+        if (cleanForEval) {
+          return {
+            scenario: combinedScenario,
+            variables,
+            annotations: {
+              caseId: q.sourceCase || q.id,
+              pearlLevel: q.pearlLevel,
+              domain: q.domain,
+              subdomain: q.subdomain,
+              difficulty: q.difficulty,
+              author: q.author || 'Unknown',
+            },
+            groundTruth: q.groundTruth,
+          };
+        }
 
         return baseExport;
       }),
@@ -159,7 +204,8 @@ export async function GET(req: NextRequest) {
         ? `causal-eval-${new Date().toISOString().split('T')[0]}.json`
         : `causal-questions-${new Date().toISOString().split('T')[0]}.json`;
 
-      return new NextResponse(JSON.stringify(exportData, null, 2), {
+      // Export just the array of questions (no metadata wrapper) for easy combining
+      return new NextResponse(JSON.stringify(exportData.questions, null, 2), {
         headers: {
           'Content-Type': 'application/json',
           'Content-Disposition': `attachment; filename="${filename}"`,
@@ -167,6 +213,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // For preview (non-download), still include metadata
     return NextResponse.json(exportData);
   } catch (error) {
     console.error('Export error:', error);
