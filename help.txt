@@ -1,0 +1,1 @@
+alsor ealized when the website generated 129 scenario data for me, it dsipalys one by one only on each page. possible add a function toe website to show all at once, like scroll thru or a way to copy paste all 129 at the same time? i want u to analyze and label and rank all of them NOT a human to go thru data 1 by 1 thats tedious.
