@@ -1,0 +1,2576 @@
+{
+  "metadata": {
+    "exportDate": "2026-01-14T10:41:23.960Z",
+    "totalQuestions": 113,
+    "distribution": {
+      "L1": 16,
+      "L2": 77,
+      "L3": 20
+    },
+    "version": "1.0",
+    "filters": {
+      "pearlLevels": [
+        "L1",
+        "L2",
+        "L3"
+      ],
+      "verifiedOnly": true
+    }
+  },
+  "questions": [
+    {
+      "caseId": "G.10",
+      "scenario": "In a study of traders who attended a prestigious trading academy (X), those who achieved consistent profits (Y) are analyzed. Many underperforming traders dropped out during the program (Z), leading to an incomplete dataset.",
+      "claim": "Attending a prestigious trading academy is associated with achieving consistent profits.",
+      "variables": {
+        "X": "Attending a prestigious trading academy",
+        "Y": "Achieving consistent profits",
+        "Z": "Dropout of underperforming traders (Condition)"
+      },
+      "annotations": {
+        "pearlLevel": "L1",
+        "domain": "Markets",
+        "subdomain": "Stock Trading",
+        "trapType": "SELECTION",
+        "trapSubtype": "Attrition_Bias",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, Z -> Y",
+        "keyInsight": "Non-random dropout skews observed association between academy attendance and profit."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario reveals a Selection Bias trap: many underperforming traders dropped out during the program (Z), leading to an analysis only of those who achieved consistent profits. This non-random attrition means the association between attending the academy (X) and achieving profits (Y) is distorted and not representative of all attendees.",
+      "wiseRefusal": "NO - the claim is invalid. The observed association between attending a prestigious trading academy and achieving consistent profits is skewed by attrition bias. Underperforming traders dropped out, which means the analysis excludes those cases, resulting in a non-representative sample and a distorted inference."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a study on educational outcomes, a dataset of 10,000 students shows that those who participate in after-school tutoring programs (X) tend to have higher standardized test scores (Y) compared to those who do not.",
+      "claim": "Participation in after-school tutoring programs (X) is correlated with higher standardized test scores (Y).",
+      "variables": {
+        "X": "Participation in after-school tutoring programs",
+        "Y": "Higher standardized test scores"
+      },
+      "annotations": {
+        "pearlLevel": "L1",
+        "domain": "Education",
+        "subdomain": "Academic Performance",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "The observed dataset shows an association between tutoring and test scores."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the dataset explicitly shows an association between participation in tutoring programs and higher test scores. The observational data provides a clear correlation, fulfilling the requirements for a valid L1 association.",
+      "wiseRefusal": "YES - the claim is supported. The dataset shows a direct correlation between after-school tutoring and enhanced test scores, fitting the criteria for an L1 association as no causal inference is made beyond observed patterns."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A cryptocurrency exchange introduced a policy rewarding traders for high trading volume (Z). Trading activity surged by 250%, but the overall profit margin per trade (Y) dropped by 30%. The exchange aimed to increase profitability (X).",
+      "claim": "Higher trading volume is associated with increased profitability.",
+      "variables": {
+        "X": "Policy to increase profitability",
+        "Y": "Profit margin per trade",
+        "Z": "High trading volume (Proxy)"
+      },
+      "annotations": {
+        "pearlLevel": "L1",
+        "domain": "Markets",
+        "subdomain": "Cryptocurrency",
+        "trapType": "GOODHART",
+        "trapSubtype": "Proxy_Drift",
+        "difficulty": "medium",
+        "causalStructure": "X -> Z, Z -> Y",
+        "keyInsight": "When a measure becomes a target, it ceases to be a good measure."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario reveals a classic Goodhart's Law trap because the exchange focused on increasing trading volume (Z) rather than profitability (Y). The observable text shows that while trading volume increased significantly, profitability per trade actually declined, demonstrating a divergence of the proxy measure from the true goal.",
+      "wiseRefusal": "NO - the claim is invalid. This is Goodhart's Law. The trading volume (Z) was optimized at the expense of the actual goal (profitability). By focusing on volume, traders engaged in more trades without regard for profit, causing the profit margin to drop."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In an analysis of cryptocurrency markets (Z), periods of high social media activity (X) are linked with increased trading volumes (Y). During these periods, trading volume rises by over 200% compared to times of lower activity.",
+      "claim": "Social media activity (X) is correlated with increased trading volumes (Y) in cryptocurrency markets.",
+      "variables": {
+        "X": "Social media activity",
+        "Y": "Trading volumes"
+      },
+      "annotations": {
+        "pearlLevel": "L1",
+        "domain": "Markets",
+        "subdomain": "Cryptocurrency trading",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "The observed correlation links social media activity with trading volume increases."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the scenario provides a clear observational correlation between periods of high social media activity and an increase in trading volumes. This association is consistent with Pearl Level 1 reasoning, where correlations are identified without implying causality.",
+      "wiseRefusal": "YES - the claim is supported. The scenario describes an observed correlation between social media activity and trading volumes, fitting L1 association requirements. It reports empirical data showing that trading volumes rise during high social media activity periods, supporting the claim without any need for causal inference."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "Among companies that weathered the 2008 financial crisis (Z), those that heavily invested in emerging technologies (X) show higher post-crisis profits (Y) than those that didn't.",
+      "claim": "Investing in emerging technologies is correlated with higher profits after financial crises.",
+      "variables": {
+        "X": "Investment in emerging technologies",
+        "Y": "Post-crisis profits",
+        "Z": "Survived 2008 financial crisis"
+      },
+      "annotations": {
+        "pearlLevel": "L1",
+        "domain": "Markets",
+        "subdomain": "Macroeconomics",
+        "trapType": "COLLIDER",
+        "trapSubtype": "Conditioning_on_Participation",
+        "difficulty": "medium",
+        "causalStructure": "X -> Z, Y -> Z",
+        "keyInsight": "Survivorship creates spurious correlation between investment and profits."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario conditions on companies that survived the 2008 financial crisis (Z), which is influenced by both investment decisions (X) and financial performance (Y). This conditioning creates a spurious correlation, making it appear that investment is associated with profits when in reality, only successful companies are examined.",
+      "wiseRefusal": "NO - the claim is invalid. This analysis conditions on survival through the 2008 crisis (a collider). Only those firms that survived are included, falsely suggesting a correlation between investing in emerging technologies and higher profits. We need data on all firms, including those that didn't survive."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a market analysis, Stock Fund A shows lower overall returns compared to Stock Fund B. However, Fund A invests more in emerging markets. When comparing similar asset classes, Fund A has higher returns than Fund B.",
+      "claim": "Stock Fund B is associated with better performance than Stock Fund A.",
+      "variables": {
+        "X": "Stock Fund (A vs B)",
+        "Y": "Returns",
+        "Z": "Asset Class (Confounder)"
+      },
+      "annotations": {
+        "pearlLevel": "L1",
+        "domain": "Markets",
+        "subdomain": "Stock Trading",
+        "trapType": "SIMPSONS",
+        "trapSubtype": "Aggregation_Bias",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, Z -> Y",
+        "keyInsight": "Aggregate statistics mask within-group relationships when groups have different compositions."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario describes a classic Simpson's Paradox where the overall returns of Fund A appear lower than Fund B due to aggregation. However, when stratifying by asset class, Fund A actually performs better. This indicates that the initial claim is based on an aggregation bias.",
+      "wiseRefusal": "NO - the claim is invalid. This is Simpson's Paradox. Stock Fund B appears to perform better when looking at aggregate returns, but this overlooks differences in asset class composition. When analyzing similar asset classes, Fund A outperforms, showing that the aggregate comparison is misleading due to aggregation bias."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a study of successful tech startups (X), it is observed that using agile project management (Y) is associated with better long-term success. The study only includes companies that have lasted over five years (Z), ignoring those that failed earlier.",
+      "claim": "Using agile project management (Y) is associated with better long-term success in tech startups (X).",
+      "variables": {
+        "X": "Tech startups",
+        "Y": "Agile project management",
+        "Z": "Companies lasting over five years (Condition)"
+      },
+      "annotations": {
+        "pearlLevel": "L1",
+        "domain": "Technology",
+        "subdomain": "Startup Success",
+        "trapType": "SURVIVORSHIP",
+        "trapSubtype": "Selective_Observation",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, Z -> Y",
+        "keyInsight": "Ignoring failed startups leads to biased conclusions about success factors."
+      },
+      "groundTruth": "NO",
+      "explanation": "The claim is invalid because the study only considers successful startups (those lasting over five years, Z) and ignores those that failed earlier. This selective observation of surviving companies creates survivorship bias, as the observed association between agile project management (Y) and startup success (X) may not hold if all startups, including those that failed, were considered.",
+      "wiseRefusal": "NO - the claim is invalid. The scenario only examines tech startups that have already survived over five years, ignoring those that failed. This survivorship bias distorts the observed association between using agile project management and long-term success, as it does not account for startups that used agile methods but still failed early."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a tech market analysis, companies adopting open-source platforms (X) reported a 30% increase in developer recruitment (Y). Data showed consistent trends over three consecutive years across 500 firms.",
+      "claim": "(X) is associated with (Y).",
+      "variables": {
+        "X": "Adopting open-source platforms",
+        "Y": "Increase in developer recruitment"
+      },
+      "annotations": {
+        "pearlLevel": "L1",
+        "domain": "Technology",
+        "subdomain": "Software Development",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "The observed association is reliable due to the large, consistent dataset across multiple years."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the consistent trend of increased developer recruitment following the adoption of open-source platforms across a large sample over several years suggests a robust association between these variables. This observed pattern strengthens the confidence in the correlation at the Pearl Level 1.",
+      "wiseRefusal": "YES - the claim is supported. The scenario provides evidence of a steady, multi-year correlation between adopting open-source platforms and increased recruitment, making the association credible at the observational level without suggesting causation."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A hedge fund selects the top 5% of crypto trading strategies (X) based on last month's returns. After allocation, these strategies show a decrease in returns (Y) the next month. The selection was based on extreme past performance (Z).",
+      "claim": "Selecting top-performing strategies is associated with continued high returns.",
+      "variables": {
+        "X": "Top-performing crypto trading strategies",
+        "Y": "Returns in the following month",
+        "Z": "Extreme past performance (Condition)"
+      },
+      "annotations": {
+        "pearlLevel": "L1",
+        "domain": "Markets",
+        "subdomain": "Crypto trading",
+        "trapType": "REGRESSION",
+        "trapSubtype": "Extreme-Group_Selection",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, Z -> Y",
+        "keyInsight": "Extreme performance tends to regress to the mean."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario indicates that the hedge fund selected strategies based on extreme past performance (Z), which is a condition that reveals the Regression to the Mean trap. The subsequent performance decline is not due to the selection itself but a return to average performance levels.",
+      "wiseRefusal": "NO - the claim is invalid. Selecting top-performing strategies based on extreme past returns (Z) does not guarantee sustained high returns. Extreme performance often regresses to the mean, leading to a natural drop in returns, not due to the selection causing it."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a study across various cities, neighborhoods with higher internet connectivity rates (X) show increased online shopping behaviors (Y). These same neighborhoods also have higher average incomes (Z), which influence both the ability to afford internet connections and to shop online.",
+      "claim": "Higher internet connectivity rates are associated with increased online shopping behaviors.",
+      "variables": {
+        "X": "Higher internet connectivity rates",
+        "Y": "Increased online shopping behaviors",
+        "Z": "Higher average incomes (Confounder)"
+      },
+      "annotations": {
+        "pearlLevel": "L1",
+        "domain": "Markets",
+        "subdomain": "E-commerce",
+        "trapType": "CONFOUNDING",
+        "trapSubtype": "Socioeconomic",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, Z -> Y",
+        "keyInsight": "Income influences both internet connectivity and shopping behavior."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario indicates that higher average incomes (Z) lead to both greater internet connectivity (X) and increased online shopping behaviors (Y). This reveals a confounding effect, as the observed association between internet connectivity and shopping behavior is actually due to income levels.",
+      "wiseRefusal": "NO - the claim is invalid. The observed association between higher internet connectivity rates (X) and increased online shopping behaviors (Y) is confounded by higher average incomes (Z). Income affects both connectivity and shopping, making the correlation spurious."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a study of tech companies, firms adopting agile methodologies (X) show improved overall project success rates (Y) compared to non-agile firms. However, when stratifying by company size (Z), smaller firms using agile consistently outperform while larger firms underperform compared to their non-agile peers.",
+      "claim": "Agile methodologies are associated with higher project success rates.",
+      "variables": {
+        "X": "Adoption of agile methodologies",
+        "Y": "Project success rate",
+        "Z": "Company size (Confounder)"
+      },
+      "annotations": {
+        "pearlLevel": "L1",
+        "domain": "Technology",
+        "subdomain": "Software development",
+        "trapType": "SIMPSONS",
+        "trapSubtype": "Aggregation_Bias",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, Z -> Y",
+        "keyInsight": "Aggregate statistics mask within-group relationships."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario explicitly shows a reversal in aggregate data when stratified by company size (Z). While agile methodologies appear beneficial overall, within smaller and larger firms, the trend is reversed, illustrating Simpson's Paradox where aggregation biases the apparent relationship.",
+      "wiseRefusal": "NO - the claim is invalid. This is Simpson's Paradox. Agile methodologies appear beneficial in aggregate due to a mix of company sizes, but stratified analysis shows they only improve success rates in smaller firms while hindering larger ones. Aggregate data is confounded by company size differences."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A market study analyzed firms that survived the 2008 financial crisis (Z) to see the impact of debt levels (X) on their post-crisis growth (Y). Many firms with high debt failed and dropped out of the analysis. The sample only includes surviving firms.",
+      "claim": "High debt levels are associated with higher post-crisis growth.",
+      "variables": {
+        "X": "Debt levels",
+        "Y": "Post-crisis growth",
+        "Z": "Survived 2008 financial crisis (Condition)"
+      },
+      "annotations": {
+        "pearlLevel": "L1",
+        "domain": "Markets",
+        "subdomain": "Macroeconomics",
+        "trapType": "SELECTION",
+        "trapSubtype": "Attrition_Bias",
+        "difficulty": "medium",
+        "causalStructure": "Z -> Y, Z -> X",
+        "keyInsight": "Survival bias skews debt level analysis."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario explicitly states that only firms that survived the 2008 financial crisis were included, implying attrition bias. High-debt firms that failed were excluded, distorting the association between debt levels (X) and growth (Y). This selection bias likely invalidates the claim as it doesn't represent all firms.",
+      "wiseRefusal": "NO - the claim is invalid. The scenario's sample is biased by only including firms that survived the 2008 financial crisis, leading to attrition bias. This non-random selection likely skews the observed relationship between debt levels and growth, as many high-debt firms that failed are not represented in the data."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a study of software companies, among those that successfully launched a new product (Z), firms using a specific development framework (X) reported higher customer satisfaction (Y) compared to others. The analysis only included companies with successful product launches.",
+      "claim": "A specific development framework is associated with higher customer satisfaction.",
+      "variables": {
+        "X": "Specific development framework",
+        "Y": "Customer satisfaction",
+        "Z": "Successful product launch (Collider)"
+      },
+      "annotations": {
+        "pearlLevel": "L1",
+        "domain": "Technology",
+        "subdomain": "Software Development",
+        "trapType": "COLLIDER",
+        "trapSubtype": "Case_Control_Sampling",
+        "difficulty": "medium",
+        "causalStructure": "X -> Z <- Y",
+        "keyInsight": "Success in launching a product is a collider causing spurious correlation."
+      },
+      "groundTruth": "NO",
+      "explanation": "The analysis is conditioned on successful product launches (Z), which acts as a collider. This induces a spurious correlation between the development framework (X) and customer satisfaction (Y). By only considering successful launches, the study fails to account for frameworks that were less successful.",
+      "wiseRefusal": "NO - the claim is invalid. This analysis conditions on successful product launches (a collider), creating a spurious correlation between the development framework and customer satisfaction. We need to consider all product launches, not just successful ones, to legitimately assess the framework's impact."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A cryptocurrency (X) experiences a 300% increase in value over a week, leading many investors to buy (Z). The following month, the value drops significantly. Analysts claim the increase in investor interest correlates with sustained high value.",
+      "claim": "Increased investor interest is associated with sustained high cryptocurrency value.",
+      "variables": {
+        "X": "Cryptocurrency value increase",
+        "Y": "Sustained high value",
+        "Z": "Increased investor interest (Context)"
+      },
+      "annotations": {
+        "pearlLevel": "L1",
+        "domain": "Markets",
+        "subdomain": "Cryptocurrency",
+        "trapType": "REGRESSION",
+        "trapSubtype": "Noise-Induced_Extremes",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, X -> Y",
+        "keyInsight": "Extreme cryptocurrency value changes often regress to the mean."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario describes a cryptocurrency with a sharp, likely noise-induced value spike, which then declines, demonstrating regression to the mean. The specific text 'experiences a 300% increase in value over a week' indicates the extremeness, followed by 'the value drops significantly,' showing the typical regression pattern. The claim assumes a sustained high value which is not causally supported.",
+      "wiseRefusal": "NO - the claim is invalid. The initial 300% value increase is an extreme observation likely caused by random noise, not sustained investor interest. The subsequent drop is a statistical regression to the mean, not a failure of investor interest to maintain high value."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A new AI tool (X) was deployed in a tech company. Employee efficiency (Y) reportedly increased by 15%. During the same quarter, a major competitor experienced a significant cybersecurity breach (Z).",
+      "claim": "The deployment of the AI tool (X) is associated with increased employee efficiency (Y).",
+      "variables": {
+        "X": "Deployment of the new AI tool",
+        "Y": "Employee efficiency",
+        "Z": "Competitor's cybersecurity breach"
+      },
+      "annotations": {
+        "pearlLevel": "L1",
+        "domain": "Technology",
+        "subdomain": "Enterprise Software",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": null,
+        "keyInsight": "Temporal and causal ordering between AI deployment and competitor breach is missing."
+      },
+      "groundTruth": "AMBIGUOUS",
+      "explanation": "The scenario lacks information on the timing of the AI tool deployment relative to the competitor's cybersecurity breach. Without knowing which event occurred first, it's unclear if the efficiency increase was due to the tool or if external market conditions played a significant role.",
+      "wiseRefusal": "AMBIGUOUS - cannot definitively evaluate. We lack information on whether the AI deployment or the competitor's cybersecurity breach occurred first. Understanding the sequence of events is necessary to determine the primary driver of increased efficiency."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A crypto exchange rates traders based on transaction volume (Z), leading to increased trading activity (X). However, overall trader profitability (Y) declined as traders focused on boosting transaction counts regardless of market conditions.",
+      "claim": "Higher transaction volume is associated with greater trader profitability.",
+      "variables": {
+        "X": "Increased trading activity",
+        "Y": "Trader profitability",
+        "Z": "Transaction volume metric"
+      },
+      "annotations": {
+        "pearlLevel": "L1",
+        "domain": "Markets",
+        "subdomain": "Crypto trading",
+        "trapType": "GOODHART",
+        "trapSubtype": "Static_Metric_Gaming",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, X -> Y",
+        "keyInsight": "When a measure becomes a target, it ceases to be a good measure."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario reveals Goodhart's Law by showing that traders focused on increasing transaction volume (Z), an optimized metric, rather than improving profitability (Y). As a result, profitability declined because the metric was gamed.",
+      "wiseRefusal": "NO - the claim is invalid. This is Goodhart's Law. The measure of transaction volume (Z) was optimized at the expense of true profitability (Y). Traders increased their trading activity (X) to meet volume targets, not profit goals, leading to reduced profitability."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a controlled environment, a trading firm randomly assigned traders to receive a new algorithm-based trading tool (X). Those using the tool achieved an average 15% higher profit margin (Y) than those using traditional methods over a 6-month period.",
+      "claim": "The use of the algorithm-based trading tool (X) causes the traders to achieve higher profit margins (Y).",
+      "variables": {
+        "X": "Use of the algorithm-based trading tool",
+        "Y": "Higher profit margins achieved by traders"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock Trading",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Random assignment and control make it a valid causal inference."
+      },
+      "groundTruth": "YES",
+      "explanation": "The scenario describes a controlled environment with random assignment to treatment, which is a key method for causal identification. The direct comparison of outcomes (profit margins) between the groups supports the claim that the tool causes the higher margins.",
+      "wiseRefusal": "YES - the claim is supported. The scenario's random assignment of traders to use the new algorithm-based tool provides a valid basis for causal inference, as it controls for confounding variables. The observed increase in profit margins can be attributed causally to the tool's use."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a clinical trial, 400 patients were randomly assigned to receive a new drug (X) or a standard treatment. After 6 months, patients receiving the new drug (X) showed a 30% greater reduction in blood pressure (Y) compared to the control group, with proper blinding and no dropouts.",
+      "claim": "The new drug (X) causes a greater reduction in blood pressure (Y) compared to standard treatment.",
+      "variables": {
+        "X": "New drug",
+        "Y": "Reduction in blood pressure"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Medicine",
+        "subdomain": "Clinical Trials",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Random assignment and proper blinding provide a valid causal inference that the new drug causes blood pressure reduction."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the clinical trial used random assignment, which ensures that any differences in outcomes can be attributed to the treatment (X). Proper blinding and the absence of dropouts support the reliability of the observed effect on blood pressure (Y).",
+      "wiseRefusal": "YES - the claim is supported. The use of random assignment in the clinical trial creates conditions where the observed difference in blood pressure reduction between the treatment and control groups can be causally attributed to the new drug (X), as there are no confounding variables affecting the outcome (Y)."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A randomized control trial assigned 800 stocks to receive a new trading algorithm (X) or continue with the existing one. After six months, the stocks using the new algorithm (X) had a 20% higher average return (Y) than the control group, with no significant confounding factors identified.",
+      "claim": "Using the new trading algorithm (X) causes an increase in stock returns (Y).",
+      "variables": {
+        "X": "New trading algorithm",
+        "Y": "Stock returns"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock trading",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "The randomized control trial provides a robust method to identify the causal impact of the new trading algorithm on stock returns."
+      },
+      "groundTruth": "YES",
+      "explanation": "The scenario describes a well-conducted randomized controlled trial, which is a gold standard for causal inference. By randomly assigning stocks to the new algorithm or control, the trial effectively controls for confounding variables, allowing us to confidently attribute the observed increase in returns to the new algorithm.",
+      "wiseRefusal": "YES - the claim is supported. The randomized control trial ensures that the assignment of the new trading algorithm is independent of other factors, thereby isolating its causal impact on stock returns. The observed 20% higher return in the treatment group can be attributed to the intervention of the new algorithm."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A randomized controlled trial assigned 300 traders to use Algorithm X for crypto trading (X) and 300 traders used standard methods. After 6 months, Algorithm X users had a 40% higher return on investments (Y) compared to the control group, with consistent trading conditions and no algorithm failures.",
+      "claim": "Algorithm X causes an increase in returns for crypto traders.",
+      "variables": {
+        "X": "Use of Algorithm X for trading",
+        "Y": "Higher return on investments"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Crypto Trading",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "The randomized control trial ensures proper causal identification by eliminating confounding factors."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the use of a randomized controlled trial (RCT) eliminates confounding variables and ensures that any observed differences in investment returns can be attributed to the use of Algorithm X. The consistent conditions and the absence of algorithmic failures further strengthen the causal inference.",
+      "wiseRefusal": "YES - the claim is supported. The use of an RCT provides a robust framework for causal inference by randomizing traders into groups, thus controlling for potential confounders. This design allows us to confidently attribute the observed increase in returns to the use of Algorithm X."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a clinical trial, 1,000 patients were randomly assigned to receive a new heart medication (X) or a placebo. After six months, those receiving the medication experienced a 25% reduction in heart attack incidents (Y) compared to the placebo group, with proper blinding and randomization maintained.",
+      "claim": "The new heart medication (X) causes a reduction in heart attack incidents (Y).",
+      "variables": {
+        "X": "New heart medication",
+        "Y": "Reduction in heart attack incidents"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Medicine",
+        "subdomain": "Cardiovascular treatment",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Randomization ensures that the observed effect is attributed to the medication, not confounding factors."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the scenario describes a randomized controlled trial, which is a robust method for establishing causal relationships. Proper blinding and randomization help eliminate confounding variables, ensuring that the observed reduction in heart attack incidents can be attributed to the medication.",
+      "wiseRefusal": "YES - the claim is supported. The clinical trial's random assignment and maintenance of blinding eliminate confounding influences, allowing us to attribute the reduction in heart attack incidents directly to the administration of the new heart medication."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a tech firm, a surge in customer support requests (Y) leads to more software updates (X) being released. Analysts observe the increased frequency of updates and assume these updates drive the rise in support requests. However, the uptick in support requests (Y) initates the reactive release of updates (X).",
+      "claim": "Software updates (X) cause an increase in customer support requests (Y).",
+      "variables": {
+        "X": "Software updates",
+        "Y": "Customer support requests",
+        "Z": "Bug reports (Reactive intervention)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Technology",
+        "subdomain": "Software development",
+        "trapType": "REVERSE",
+        "trapSubtype": "Reactive_Intervention",
+        "difficulty": "medium",
+        "causalStructure": "Y -> X",
+        "keyInsight": "Support requests trigger updates, not vice versa."
+      },
+      "groundTruth": "NO",
+      "explanation": "The specific text 'the uptick in support requests (Y) initiates the reactive release of updates (X)' reveals the reverse causation trap. The scenario demonstrates that updates are a response to customer issues, not the cause of them.",
+      "wiseRefusal": "NO - the claim is invalid. The scenario clearly shows reverse causation: the increase in customer support requests (Y) triggers the reactive development of software updates (X), not the other way around."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "To improve school rankings (Y), an education board mandated frequent testing (X) in classrooms. As a result, average test scores increased (Z), but student comprehension and critical thinking skills showed no improvement, and teacher reports indicate increased stress and surface-level learning.",
+      "claim": "Mandating frequent testing leads to improved school rankings.",
+      "variables": {
+        "X": "Frequent testing mandate",
+        "Y": "Improved school rankings",
+        "Z": "Average test scores (Proxy)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Education",
+        "subdomain": "School Management",
+        "trapType": "GOODHART",
+        "trapSubtype": "Policy_Target_Gaming",
+        "difficulty": "medium",
+        "causalStructure": "X -> Z, Z !-> Y",
+        "keyInsight": "The proxy metric (test scores) was optimized at the expense of true educational outcomes."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario reveals Goodhart's Law as the increase in average test scores (Z) does not translate to true educational gains (Y) such as improved rankings. The policy (X) led to gaming the measure (Z) at the expense of broader educational goals.",
+      "wiseRefusal": "NO - the claim is invalid. The policy optimized test scores at the expense of actual school performance improvements. The observed increase in scores was not due to better learning but rather teaching methodologies that targeted the tests, demonstrating Goodhart's Law."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A stock trading firm introduces a bonus scheme for brokers based on the number of trades (Z) executed daily. The trading volume increased by 150%, but overall returns (Y) dropped by 30%. Brokers focused on increasing trade frequency instead of profitable investments (X).",
+      "claim": "Offering bonuses for more trades increases firm profits.",
+      "variables": {
+        "X": "Bonus scheme for trade frequency",
+        "Y": "Overall firm profits",
+        "Z": "Number of trades executed (proxy metric)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock trading",
+        "trapType": "GOODHART",
+        "trapSubtype": "Policy_Target_Gaming",
+        "difficulty": "medium",
+        "causalStructure": "X -> Z, Z -> Y",
+        "keyInsight": "Optimizing a proxy at the expense of the true goal is counterproductive."
+      },
+      "groundTruth": "NO",
+      "explanation": "The problematic part is 'Brokers focused on increasing trade frequency instead of profitable investments'. This reveals the Goodhart's Law trap, where maximizing the number of trades (Z) undermined the firm profits (Y), as brokers targeted the metric rather than the true goal.",
+      "wiseRefusal": "NO - the claim is invalid. This is Goodhart's Law in action. The bonus scheme (X) incentivized brokers to optimize the number of trades (Z) at the expense of actual returns (Y). The measure became a target, which degraded its effectiveness as a performance metric."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In an effort to reduce congestion (Y), a city implements a new traffic policy (X) that increases public transport availability. As more citizens use public transport, the city's revenue decreases, prompting a reduction in transport services, which leads to increased congestion again.",
+      "claim": "Implementing the new traffic policy (X) causes a permanent reduction in congestion (Y).",
+      "variables": {
+        "X": "New traffic policy",
+        "Y": "Congestion level",
+        "Z": "City's revenue from public transport (Mediator)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Urban planning",
+        "trapType": "FEEDBACK",
+        "trapSubtype": "Policy-Response_Loop",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y, Y -> Z, Z -> X",
+        "keyInsight": "Bidirectional causation between policy and congestion due to revenue impacts."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario explicitly reveals a feedback loop where the traffic policy (X) impacts congestion (Y), but the resulting decrease in revenue (Z) influences future policy effectiveness. This creates a dynamics cycle where the intended reduction in congestion is not sustained.",
+      "wiseRefusal": "NO - the claim is invalid. The feedback loop between the policy's impact on congestion and the city's revenue affects the policy's effectiveness over time. As the policy reduces congestion by increasing public transport use, it decreases revenue, leading to service cuts and increased congestion, contradicting the claim of permanent congestion reduction."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In the tech industry, adopting open-source software (X) is associated with increased market share (Y). However, during periods of technological innovation (Z), tech companies tend to adopt more open-source solutions and simultaneously experience market growth.",
+      "claim": "Adopting open-source software causes increased market share.",
+      "variables": {
+        "X": "Adoption of open-source software",
+        "Y": "Increased market share",
+        "Z": "Periods of technological innovation (Confounder)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Technology",
+        "subdomain": "Software adoption",
+        "trapType": "CONFOUNDING",
+        "trapSubtype": "Time-varying_Confounding",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, Z -> Y",
+        "keyInsight": "Technological innovation drives both open-source adoption and market growth."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario states that during periods of technological innovation (Z), companies both adopt more open-source solutions (X) and experience market growth (Y). This suggests that Z is a common cause of both X and Y, revealing a confounding trap.",
+      "wiseRefusal": "NO - the claim is invalid. Adopting open-source software does not cause increased market share. Technological innovation (Z) leads to both the adoption of open-source software (X) and increased market share (Y), confounding the relationship."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A new algorithmic trading strategy (X) is tested on a subset of traders who already have high performance records (Z). Profit margins for these traders increase by 20% (Y) after adopting the strategy. The performance of traders not using the strategy is not considered.",
+      "claim": "The new trading strategy causes an increase in profit margins.",
+      "variables": {
+        "X": "New algorithmic trading strategy",
+        "Y": "Increase in profit margins",
+        "Z": "Traders with high performance records (Condition)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock trading",
+        "trapType": "SELECTION",
+        "trapSubtype": "Post_intervention_Selection",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, Z -> Y",
+        "keyInsight": "Non-random selection leads to biased results."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario explicitly states that only traders with high performance records are considered. This is a non-random subset which introduces selection bias, as it does not represent the full population of traders. These traders are likely to succeed regardless of the strategy, distorting the relationship between the strategy (X) and profit margins (Y).",
+      "wiseRefusal": "NO - the claim is invalid. The observed increase in profit margins is from a non-representative sample of traders with pre-existing high performance records. This means the strategy's apparent success could be due to the baseline high performance of these traders, not the strategy itself. The claim does not account for this selection bias."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A new investment strategy (X) significantly improved overall returns (Y) in a trading firm. However, when stratified by different market conditions (Z), the strategy only enhanced returns in bull markets and reduced them in bear markets.",
+      "claim": "The new investment strategy (X) causes an increase in returns (Y) in all market conditions.",
+      "variables": {
+        "X": "Investment strategy",
+        "Y": "Returns",
+        "Z": "Market conditions (Confounder)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock trading",
+        "trapType": "SIMPSONS",
+        "trapSubtype": "Stratified_Intervention_Reversal",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, Z -> Y",
+        "keyInsight": "Aggregate effects can mask stratified intervention reversals."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario explicitly shows a reversal when stratified: while overall returns increased, within specific market conditions the strategy only improved returns in bull markets, decreasing them in bear markets. This demonstrates Simpson's Paradox.",
+      "wiseRefusal": "NO - the claim is invalid. This is Simpson's Paradox. The aggregate data suggests the strategy increases returns universally, but it actually varies by market conditions, improving returns only in bull markets and reducing them in bear markets. The aggregate effect is misleading."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A company introduces a new technology (X) to improve productivity (Y). Analysts adjust for changed work processes (Z) introduced alongside the new technology. Productivity gains appear negligible after adjustment.",
+      "claim": "Introducing the new technology (X) causes increased productivity (Y).",
+      "variables": {
+        "X": "New technology",
+        "Y": "Productivity",
+        "Z": "Changed work processes (Mediator)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Technology",
+        "subdomain": "Corporate productivity",
+        "trapType": "CONFOUNDER_MEDIATOR",
+        "trapSubtype": "Mediator_Adjustment_Error",
+        "difficulty": "medium",
+        "causalStructure": "X -> Z -> Y, X -> Y",
+        "keyInsight": "Improper adjustment for a mediator can conceal the true effect of an intervention."
+      },
+      "groundTruth": "NO",
+      "explanation": "The problem arises from adjusting for (Z), which acts as a mediator. The text states, 'Analysts adjust for changed work processes (Z) introduced alongside the new technology.' This adjustment erroneously blocks the causal pathway of (X) on (Y) through (Z), masking the true effect of the new technology.",
+      "wiseRefusal": "NO - the claim is invalid. The scenario explicitly reveals an error by adjusting for the mediator (Z) which is crucial for (X) to affect (Y). By doing this, the analysts block the indirect causal path from the new technology to improved productivity, invalidating the claim."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A randomized controlled trial randomly assigned 200 investors to receive market forecasts via a new AI tool (X) or traditional newsletters. After six months, those using the AI tool (X) achieved a 25% better portfolio performance (Y) than the control group, with no other changes in investment strategy.",
+      "claim": "The use of the AI tool (X) causes an improvement in portfolio performance (Y).",
+      "variables": {
+        "X": "Use of AI market forecasting tool",
+        "Y": "Portfolio performance"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock trading",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "The randomized controlled trial ensures causal identification by eliminating confounding factors."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the scenario describes a randomized controlled trial, which provides a strong basis for causal inference by randomly assigning subjects to treatment and control groups, thereby controlling for confounding variables. The observed improvement in portfolio performance for those using the AI tool is likely due to the tool itself, as no other changes in investment strategy were reported.",
+      "wiseRefusal": "YES - the claim is supported. The randomized controlled trial design ensures that any differences in portfolio performance between the AI tool users and the control group can be attributed to the intervention itself. Randomization controls for potential confounders, making the causal inference about the AI tool's effectiveness sound."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a medicine trial, patients receive a new drug (X) intended to reduce blood pressure (Y). Researchers also measure weight change (Z) as it results from the drug. Adjusting for weight change obscures the drug's primary effect on blood pressure.",
+      "claim": "The new drug (X) causes a reduction in blood pressure (Y).",
+      "variables": {
+        "X": "New drug",
+        "Y": "Blood pressure",
+        "Z": "Weight change (Mediator)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Medicine",
+        "subdomain": "Pharmaceutical trials",
+        "trapType": "CONFOUNDER_MEDIATOR",
+        "trapSubtype": "Mediator_Adjustment_Error",
+        "difficulty": "medium",
+        "causalStructure": "X -> Z -> Y",
+        "keyInsight": "Adjusting for a mediator distorts the causal path from drug to outcome."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario explicitly states the researchers adjust for weight change (Z), a mediator of the drug's effect, thus blocking the causal link from the drug (X) to blood pressure reduction (Y). This reveals the Mediator Adjustment Error trap.",
+      "wiseRefusal": "NO - the claim is invalid. By adjusting for weight change (Z), the researchers incorrectly block the causal pathway between the new drug (X) and its intended effect on blood pressure (Y), thus failing to capture the true causal effect."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a study, 100 companies were randomly assigned to adopt a new trading algorithm (X), while 100 companies continued usual trading practices. After six months, companies using the algorithm (X) showed a 15% higher return on investment (Y) compared to the control group.",
+      "claim": "Adopting the new trading algorithm (X) causes a 15% increase in return on investment (Y).",
+      "variables": {
+        "X": "Adoption of new trading algorithm",
+        "Y": "Return on investment"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock trading",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Random assignment allows for clear causal inference."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the scenario describes a randomized controlled trial with companies randomly assigned to either adopt the new trading algorithm or continue with their usual practices. This randomization ensures that differences in return on investment are due to the algorithm, not other confounding factors.",
+      "wiseRefusal": "YES - the claim is supported. The use of a randomized controlled trial here allows for proper causal identification, as the random assignment controls for potential confounders. The observed increase in return on investment can be attributed to the adoption of the new trading algorithm, validating the causal claim."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a study of technology firms highly rated by industry analysts (Z), firms using advanced analytics software (X) report higher market share growth (Y) than those that don't. Ratings depend on both software usage and previous growth.",
+      "claim": "Using advanced analytics software causes increased market share growth among technology firms.",
+      "variables": {
+        "X": "Usage of advanced analytics software",
+        "Y": "Market share growth",
+        "Z": "Rated highly by industry analysts (Collider)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Technology",
+        "subdomain": "Market Share Analysis",
+        "trapType": "COLLIDER",
+        "trapSubtype": "Conditioning_on_Compliance",
+        "difficulty": "medium",
+        "causalStructure": "X -> Z <- Y",
+        "keyInsight": "Conditioning on analyst ratings induces spurious correlation between software use and growth."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario conditions on firms being 'highly rated by industry analysts' (Z), which is influenced by both their use of analytics software (X) and previous market growth (Y). This creates a spurious correlation between software use and market growth.",
+      "wiseRefusal": "NO - the claim is invalid. This analysis conditions on firms being rated highly (a collider), which is affected by both software usage and past growth. This induces a spurious association, making it appear software use leads to growth. We need data on all firms, not just those highly rated."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A randomized controlled trial in currency markets assigned 200 traders to use an advanced algorithmic trading system (X) and 200 to continue using traditional methods. After 6 months, those using the new system realized a 20% higher return on investment (Y) compared to their peers.",
+      "claim": "The advanced algorithmic trading system (X) causes a 20% higher return on investment (Y).",
+      "variables": {
+        "X": "Use of advanced algorithmic trading system",
+        "Y": "Higher return on investment"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Currency trading",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Randomized controlled trials provide strong causal evidence by controlling for confounders."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported as the use of a randomized controlled trial ensures that the groups are comparable, and any difference in outcomes can be attributed to the use of the advanced algorithm. This setup eliminates confounding variables, effectively isolating the causal effect of the intervention.",
+      "wiseRefusal": "YES - the claim is supported. The use of a randomized controlled trial in the scenario effectively isolates the causal impact of the advanced algorithmic trading system on returns. The random assignment ensures that confounding variables are balanced across groups, allowing us to attribute the higher returns directly to the new trading system."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "Increased stock trading activity (X) coincided with market volatility (Y) throughout the year. Economic instability (Z) caused both increased trading as investors sought to hedge risks, and market volatility due to fluctuating economic indicators. The correlation between trading and volatility doesn't imply causation.",
+      "claim": "Increased stock trading activity causes market volatility.",
+      "variables": {
+        "X": "Increased stock trading activity",
+        "Y": "Market volatility",
+        "Z": "Economic instability (Confounder)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock trading",
+        "trapType": "CONFOUNDING",
+        "trapSubtype": "Unblocked_Backdoor",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, Z -> Y",
+        "keyInsight": "Market activity and volatility are both driven by underlying economic conditions."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario explicitly states that economic instability (Z) causes both increased trading (X) and market volatility (Y), revealing the confounding trap. The correlation does not indicate that trading causes volatility.",
+      "wiseRefusal": "NO - the claim is invalid. Both increased trading activity (X) and market volatility (Y) are caused by economic instability (Z). Thus, the observed correlation does not imply a causal relationship between X and Y."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a study of currency markets, a central bank intervention (X) involved purchasing large amounts of domestic currency. Subsequently, the currency's value appreciated by 15% (Y) over two weeks. The intervention was coordinated with no other policy changes.",
+      "claim": "The central bank's intervention (X) causes the currency's value to appreciate (Y).",
+      "variables": {
+        "X": "Central bank intervention",
+        "Y": "Currency value appreciation"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Currency markets",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "The isolated intervention allows for clear causal inference."
+      },
+      "groundTruth": "YES",
+      "explanation": "YES - the claim is supported. The scenario explicitly describes a central bank intervention with no confounding changes, allowing for a direct causal link between the intervention and currency appreciation.",
+      "wiseRefusal": "YES - the claim is supported. The central bank's intervention was a singular action without concurrent policy changes, creating a clear causal pathway from intervention to currency appreciation."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "During market downturns (Y), regulatory bodies often impose restrictions on high-frequency trading (X) to curb volatility. However, historical data shows that such restrictions are typically imposed after the downturns have already begun. This suggests that the downturn (Y) influences the restrictions (X).",
+      "claim": "High-frequency trading restrictions cause market downturns.",
+      "variables": {
+        "X": "High-frequency trading restrictions",
+        "Y": "Market downturns",
+        "Z": "Market volatility (Trigger for Restrictions)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock Trading",
+        "trapType": "REVERSE",
+        "trapSubtype": "Reactive_Intervention",
+        "difficulty": "medium",
+        "causalStructure": "Y -> X",
+        "keyInsight": "Market downturns trigger regulatory restrictions, not vice versa."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario mentions that restrictions are imposed during downturns, indicating that the downturns (Y) occur before or concurrently with the restrictions (X), suggesting reverse causation.",
+      "wiseRefusal": "NO - the claim is invalid. Market downturns (Y) typically lead to high-frequency trading restrictions (X), not the other way around. The restrictions are a reactive intervention implemented to manage existing volatility, not the cause of the downturn."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A commodities exchange randomly assigned traders to receive a new algorithmic trading tool (X) or continue with current methods. After 6 months, traders using the tool showed a 25% increase in trade success (Y) compared to those who did not switch, with no significant differences in market conditions or trader experience.",
+      "claim": "Using the new algorithmic trading tool (X) causes a 25% increase in trade success (Y).",
+      "variables": {
+        "X": "Use of new algorithmic trading tool",
+        "Y": "Increase in trade success"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Commodities",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Random assignment ensures causal effects can be attributed to the intervention."
+      },
+      "groundTruth": "YES",
+      "explanation": "The scenario describes a randomized assignment of traders to either receive the new trading tool or use existing methods. This design controls for potential confounders, allowing us to attribute the observed 25% increase in trade success to the intervention. Market conditions and trader experience were not significant differentiators, further supporting the causal claim.",
+      "wiseRefusal": "YES - the claim is supported. The random assignment of the new trading tool (X) to traders allows us to infer that the observed increase in trade success (Y) is due to the use of the tool, as potential confounding factors are balanced across groups."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a study on a new educational app (X), only students who continued using the app for the entire semester (Z) were analyzed. These students showed improved test scores (Y). Non-compliant students were excluded from the results.",
+      "claim": "Using the educational app (X) improves student test scores (Y).",
+      "variables": {
+        "X": "Educational app usage",
+        "Y": "Student test scores",
+        "Z": "Continued app usage (Condition)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Education",
+        "subdomain": "Educational Technology",
+        "trapType": "SELECTION",
+        "trapSubtype": "Post_intervention_Selection",
+        "difficulty": "medium",
+        "causalStructure": "Z -> Y",
+        "keyInsight": "Analyzing only compliant users distorts causal inference."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario specifies that only students who continued using the app were analyzed, indicating post-intervention selection. This non-random selection likely means the sample shows a biased improvement in test scores, as non-compliant students were not considered.",
+      "wiseRefusal": "NO - the claim is invalid. The analysis focuses only on students who continued using the app, excluding those who did not comply. This non-random selection introduces bias, making the improvement in test scores an unreliable indicator of the app's true causal effect."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In technology startups where adherence to new data privacy regulations (Z) is monitored, those using encryption methods (X) show higher customer retention rates (Y) than those using traditional security measures.",
+      "claim": "Using encryption methods causes higher customer retention rates in technology startups.",
+      "variables": {
+        "X": "Encryption methods",
+        "Y": "Customer retention rates",
+        "Z": "Adherence to new data privacy regulations (Collider)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Technology",
+        "subdomain": "Data Privacy",
+        "trapType": "COLLIDER",
+        "trapSubtype": "Conditioning_on_Compliance",
+        "difficulty": "medium",
+        "causalStructure": "X -> Z, Y -> Z",
+        "keyInsight": "Conditioning on compliance induces a spurious correlation between encryption and retention."
+      },
+      "groundTruth": "NO",
+      "explanation": "The analysis is restricted to startups adhering to new data privacy regulations (Z), which acts as a collider between encryption methods (X) and customer retention rates (Y). This induces a spurious correlation between X and Y, leading to the false impression that encryption directly causes higher retention.",
+      "wiseRefusal": "NO - the claim is invalid. This analysis conditions on adherence to data privacy regulations (a collider). Startups not complying are excluded. Encryption methods may appear to enhance retention only due to regulatory compliance. We need data from all startups, including non-compliant ones."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A randomized experiment was conducted where 200 traders were provided with real-time market analytics software (X) while another 200 traders used traditional tools. After three months, traders using the software (X) saw a 20% increase in trading efficiency (Y).",
+      "claim": "Using real-time market analytics software (X) causes an increase in trading efficiency (Y).",
+      "variables": {
+        "X": "Real-time market analytics software",
+        "Y": "Trading efficiency"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock trading",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "The randomized experiment ensures causal identification by controlling for confounding variables."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the scenario describes a randomized experiment, which is a robust method for causal identification. Here, the treatment group received the market analytics software, and the control group did not. The observed increase in trading efficiency among the treatment group, compared to the control, can be attributed to the intervention.",
+      "wiseRefusal": "YES - the claim is supported. The scenario involves a randomized experiment, which eliminates confounding factors. Therefore, the observed increase in trading efficiency can be causally linked to the use of real-time market analytics software."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a natural experiment, a new policy reduced trading fees by 50% (X) on a stock exchange. Market activity increased, showing a 20% rise in trading volume (Y) over six months, with no other major market changes during this period.",
+      "claim": "Reducing trading fees causes an increase in trading volume.",
+      "variables": {
+        "X": "Reduction in trading fees",
+        "Y": "Increase in trading volume"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock trading",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "The natural experiment setting provides a causal link between fee reduction and volume increase."
+      },
+      "groundTruth": "YES",
+      "explanation": "The scenario describes a natural experiment where an external change (fee reduction) is followed by an increase in trading activity. The lack of other major changes supports a causal interpretation that the fee reduction led to increased trading volume.",
+      "wiseRefusal": "YES - the claim is supported. The natural experiment effectively isolates the effect of fee reduction on trading volume, providing a causal inference due to the absence of confounding factors and the clear temporal relationship between the intervention and outcome."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a school district, implementing a new grading policy (X) caused an increase in student performance (Y). However, observing improved performance led to modifications in the grading policy, creating a cycle of adjustment.",
+      "claim": "Implementing a new grading policy (X) causes an increase in student performance (Y).",
+      "variables": {
+        "X": "New grading policy",
+        "Y": "Student performance",
+        "Z": "Policy adjustments based on observed performance (Policy-Response Loop)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Education",
+        "subdomain": "School policy",
+        "trapType": "FEEDBACK",
+        "trapSubtype": "Policy-Response_Loop",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y, Y -> Z, Z -> X",
+        "keyInsight": "Feedback loops make isolating the effect of policy changes challenging."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario explicitly reveals a feedback loop as modifications in the grading policy (Z) are made based on the observed student performance (Y), which then further affects the policy (X). This cycle complicates the ability to attribute changes in student performance solely to the grading policy.",
+      "wiseRefusal": "NO - the claim is invalid. The scenario reveals a feedback loop where changes in grading policy (X) lead to improved performance (Y), but observed performance then influences further policy changes (Z), making it impossible to isolate the causal impact of the initial policy."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A market analysis indicates that adopting a new trading algorithm (X) increases overall portfolio returns (Y) by 5%. However, when stratified by market conditions (Z), the algorithm leads to higher returns in bull markets but decreases returns in bear markets.",
+      "claim": "Adopting the new trading algorithm (X) causes an increase in portfolio returns (Y).",
+      "variables": {
+        "X": "Adoption of new trading algorithm",
+        "Y": "Portfolio returns",
+        "Z": "Market conditions (Confounder influencing the effect of X on Y)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock trading",
+        "trapType": "SIMPSONS",
+        "trapSubtype": "Stratified_Intervention_Reversal",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, Z -> Y",
+        "keyInsight": "Aggregate effects may reverse when stratified by influencing factors."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario explicitly shows that the algorithm's effect on returns reverses based on market conditions (Z). In aggregate, it seems beneficial, but when looking at bull versus bear markets, the impact of X varies, illustrating Simpson's Paradox.",
+      "wiseRefusal": "NO - the claim is invalid. This is Simpson's Paradox. The algorithm appears to increase returns overall, but this effect reverses when stratified by market conditions, revealing that it benefits bullish markets and harms bearish ones. The aggregate conclusion is confounded by varying market states."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A study on online education randomly assigned 400 students to either a new interactive platform (X) or traditional online materials. After one semester, students using the platform showed a 30% improvement in course grades (Y) compared to the control group.",
+      "claim": "Using the new interactive platform (X) causes an improvement in course grades (Y).",
+      "variables": {
+        "X": "New interactive platform",
+        "Y": "Course grades"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Education",
+        "subdomain": "Online learning",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "easy",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Random assignment ensures the causal relationship between the platform and grade improvement."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the study uses a randomized controlled trial, which is a robust method for establishing causality. The random assignment of students to either the new platform or traditional materials controls for confounding variables, allowing us to confidently attribute the observed improvement in grades to the use of the interactive platform.",
+      "wiseRefusal": "YES - the claim is supported. The randomized control design ensures that any improvement in grades is causally linked to the use of the new interactive platform, as randomization controls for other potential confounding factors."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a randomized controlled trial, 400 patients were assigned to receive either a new anticoagulant drug (X) or a placebo. After 6 months, the group receiving the drug had a 30% lower incidence of blood clots (Y) compared to the placebo group, with adherence monitored and no significant dropouts.",
+      "claim": "The use of the new anticoagulant drug (X) causes a reduction in the incidence of blood clots (Y).",
+      "variables": {
+        "X": "New anticoagulant drug",
+        "Y": "Incidence of blood clots"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Medicine",
+        "subdomain": "Pharmacology",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Randomized controlled trial effectively isolates the causal effect of the drug on outcomes."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the randomized controlled trial ensures that the only systematic difference between the groups is the presence of the drug, isolating its causal effect. The proper monitoring of adherence and control for dropouts further strengthens the causal interpretation.",
+      "wiseRefusal": "YES - the claim is supported. The randomized controlled trial design allows for a clear causal inference that the new anticoagulant drug directly reduces the incidence of blood clots, as random assignment eliminates confounding factors, and adherence monitoring ensures the effect is due to the drug."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A cryptocurrency exchange rewards traders (X) based on transaction counts. Transaction volume (Z) surged 400%, but the average market liquidity (Y) decreased by 20% as traders focused on increasing trade frequency instead of meaningful volume.",
+      "claim": "Rewarding transaction counts increases market liquidity.",
+      "variables": {
+        "X": "Rewarding transaction counts",
+        "Y": "Market liquidity",
+        "Z": "Transaction volume"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Cryptocurrency",
+        "trapType": "GOODHART",
+        "trapSubtype": "Policy_Target_Gaming",
+        "difficulty": "medium",
+        "causalStructure": "X -> Z, Z -> Y",
+        "keyInsight": "Optimizing a metric independent of the true goal can undermine intended outcomes."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario explicitly shows a Goodhart's Law trap: transaction volume (Z) was optimized due to the reward system (X), leading to decreased market liquidity (Y). Traders increased trade counts to meet the target rather than enhancing liquidity, revealing policy target gaming.",
+      "wiseRefusal": "NO - the claim is invalid. This is Goodhart's Law. The metric (transaction counts) was optimized at the expense of the intended goal (market liquidity). Traders focused on increasing trade frequency to gain rewards, reducing meaningful liquidity, which shows policy target gaming."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A new regulation (X) in financial markets requires firms to report trades in real-time. This leads to increased market volatility (Y), prompting regulators to frequently adjust the policy (X) to stabilize the market, which further impacts volatility (Y).",
+      "claim": "Implementing the regulation (X) causes a stable decrease in market volatility (Y).",
+      "variables": {
+        "X": "Real-time trade reporting regulation",
+        "Y": "Market volatility",
+        "Z": "Regulatory adjustments (Mediator)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Financial regulation",
+        "trapType": "FEEDBACK",
+        "trapSubtype": "Policy-Response_Loop",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y, Y -> X",
+        "keyInsight": "Feedback loops can cause interventions to have unpredictable effects."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario reveals a feedback loop where implementing the regulation (X) increases volatility (Y) which leads to further regulatory adjustments (Z) affecting both X and Y. This bidirectional causation makes it impossible to isolate the regulation's initial impact on volatility.",
+      "wiseRefusal": "NO - the claim is invalid. The scenario describes a feedback loop where the regulation (X) affects market volatility (Y), which in turn causes frequent policy adjustments (X), creating a cycle that prevents stable outcomes. The intervention cannot have a predictable effect due to the dynamic interaction."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a clinical trial for a new hypertension drug (X), only patients who adhered to the treatment plan were analyzed. These patients showed a significant drop in blood pressure (Y) after the trial. However, patients who did not comply were excluded from the analysis (Z), impacting the representativeness of the results.",
+      "claim": "The new hypertension drug (X) causes a significant drop in blood pressure (Y).",
+      "variables": {
+        "X": "Hypertension drug",
+        "Y": "Drop in blood pressure",
+        "Z": "Patient compliance (Condition)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Medicine",
+        "subdomain": "Clinical Trials",
+        "trapType": "SELECTION",
+        "trapSubtype": "Post_intervention_Selection",
+        "difficulty": "medium",
+        "causalStructure": "Z -> Y",
+        "keyInsight": "Non-compliant patients were excluded, skewing results."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario states that only compliant patients were analyzed, which implies a non-random selection of the sample. By excluding non-compliant patients, the data may not accurately reflect the true effect of the drug on the entire population, leading to selection bias.",
+      "wiseRefusal": "NO - the claim is invalid. The analysis only included compliant patients, which introduces selection bias. This non-random selection skews the results and does not provide a true causal relationship between the drug and blood pressure reduction for the entire patient population."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a hospital, it's observed that patients experiencing severe symptoms (Y) receive higher doses of a new medication (X). Over time, these patients have a higher mortality rate. Doctors administer this medication upon noticing symptom severity.",
+      "claim": "Administering higher doses of medication (X) causes the higher mortality rate (Y).",
+      "variables": {
+        "X": "Higher doses of medication",
+        "Y": "Higher mortality rate",
+        "Z": "Severity of symptoms (Condition)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Medicine",
+        "subdomain": "Hospital treatment protocols",
+        "trapType": "REVERSE",
+        "trapSubtype": "Reactive_Intervention",
+        "difficulty": "medium",
+        "causalStructure": "Y -> X",
+        "keyInsight": "Severity of symptoms prompts higher medication doses, not the cause of mortality."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario reveals that the medication (X) is administered in response to severe symptoms (Y), indicating reverse causation. The observed higher mortality is likely due to the severity itself, not the medication.",
+      "wiseRefusal": "NO - the claim is invalid. The higher medication doses (X) are a reaction to severe symptoms (Y), which are likely the actual cause of the higher mortality rate, not the medication itself. This is a case of reverse causation."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a randomized controlled trial, 100 investment firms were assigned to receive a market analytics tool (X) while another 100 firms continued without it. After one year, firms using the tool reported a 20% increase in portfolio returns (Y) compared to those without, with no significant differences in initial capital or sector focus.",
+      "claim": "The market analytics tool (X) causes the increase in portfolio returns (Y).",
+      "variables": {
+        "X": "Use of market analytics tool",
+        "Y": "Increase in portfolio returns"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Investment firms",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Randomized assignment ensures that any observed difference in outcomes is due to the intervention."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the use of a randomized controlled trial eliminates confounding variables, ensuring that differences in portfolio returns are attributable to the use of the market analytics tool. The scenario specifies proper randomization and similar initial conditions, which supports causal inference.",
+      "wiseRefusal": "YES - the claim is supported. The use of a randomized controlled trial means that the assignment of firms to use the analytics tool is random, controlling for confounding factors. This allows us to infer that the tool causes the increase in portfolio returns, as differences in outcomes can be attributed to the intervention."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A clinical trial randomly assigned 400 patients to receive a new medication (X) or a placebo. After 6 months, patients who received the medication showed a 30% decrease in blood pressure (Y) compared to the placebo group, with consistent monitoring and adherence to protocol.",
+      "claim": "The use of the new medication (X) causes a decrease in blood pressure (Y).",
+      "variables": {
+        "X": "New medication",
+        "Y": "Blood pressure decrease"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Medicine",
+        "subdomain": "Cardiovascular treatment",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Random assignment in a clinical trial provides strong causal identification."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the scenario describes a randomized controlled trial, which is a strong method for establishing causality. Random assignment minimizes confounders, allowing us to attribute the observed reduction in blood pressure directly to the medication.",
+      "wiseRefusal": "YES - the claim is supported. A randomized controlled trial, with proper protocols and monitoring, provides a robust basis for concluding that the new medication directly causes the decrease in blood pressure by effectively isolating the causal effect from other confounding variables."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a tech firm's field tests, a new software patch (X) shows an increase in system failures (Y). However, when analyzing by operating system version (Z), each version shows reduced failures with the patch. The patch appears detrimental only when data from all versions is aggregated.",
+      "claim": "The new software patch causes more system failures.",
+      "variables": {
+        "X": "Software patch",
+        "Y": "System failures",
+        "Z": "Operating system version (Confounder)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Technology",
+        "subdomain": "Software Testing",
+        "trapType": "SIMPSONS",
+        "trapSubtype": "Stratified_Intervention_Reversal",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, Z -> Y",
+        "keyInsight": "Aggregate statistics can mask within-group benefits."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario explicitly shows that the aggregate data indicates the patch increases failures, yet stratification by operating system version reveals a reduction in failures for each version. This is a classic Simpson's Paradox case where the aggregated trend reverses when controlling for a confounding variable.",
+      "wiseRefusal": "NO - the claim is invalid. This is Simpson's Paradox. The software patch appears to increase system failures in aggregate because of differences in operating system versions. When stratified by version, the patch actually reduces failures, revealing the aggregate comparison is confounded by version differences."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "To boost sales (Y), a company offers bonuses to sales teams based on the number of new accounts opened (Z). Account openings tripled, but revenue per account dropped 70%. Many new accounts were inactive after six months.",
+      "claim": "Offering bonuses for new account openings increases sales.",
+      "variables": {
+        "X": "Bonuses for account openings",
+        "Y": "Sales",
+        "Z": "Number of new accounts opened (Proxy)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Sales Incentives",
+        "trapType": "GOODHART",
+        "trapSubtype": "Policy_Target_Gaming",
+        "difficulty": "medium",
+        "causalStructure": "X -> Z, Z -> Y",
+        "keyInsight": "Optimizing a proxy metric at the expense of the true goal can lead to gaming of incentives."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario text mentions 'account openings tripled, but revenue per account dropped 70%,' showing that the metric of new accounts (Z) was optimized at the expense of actual sales (Y), thereby revealing the Goodhart's Law trap.",
+      "wiseRefusal": "NO - the claim is invalid. This is Goodhart's Law. The metric (number of accounts) was optimized at the expense of the actual goal (sales). Teams focused on opening accounts regardless of their quality or potential revenue. The proxy was gamed, undermining true sales objectives."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A natural experiment in a stock market assigned some high-frequency traders to receive market data updates every millisecond (X) while others received updates every second. Traders with millisecond updates (X) achieved a 15% increase in trading profits (Y) compared to those with second-by-second updates.",
+      "claim": "Receiving market data updates every millisecond (X) causes a 15% increase in trading profits (Y).",
+      "variables": {
+        "X": "Receiving market data updates every millisecond",
+        "Y": "Increase in trading profits"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock trading",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "A natural experiment provides a robust setting for causal inference due to random assignment."
+      },
+      "groundTruth": "YES",
+      "explanation": "The scenario describes a natural experiment where traders were randomly assigned to different data update frequencies, allowing for causal inference. The lack of confounding due to random assignment supports that the observed 15% increase in trading profits is caused by receiving updates every millisecond.",
+      "wiseRefusal": "YES - the claim is supported. The natural experiment ensures that traders were randomly allocated to different update frequencies, which eliminates potential confounding factors. This setup allows us to causally attribute the 15% increase in profits to receiving market data updates every millisecond."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a tech company, implementing a flexible work policy (X) leads to higher employee productivity (Y). However, as productivity increases, the company updates the policy to include more remote work options, which again affects productivity. This feedback loop complicates isolating the policy's true effect.",
+      "claim": "Implementing a flexible work policy (X) causes higher employee productivity (Y).",
+      "variables": {
+        "X": "Flexible work policy",
+        "Y": "Employee productivity",
+        "Z": "Policy updates based on productivity changes (Policy-Response Loop)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Technology",
+        "subdomain": "Workplace productivity",
+        "trapType": "FEEDBACK",
+        "trapSubtype": "Policy-Response_Loop",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y, Y -> Z, Z -> X",
+        "keyInsight": "Feedback loops create difficulty in determining causal effects."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario describes how implementing a flexible work policy (X) leads to higher employee productivity (Y), but then leads to policy updates (Z) that further influence productivity. This creates a feedback loop, as the policy effectiveness changes with productivity, violating the assumption of no feedback loops for causal inference.",
+      "wiseRefusal": "NO - the claim is invalid. The feedback loop between work policy and productivity, where productivity influences policy updates, makes it impossible to isolate the causal effect of the policy on productivity."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A financial study claims that increasing advertising spending (X) increases market share (Y) for companies. However, advertising spending also boosts brand visibility (Z), which directly influences market share independently. By adjusting for brand visibility, the study blocks the causal effect of interest.",
+      "claim": "Increasing advertising spending (X) causes an increase in market share (Y).",
+      "variables": {
+        "X": "Advertising spending",
+        "Y": "Market share",
+        "Z": "Brand visibility (Mediator)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Advertising",
+        "trapType": "CONFOUNDER_MEDIATOR",
+        "trapSubtype": "Mediator_Adjustment_Error",
+        "difficulty": "medium",
+        "causalStructure": "X -> Z, Z -> Y",
+        "keyInsight": "Adjusting for a mediator can block the causal pathway of interest."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario describes a Confounder-Mediator Error where brand visibility (Z) is a mediator between advertising spending (X) and market share (Y). By adjusting for brand visibility, the study inadvertently blocks the causal path from advertising spending to market share, leading to an incorrect conclusion.",
+      "wiseRefusal": "NO - the claim is invalid. The scenario reveals a Confounder-Mediator Error by adjusting for brand visibility (Z), which is a mediator in the causal pathway from advertising spending (X) to market share (Y). This adjustment blocks the causal effect of interest, invalidating the study's claim."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a randomized controlled trial, 400 traders were given access to a new trading algorithm (X). After 6 months, the group using the algorithm saw an average increase in portfolio value by 25% (Y) compared to a control group with no algorithm access.",
+      "claim": "The new trading algorithm (X) causes an increase in portfolio value (Y).",
+      "variables": {
+        "X": "Access to new trading algorithm",
+        "Y": "Increase in portfolio value"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock Trading",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Randomized controlled trial supports causal inference by eliminating confounders."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported by a randomized controlled trial, which effectively isolates the effect of the trading algorithm on portfolio value by randomly assigning traders to treatment and control groups. This randomization helps to ensure that any observed differences in portfolio outcomes are attributable to the algorithm rather than other confounding variables.",
+      "wiseRefusal": "YES - the claim is supported. The randomized controlled trial design is a robust method for establishing causal relationships, as it randomly assigns the treatment, thereby controlling for confounders. The observed increase in portfolio value can be attributed to the algorithm, given that randomization ensures comparability between groups."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a tech market study, companies that heavily invest in cybersecurity (X) report fewer data breaches (Y). However, increased cybersecurity spending coincides with rising cyber threat levels (Z) because of global tensions. The study ignores the threat level factor.",
+      "claim": "Investing in cybersecurity directly causes a reduction in data breaches.",
+      "variables": {
+        "X": "Cybersecurity investment",
+        "Y": "Reduction in data breaches",
+        "Z": "Rising cyber threat levels (Confounder)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Technology",
+        "subdomain": "Cybersecurity",
+        "trapType": "CONFOUNDING",
+        "trapSubtype": "Unblocked_Backdoor",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, Z -> Y",
+        "keyInsight": "Rising threats prompt both increased spending and breaches."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario explicitly reveals a confounding trap where rising cyber threat levels (Z) lead to increased cybersecurity investment (X) and also to more data breaches (Y). This unblocked backdoor path creates a spurious relationship between cybersecurity investment and fewer breaches, invalidating the claim.",
+      "wiseRefusal": "NO - the claim is invalid. The observed relationship is due to a confounding factor: rising cyber threat levels (Z) cause both increased cybersecurity investment (X) and the occurrence of data breaches (Y). The study fails to account for this backdoor path, invalidating a direct causal interpretation."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a randomized controlled trial, 1000 patients were assigned to receive either a new vaccine (X) or a placebo. The vaccine group exhibited a 60% lower incidence of the targeted disease (Y) compared to the placebo group, with proper blinding and randomization.",
+      "claim": "Receiving the new vaccine (X) causes a reduction in the incidence of the targeted disease (Y).",
+      "variables": {
+        "X": "Receipt of the new vaccine",
+        "Y": "Incidence of the targeted disease"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Medicine",
+        "subdomain": "Clinical trials",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Randomization ensures that the vaccine effect is isolated from confounders."
+      },
+      "groundTruth": "YES",
+      "explanation": "The use of a randomized controlled trial with proper blinding and randomization ensures that the observed reduction in disease incidence can be causally attributed to the vaccine, as it eliminates the influence of confounders and selection bias. Hence, the claim is supported.",
+      "wiseRefusal": "YES - the claim is supported. The randomized controlled trial design with proper blinding effectively isolates the causal effect of the vaccine on disease incidence, providing robust evidence for the causal claim that the vaccine reduces the incidence of the targeted disease."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a volatile market, traders frequently adjust their investment portfolios (X). During these periods, there is often a noticeable increase in market volatility (Y). Economic uncertainty (Z) influences both the decision to adjust portfolios and the overall market’s volatility.",
+      "claim": "Adjusting investment portfolios causes increased market volatility.",
+      "variables": {
+        "X": "Adjusting investment portfolios",
+        "Y": "Increased market volatility",
+        "Z": "Economic uncertainty (Common Cause)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock Trading",
+        "trapType": "CONFOUNDING",
+        "trapSubtype": "Time-varying_Confounding",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, Z -> Y",
+        "keyInsight": "Economic uncertainty (Z) drives both portfolio adjustments and market volatility."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario describes economic uncertainty (Z) as causing both the adjustment of investment portfolios (X) and increased market volatility (Y). This hidden variable makes it appear that adjusting portfolios causes volatility, but both are actually independent outcomes of the same confounding factor.",
+      "wiseRefusal": "NO - the claim is invalid. Adjusting investment portfolios does not cause increased market volatility. Both the decision to adjust portfolios (X) and the resulting market volatility (Y) are influenced by economic uncertainty (Z), which acts as a common cause."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a commodities market study, 1,000 traders were randomly assigned to receive automated trading alerts (X) or none. After six months, traders with alerts saw an average 15% increase in trade profitability (Y), with no trader dropouts or deviations from the assigned protocol.",
+      "claim": "Receiving automated trading alerts (X) causes an increase in trade profitability (Y).",
+      "variables": {
+        "X": "Receiving automated trading alerts",
+        "Y": "Increase in trade profitability"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Commodities",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Random assignment in a controlled setting provides strong causal identification."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the study uses a randomized controlled trial which is a robust method for establishing causal relationships. Random assignment of traders to receive alerts ensures that the observed increase in trade profitability is attributable to the intervention, not confounded by extraneous variables.",
+      "wiseRefusal": "YES - the claim is supported. The use of a randomized controlled trial ensures that the effect on trade profitability is causally linked to the automated trading alerts, as it controls for potential confounding factors."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A randomized controlled experiment assigned 400 patients to receive Drug A (X) or a placebo. Over 8 weeks, those on Drug A showed a 60% reduction in disease symptoms (Y) compared to placebo with no significant dropout rate.",
+      "claim": "Drug A causes a reduction in disease symptoms.",
+      "variables": {
+        "X": "Drug A",
+        "Y": "Reduction in disease symptoms"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Medicine",
+        "subdomain": "Clinical trials",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Randomization ensures that Drug A's effect on symptoms is isolated from other factors."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the scenario describes a randomized controlled trial, which is a robust method for establishing causal relationships. Random assignment of patients to either Drug A or placebo ensures that the observed reduction in symptoms is due to the drug itself, not confounding variables.",
+      "wiseRefusal": "YES - the claim is supported. The randomized controlled experiment provides strong evidence for causality by eliminating selection bias and controlling for confounding variables, isolating the effect of Drug A on the reduction of disease symptoms."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A financial firm launches a new trading strategy (X) that shows high returns. However, only high-performing traders (Z) who applied the strategy under favorable market conditions are analyzed. The market shows no consistent trend (Y) across all traders using the strategy.",
+      "claim": "The new trading strategy (X) causes consistent high returns (Y).",
+      "variables": {
+        "X": "New trading strategy",
+        "Y": "High returns",
+        "Z": "High-performing traders (Post intervention Selection)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock Trading",
+        "trapType": "SELECTION",
+        "trapSubtype": "Post_intervention_Selection",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, Z -> Y",
+        "keyInsight": "The analysis only includes high-performing traders, not a random sample."
+      },
+      "groundTruth": "NO",
+      "explanation": "The claim is invalid due to selection bias. The analysis only includes high-performing traders (Z), which is a non-random subset that favors successful outcomes. This post-intervention selection distorts the causal link between the trading strategy (X) and consistent high returns (Y), as the sample is not representative of all traders.",
+      "wiseRefusal": "NO - the claim is invalid. The scenario explicitly reveals selection bias as only high-performing traders, who are not representative of all traders, are analyzed post strategy implementation. This non-random sample distorts the causal relationship, making the observed high returns not generalizable to all users."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a randomized controlled trial, 400 patients were assigned to receive either Drug A or a placebo. After 6 months, patients receiving Drug A (X) showed a 30% reduction in cholesterol levels (Y) compared to the placebo group, with proper blinding and no significant dropouts.",
+      "claim": "Drug A causes a reduction in cholesterol levels.",
+      "variables": {
+        "X": "Drug A administration",
+        "Y": "Cholesterol level reduction"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Medicine",
+        "subdomain": "Pharmaceuticals",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Randomization and blinding ensure that the observed effect is causally attributable to Drug A."
+      },
+      "groundTruth": "YES",
+      "explanation": "The randomized controlled trial with blinding and no significant dropouts directly supports the causal claim. Randomization minimizes confounding, and the fact that a significant effect was observed in the treatment group compared to the placebo establishes a causal link between Drug A and reduction in cholesterol levels.",
+      "wiseRefusal": "YES - the claim is supported. The randomized controlled trial design, including proper blinding and lack of significant dropouts, indicates that the reduction in cholesterol levels can be causally attributed to Drug A. This setup effectively isolates the effect of Drug A from other variables, supporting the claim of causation."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A study observes that increased central bank interventions (X) correspond with rising inflation rates (Y). However, records show interventions are often initiated when inflation signals begin increasing (Z).",
+      "claim": "Central bank interventions cause rising inflation rates.",
+      "variables": {
+        "X": "Central bank interventions",
+        "Y": "Rising inflation rates",
+        "Z": "Initial inflation signals (Latent Cause)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Macroeconomics",
+        "trapType": "REVERSE",
+        "trapSubtype": "Reactive_Intervention",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, Z -> Y",
+        "keyInsight": "Intervention is a reaction to rising inflation signals, not the cause of inflation."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario shows interventions are triggered by rising inflation signals (Z), indicating reverse causation. The rising inflation rates (Y) are not caused by the interventions (X), but rather both are responses to the same initial signals.",
+      "wiseRefusal": "NO - the claim is invalid. The observed interventions (X) do not cause rising inflation rates (Y). Instead, the interventions are a reaction to early inflation signals (Z), which are the real drivers of the observed inflation increase."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In the tech sector, companies implementing AI tools (X) report a 10% increase in productivity (Y) overall. However, within departments stratified by task complexity (Z), simpler tasks see productivity decrease after AI tool implementation, while complex tasks show significant improvement.",
+      "claim": "Implementing AI tools causes an increase in productivity.",
+      "variables": {
+        "X": "AI tool implementation",
+        "Y": "Productivity increase",
+        "Z": "Task complexity (Stratified Intervention Reversal)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Technology",
+        "subdomain": "AI Implementation",
+        "trapType": "SIMPSONS",
+        "trapSubtype": "Stratified_Intervention_Reversal",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, Z -> Y",
+        "keyInsight": "Aggregate improvement masks the detrimental effect on simpler tasks."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario explicitly reveals a Simpson's Paradox trap: while AI tools appear to boost productivity in aggregate, stratifying by task complexity shows they only aid complex tasks while reducing productivity in simpler ones. The claim is invalid because the aggregate data conceals these opposing effects.",
+      "wiseRefusal": "NO - the claim is invalid. This is Simpson's Paradox. The overall increase in productivity masks the fact that AI tools improve complex tasks but decrease productivity for simpler tasks. Aggregate data does not reflect the stratified impact on different task types."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In the health sector, among patients who attended follow-up appointments (Z) after receiving Drug A or Drug B (X), those using Drug A reported lower average cholesterol levels (Y).",
+      "claim": "Drug A causes lower cholesterol levels than Drug B.",
+      "variables": {
+        "X": "Drug A vs. Drug B",
+        "Y": "Cholesterol levels",
+        "Z": "Attended follow-up appointments (Collider)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Medicine",
+        "subdomain": "Pharmaceutical Studies",
+        "trapType": "COLLIDER",
+        "trapSubtype": "Conditioning_on_Compliance",
+        "difficulty": "medium",
+        "causalStructure": "X -> Z, Y -> Z",
+        "keyInsight": "Attendance is a collider; Drug A may appear effective because it conditions on compliance."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario conditions on follow-up appointment attendance (Z), which is influenced by both the drug received (X) and health outcomes like cholesterol levels (Y). This induces a spurious correlation between the drug type and cholesterol outcomes, making the claim invalid.",
+      "wiseRefusal": "NO - the claim is invalid. This analysis conditions on attendance at follow-up appointments (a collider), where compliance is influenced by both drug choice and cholesterol levels. Without data on those who missed appointments, the comparison is biased. We need data on all patients, regardless of follow-up attendance."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a randomized controlled trial, 400 patients were assigned to receive Drug A (X) or a placebo. After 8 weeks, those on Drug A experienced a 35% reduction in blood pressure (Y) compared to the placebo group.",
+      "claim": "Drug A (X) causes a reduction in blood pressure (Y).",
+      "variables": {
+        "X": "Drug A",
+        "Y": "Blood pressure reduction"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Medicine",
+        "subdomain": "Pharmacology",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Randomization ensures that the causal effect of Drug A on blood pressure is isolated."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the use of a randomized controlled trial allows us to infer causation. The random assignment of patients to receive either Drug A or a placebo controls for confounding variables, ensuring that differences in blood pressure reduction can be attributed to the effect of Drug A.",
+      "wiseRefusal": "YES - the claim is supported. The randomized controlled trial methodology provides a sound basis for causal inference. By randomly assigning patients to the treatment and control groups, the trial effectively controls for confounding, enabling the conclusion that Drug A causes a reduction in blood pressure."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A trading firm implemented a policy rewarding traders based on the number of trades executed (Z). The number of trades increased by 150%, but overall trading profits (Y) fell by 30% as transaction costs rose dramatically.",
+      "claim": "Rewarding traders for executing more trades increases overall trading profits.",
+      "variables": {
+        "X": "Trade Volume Incentive (Policy)",
+        "Y": "Overall Trading Profits",
+        "Z": "Number of Trades (Proxy)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock Trading",
+        "trapType": "GOODHART",
+        "trapSubtype": "Policy_Target_Gaming",
+        "difficulty": "medium",
+        "causalStructure": "X -> Z, Z -/-> Y",
+        "keyInsight": "Optimizing a proxy measure can undermine the true goal."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario explicitly reveals the trap of Goodhart's Law: the firm's policy targets the number of trades (Z) as a proxy for success, leading to increased trade volume but reduced profits due to rising transaction costs. This demonstrates metric gaming, where optimizing (Z) fails to achieve the true goal (Y).",
+      "wiseRefusal": "NO - the claim is invalid. This is a case of Goodhart's Law. Rewarding traders based on trade volume (Z) optimized the metric but undermined overall profitability (Y) as transaction costs eroded gains. The proxy was gamed at the expense of the true outcome."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A randomized controlled trial assigned 1,000 retail investors to receive either automated trading recommendations (X) or no intervention. After six months, the automated recommendation group showed a 15% higher portfolio return (Y) compared to the control group, with balanced randomization and no dropouts.",
+      "claim": "Using automated trading recommendations (X) causes an increase in portfolio return (Y).",
+      "variables": {
+        "X": "Automated trading recommendations",
+        "Y": "Portfolio return"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock trading",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Randomized assignment removes confounding, allowing valid causal inference."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the scenario describes a properly conducted randomized controlled trial. Randomization ensures that confounding variables are evenly distributed between the groups, thus any observed difference in outcomes can be attributed to the intervention. The increase in portfolio returns is therefore causally linked to the use of automated trading recommendations.",
+      "wiseRefusal": "YES - the claim is supported. This scenario describes a randomized controlled trial where retail investors were randomly assigned to receive automated trading recommendations or not. The randomization ensures no confounding variables interfere, making the observed higher portfolio returns causally attributable to the intervention."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A company conducted a randomized controlled trial assigning 200 traders to use a new AI trading tool (X) while the other 200 continued with traditional methods. Over six months, the AI tool users reported a 25% increase in trading profits (Y) with consistent market conditions and no dropouts.",
+      "claim": "Using the AI trading tool (X) causes an increase in trading profits (Y).",
+      "variables": {
+        "X": "Use of AI trading tool",
+        "Y": "Trading profits"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock Trading",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "The randomized controlled trial design ensures that the use of the AI tool is the cause of increased profits."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the scenario describes a randomized controlled trial, which is a strong method for causal identification. By randomly assigning traders to use the AI tool, any differences in profits can be attributed to the use of the tool rather than other confounding factors.",
+      "wiseRefusal": "YES - the claim is supported. The scenario's use of a randomized controlled trial eliminates confounding variables, allowing us to confidently attribute the increase in trading profits to the use of the AI trading tool. This method provides strong evidence for a causal relationship at Pearl's Level 2."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a medical study, a new drug (X) is prescribed to lower blood pressure (Y). As patients' blood pressure decreases, doctors adjust the dosage to maintain the effect, which then alters future blood pressure readings. The dynamic between dosage adjustment and blood pressure creates a feedback loop.",
+      "claim": "Prescribing the new drug (X) causes a decrease in blood pressure (Y).",
+      "variables": {
+        "X": "Drug prescription dosage",
+        "Y": "Blood pressure",
+        "Z": "Dosage adjustment feedback (Policy-Response Loop)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Medicine",
+        "subdomain": "Pharmacology",
+        "trapType": "FEEDBACK",
+        "trapSubtype": "Policy-Response_Loop",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y, Y -> Z, Z -> X",
+        "keyInsight": "Feedback loops can obscure the direct causal effect of an intervention."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario reveals a feedback loop where dosage adjustments (Z) are influenced by blood pressure (Y), which in turn affects future dosage (X). This makes it impossible to isolate the causal effect of the drug prescription (X) on blood pressure (Y). The cycle of adjustment indicates a Policy-Response Loop.",
+      "wiseRefusal": "NO - the claim is invalid. The scenario illustrates a Feedback Loop trap: as blood pressure changes, dosage is adjusted, affecting future readings. This bidirectional causation prevents isolating the causal effect of the drug (X) on blood pressure (Y)."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A government policy randomly increased subsidies (X) for renewable energy companies. Over 24 months, these companies saw a 40% increase in production levels (Y) compared to non-subsidized firms, with no other concurrent policy changes.",
+      "claim": "The subsidy policy (X) causes the increase in production levels (Y) for renewable energy companies.",
+      "variables": {
+        "X": "Subsidies for renewable energy companies",
+        "Y": "Production levels of renewable energy companies"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Macroeconomics",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Randomized policy implementation eliminates confounding, ensuring causal inference."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the scenario describes a randomized intervention (increased subsidies) that directly impacts renewable energy production. The scenario specifies that no other policy changes occurred, effectively isolating the effect of the subsidies on production. This controlled setup allows for a causal relationship to be established between the subsidies and the increased production levels.",
+      "wiseRefusal": "YES - the claim is supported. The randomized nature of the subsidy policy implementation provides a natural experiment, allowing us to confidently assert that the observed increase in production levels is caused by the subsidies, with confounding factors effectively controlled by the randomization."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In an experiment with 100 cryptocurrency traders, 50 were randomly assigned to receive a signal for strategic buying (X). After 3 months, the strategic buying group saw a 25% increase in portfolio value (Y), while the control group remained unchanged.",
+      "claim": "Receiving a signal for strategic buying (X) causes a 25% increase in portfolio value (Y).",
+      "variables": {
+        "X": "Signal for strategic buying",
+        "Y": "Increase in portfolio value"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Cryptocurrency trading",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Random assignment of traders to treatment and control groups ensures causal interpretation."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the scenario involves a randomized controlled experiment, which is a robust method for identifying causal effects. The random assignment of traders to receive the strategic signal eliminates confounding factors, allowing us to attribute the observed increase in portfolio value directly to the intervention.",
+      "wiseRefusal": "YES - the claim is supported. The use of random assignment ensures that differences in portfolio value can be causally attributed to the strategic buying signal, as potential confounders are evenly distributed across groups, and the experimental design directly supports the causal inference."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In schools, an increase in online homework assignments (X) is correlated with improved student test scores (Y). During the same period, students also had increased access to high-speed internet (Z), which facilitates both online homework and studying.",
+      "claim": "Increasing online homework assignments causes improved student test scores.",
+      "variables": {
+        "X": "Online homework assignments",
+        "Y": "Student test scores",
+        "Z": "Access to high-speed internet (Confounder)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Education",
+        "subdomain": "Student performance",
+        "trapType": "CONFOUNDING",
+        "trapSubtype": "Time-varying_Confounding",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, Z -> Y",
+        "keyInsight": "High-speed internet access (Z) influences both online homework (X) and studying (Y)."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario mentions increased access to high-speed internet (Z) which could improve both online homework completion (X) and general studying efficiency, leading to better test scores (Y). Thus, the observed relationship between X and Y is confounded by Z.",
+      "wiseRefusal": "NO - the claim is invalid. The observed correlation between online homework (X) and test scores (Y) is likely due to increased internet access (Z), which enhances both online assignments and studying capabilities, not because homework directly causes better scores."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "Cryptocurrency exchange platform lowers transaction fees (X) while Bitcoin trading volume increases by 150% (Y). Simultaneously, Bitcoin prices surge by 30% over two weeks (Z).",
+      "claim": "Lowering transaction fees (X) causes the increase in Bitcoin trading volume (Y).",
+      "variables": {
+        "X": "Lowering transaction fees",
+        "Y": "Increase in Bitcoin trading volume",
+        "Z": "Surge in Bitcoin prices"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Cryptocurrency",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": null,
+        "keyInsight": "The timing and causation between trading volume increase and price surge are unclear."
+      },
+      "groundTruth": "AMBIGUOUS",
+      "explanation": "While lowering transaction fees (X) could logically increase trading volume (Y), the simultaneous surge in Bitcoin prices (Z) could also be a primary driver. The scenario lacks clear temporal information to determine whether the fee change or the price surge primarily stimulated trading volume.",
+      "wiseRefusal": "AMBIGUOUS - cannot definitively evaluate. The claim lacks clarity about whether the fee reduction (X) or the Bitcoin price surge (Z) primarily caused the increase in trading volume (Y). Clarification on temporal ordering or causality between fee changes and price movement is needed."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a randomized controlled trial, 250 patients were assigned to receive a new blood pressure medication (X) or a placebo. After 8 weeks, those on the medication (X) experienced a significant reduction in systolic blood pressure (Y) compared to the placebo group, with blinding maintained.",
+      "claim": "The medication (X) causes a reduction in systolic blood pressure (Y).",
+      "variables": {
+        "X": "New blood pressure medication",
+        "Y": "Reduction in systolic blood pressure"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Medicine",
+        "subdomain": "Pharmacological intervention",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "easy",
+        "causalStructure": "X -> Y",
+        "keyInsight": "The randomized controlled trial ensures causal identification by controlling for confounders."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the randomized controlled trial design allows for the clear identification of causal effects. Random assignment minimizes confounding variables, and the maintained blinding prevents bias in outcome assessment, allowing the observed differences in blood pressure to be attributed to the medication.",
+      "wiseRefusal": "YES - the claim is supported. The randomized controlled trial design ensures that any observed effect on blood pressure can be causally attributed to the medication, as the randomization process balances both known and unknown confounders across treatment groups."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a randomized controlled trial, 2000 stock investors were randomly assigned to receive early financial news alerts (X) or standard alerts. Those with early alerts traded 20% more stocks and increased their portfolio value by 15% (Y) within 6 months.",
+      "claim": "Receiving early financial news alerts (X) causes an increase in portfolio value (Y).",
+      "variables": {
+        "X": "Early financial news alerts",
+        "Y": "Portfolio value increase"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock Trading",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Randomization ensures that the effect on portfolio value can be attributed to early news alerts."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the scenario describes a randomized controlled trial where investors were randomly allocated to receive early news alerts. This randomization addresses confounding, allowing us to causally attribute the observed increase in portfolio value to receiving early alerts.",
+      "wiseRefusal": "YES - the claim is supported. The use of a randomized controlled trial ensures that the observed increase in portfolio value is causally linked to receiving early financial news alerts, as random assignment eliminates other potential confounding factors."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a double-blind randomized controlled trial, 300 patients were assigned to receive either a new cancer drug (X) or a placebo. After 6 months, the drug group demonstrated a significant reduction in tumor size (Y) compared to the placebo group, with no other treatments administered.",
+      "claim": "The new cancer drug (X) causes a reduction in tumor size (Y).",
+      "variables": {
+        "X": "New cancer drug",
+        "Y": "Reduction in tumor size"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Medicine",
+        "subdomain": "Pharmacology",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Random assignment and blinding ensure that the reduction in tumor size is causally attributed to the drug."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the use of a double-blind randomized controlled trial isolates the effect of the drug on tumor size, eliminating confounding variables and biases. The observed significant reduction in tumor size is causally attributable to the drug, as the trial design ensures internal validity.",
+      "wiseRefusal": "YES - the claim is supported. The randomized controlled trial design with blinding ensures that the causal effect of the new cancer drug on tumor size can be validly ascertained, as it controls for confounders and minimizes biases, providing strong evidence for the causal claim."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A crypto fund implements a new trading algorithm (X) to increase returns (Y). Analysts control for changes in trading volume (Z), a direct result of the algorithm's use. Despite this, returns do not improve as expected.",
+      "claim": "The new trading algorithm (X) causes increased returns (Y).",
+      "variables": {
+        "X": "New trading algorithm",
+        "Y": "Increased returns",
+        "Z": "Changes in trading volume (Mediator)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Crypto trading",
+        "trapType": "CONFOUNDER_MEDIATOR",
+        "trapSubtype": "Mediator_Adjustment_Error",
+        "difficulty": "medium",
+        "causalStructure": "X -> Z -> Y",
+        "keyInsight": "Adjusting for a mediator can block the causal effect of interest."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario adjusts for changes in trading volume (Z), a mediator on the pathway from the new trading algorithm (X) to increased returns (Y). By controlling for Z, the analysis blocks the pathway through which X affects Y, demonstrating a Mediator Adjustment Error.",
+      "wiseRefusal": "NO - the claim is invalid. Controlling for trading volume (Z), which is a mediator between the trading algorithm (X) and returns (Y), blocks the causal pathway and prevents observing the true effect of X on Y."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "An educational platform (X) was introduced in schools. Student performance on standardized tests (Y) improved by 15%. Simultaneously, a government educational funding increase (Z) occurred.",
+      "claim": "The introduction of the educational platform (X) causes the improvement in student performance (Y).",
+      "variables": {
+        "X": "Educational platform introduction",
+        "Y": "Improvement in student performance",
+        "Z": "Government educational funding increase"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Education",
+        "subdomain": "Educational technology implementation",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": null,
+        "keyInsight": "The timing of the funding increase in relation to the platform introduction is missing."
+      },
+      "groundTruth": "AMBIGUOUS",
+      "explanation": "The scenario does not provide sufficient information about the timing of the funding increase relative to the platform introduction. It is unclear whether the test score improvement is primarily due to the platform (X) or the funding increase (Z), or a combination of both. Without knowing which change occurred first or predominated, the claim cannot be definitively evaluated.",
+      "wiseRefusal": "AMBIGUOUS - cannot definitively evaluate. The scenario lacks information about the order of events between the platform introduction and the funding increase. Knowing which occurred first or predominated would clarify the causal relationship."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a market analysis, among the brokers who executed trades above $1 million (Z), those using Algorithm X showed higher profits (Y) than those using Algorithm Y. This analysis only includes brokers who met this high trade volume threshold.",
+      "claim": "Algorithm X causes higher profits than Algorithm Y.",
+      "variables": {
+        "X": "Algorithm used for trading",
+        "Y": "Profit from trades",
+        "Z": "Traded amounts above $1 million (Collider)"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock trading",
+        "trapType": "COLLIDER",
+        "trapSubtype": "Conditioning_on_Compliance",
+        "difficulty": "medium",
+        "causalStructure": "X -> Z <- Y",
+        "keyInsight": "Conditioning on high trade volume creates spurious correlation."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario states that only brokers executing trades above $1 million were analyzed, making Z a collider. This conditioning induces a spurious correlation between the algorithm used and profits, leading to the appearance that Algorithm X is superior.",
+      "wiseRefusal": "NO - the claim is invalid. This analysis conditions on trade amounts above $1 million (a collider), creating spurious correlation between the trading algorithm and profits. The perceived advantage of Algorithm X might be due to this bias. An unbiased analysis should include all trades regardless of size."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a tech experiment, 100 startups were randomly assigned to adopt a new AI-driven marketing strategy (X), while 100 maintained traditional methods. After 12 months, the AI group showed a 25% increase in sales (Y) compared to the control group, with all other variables held constant.",
+      "claim": "Adopting the new AI-driven marketing strategy (X) causes an increase in sales (Y).",
+      "variables": {
+        "X": "AI-driven marketing strategy",
+        "Y": "Sales increase"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Technology",
+        "subdomain": "Startup marketing",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Random assignment in a controlled experiment eliminates confounding, supporting causal inference."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the scenario describes a randomized controlled experiment where startups are assigned to either adopt the AI strategy or maintain traditional methods. The random assignment and control of other variables ensure that differences in sales can be attributed to the AI strategy, thus supporting the causal claim.",
+      "wiseRefusal": "YES - the claim is supported. The scenario involves a randomized controlled trial, a gold standard for causal inference, where the random assignment of startups to different strategies allows for a clear causal link between the use of the AI-driven marketing strategy and the increase in sales."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A pharmaceutical company releases a new vaccine (X) and observes a 30% drop in infection rates (Y) over six months. During the same period, a public awareness campaign (Z) about hygiene practices is launched.",
+      "claim": "The new vaccine (X) causes the drop in infection rates (Y).",
+      "variables": {
+        "X": "New vaccine",
+        "Y": "Infection rates",
+        "Z": "Public awareness campaign"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Medicine",
+        "subdomain": "Pharmaceuticals",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": null,
+        "keyInsight": "Lack of information on the timing and interaction between vaccine effect and awareness campaign."
+      },
+      "groundTruth": "AMBIGUOUS",
+      "explanation": "The scenario does not provide information on whether the vaccine or the public awareness campaign primarily influenced the drop in infection rates. The timing and relative impact of these interventions are not clear, making it impossible to definitively attribute causation to the vaccine alone.",
+      "wiseRefusal": "AMBIGUOUS - cannot definitively evaluate. The scenario lacks clear timing and interaction details between the vaccine introduction and the public awareness campaign. Without knowing which intervention primarily drove the infection rate drop, we cannot conclusively attribute the cause to the vaccine."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "During Q2, a major electronics chain reduced prices on popular smartphones (X). Simultaneously, consumer spending on tech products (Y) increased. A new competitor, TechMart (Z), entered the market with aggressive advertising.",
+      "claim": "Reducing smartphone prices (X) leads to an increase in consumer spending on tech products (Y).",
+      "variables": {
+        "X": "Reduced smartphone prices",
+        "Y": "Increased consumer spending on tech products",
+        "Z": "Entry of new competitor TechMart"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Retail Electronics",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": null,
+        "keyInsight": "Ambiguity arises from not knowing the influence of TechMart's entry on consumer spending."
+      },
+      "groundTruth": "AMBIGUOUS",
+      "explanation": "The scenario lacks information on whether the increase in consumer spending was driven by the price reduction or the entry of a new competitor. Without understanding the relative timing and impact of TechMart's entry and marketing efforts, it is impossible to isolate the specific effect of the price reduction on consumer spending.",
+      "wiseRefusal": "AMBIGUOUS - cannot definitively evaluate. The scenario does not provide the temporal or causal order of events related to TechMart's entry and marketing strategy. To evaluate the claim, we need to understand how much of the spending increase was due to price reductions versus TechMart's influence."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A tech company launched a marketing campaign (X). In the same quarter, its stock price increased by 15% (Y) as a new competitor entered the market (Z).",
+      "claim": "The marketing campaign (X) causes the stock price increase (Y).",
+      "variables": {
+        "X": "Marketing campaign",
+        "Y": "Stock price increase",
+        "Z": "New competitor entering the market"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock trading",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": null,
+        "keyInsight": "The scenario is missing information about the timing and impact of the new competitor."
+      },
+      "groundTruth": "AMBIGUOUS",
+      "explanation": "The scenario is missing details on the timing of the competitor's entry relative to the stock price increase and marketing campaign. Without knowing whether the competitor's entry contributed to the stock price change, we cannot definitively attribute the increase solely to the marketing campaign.",
+      "wiseRefusal": "AMBIGUOUS - cannot definitively evaluate. The scenario lacks information on whether the competitor's market entry and its timing played a role in the stock price increase, making it unclear if the marketing campaign alone caused this outcome."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "An ed-tech company introduces a new learning management system (X) in schools. Student engagement metrics (Y) increase by 20% within the first semester. Simultaneously, a new government policy mandating digital literacy (Z) is rolled out.",
+      "claim": "The introduction of the new learning management system (X) causes the increase in student engagement (Y).",
+      "variables": {
+        "X": "Introduction of new learning management system",
+        "Y": "Increase in student engagement",
+        "Z": "Government policy on digital literacy"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Education",
+        "subdomain": "Ed-Tech Implementation",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": null,
+        "keyInsight": "The timing of digital literacy policy (Z) relative to system implementation (X) is missing."
+      },
+      "groundTruth": "AMBIGUOUS",
+      "explanation": "The claim is ambiguous because the scenario does not specify whether the increase in student engagement is primarily due to the new learning management system or the simultaneous government policy. The timing and impact of the policy relative to the system's introduction are unclear. Without this information, we cannot definitively attribute the engagement increase.",
+      "wiseRefusal": "AMBIGUOUS - cannot definitively evaluate. The scenario lacks information on the timing and direct impact of the government policy on digital literacy (Z) relative to the introduction of the new system (X). To resolve this, we need details on whether the policy preceded or coincided with the system implementation."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A university introduced a new exam format (X). Graduation rates (Y) increased by 10%. Simultaneously, a tutoring program (Z) was launched to support students.",
+      "claim": "Implementing the new exam format (X) causes the increase in graduation rates (Y).",
+      "variables": {
+        "X": "New exam format",
+        "Y": "Graduation rates",
+        "Z": "Tutoring program"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Education",
+        "subdomain": "University policies",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": null,
+        "keyInsight": "The specific impact of the new exam format is unclear due to concurrent introduction of a tutoring program."
+      },
+      "groundTruth": "AMBIGUOUS",
+      "explanation": "The scenario is ambiguous because it lacks information on the relative timing and interaction effects of the new exam format and the tutoring program. Both interventions could contribute to the observed increase in graduation rates, but their individual effects are not isolated or clarified in the scenario.",
+      "wiseRefusal": "AMBIGUOUS - cannot definitively evaluate. The scenario does not provide temporal information about whether the new exam format or the tutoring program had a greater effect on graduation rates. Clarification is needed to determine the primary driver of the observed outcome."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a randomized controlled trial, 300 investors were randomly assigned to use a new predictive algorithm (X) for trading decisions. After six months, users of the algorithm experienced a 20% higher return on investment (Y) compared to a control group without the algorithm.",
+      "claim": "Using the new predictive algorithm (X) causes a higher return on investment (Y).",
+      "variables": {
+        "X": "Use of the new predictive algorithm",
+        "Y": "Return on investment"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Stock trading",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Randomized assignment ensures that other confounding factors are evenly distributed between groups."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the scenario describes a randomized controlled trial, which is a robust method for identifying causal effects. Randomization ensures that any observed differences in return on investment between groups can be attributed to the use of the algorithm rather than other confounding variables.",
+      "wiseRefusal": "YES - the claim is supported. The use of a randomized controlled trial provides strong evidence that the predictive algorithm directly causes an increase in return on investment, as randomization balances confounding variables across treatment and control groups."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a study on student performance, 200 students were randomly assigned to use a personalized learning app (X), while another 200 used traditional methods. After a semester, students using the app scored 20% higher on standardized tests (Y) compared to those who did not use the app.",
+      "claim": "Using the personalized learning app (X) causes an increase in standardized test scores (Y).",
+      "variables": {
+        "X": "Use of personalized learning app",
+        "Y": "Standardized test scores"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Education",
+        "subdomain": "Student performance",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Randomized assignment ensures that the increase in test scores can be attributed to the app, avoiding confounding variables."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the study used random assignment to control for confounding variables, allowing us to confidently attribute the increase in test scores to the use of the personalized learning app. Randomization ensures that differences in test scores are due to the intervention, not pre-existing differences between groups.",
+      "wiseRefusal": "YES - the claim is supported. By randomly assigning students to use the personalized learning app, the study effectively controls for other factors, making it reasonable to conclude that the app caused the observed improvement in test scores."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a controlled economic experiment, 300 participants were randomly assigned to either receive a bonus for trading commodities (X) or no bonus. Those receiving the bonus traded 40% more on average and saw a 25% increase in trading profits (Y) compared to the control group.",
+      "claim": "Receiving a bonus for trading commodities (X) causes an increase in trading profits (Y).",
+      "variables": {
+        "X": "Receiving a bonus for trading commodities",
+        "Y": "Increase in trading profits"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Markets",
+        "subdomain": "Commodities trading",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Random assignment ensures that the causal effect of the bonus on profits is identified."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the experimental design randomly assigns participants to treatment and control groups, eliminating confounding factors. The observed increase in trading profits can be causally attributed to the bonus due to this randomization, which isolates the effect of receiving a bonus from other potential influences.",
+      "wiseRefusal": "YES - the claim is supported. The random assignment in the controlled experiment ensures that differences in trading profits are causally linked to the bonus, as it eliminates other confounding variables that could affect the outcome."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a study, 200 schools were randomly assigned to either adopt a new digital learning tool (X) or continue traditional methods. Students in the digital tool schools showed a 25% increase in test scores (Y) over a semester, with consistent teacher training and device availability.",
+      "claim": "Adopting the digital learning tool (X) causes an increase in student test scores (Y).",
+      "variables": {
+        "X": "Adoption of the new digital learning tool",
+        "Y": "Increase in student test scores"
+      },
+      "annotations": {
+        "pearlLevel": "L2",
+        "domain": "Education",
+        "subdomain": "Digital Learning",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Random assignment ensures the observed effect on test scores is causally attributable to the digital tool."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported by the scenario because the use of random assignment in the study design helps isolate the effect of the digital learning tool on test scores. This reduces the likelihood of confounders influencing the outcome, allowing for a clear causal interpretation.",
+      "wiseRefusal": "YES - the claim is supported. The random assignment of schools to either adopt the digital learning tool or continue traditional methods provides a strong basis for inferring causality. This method helps ensure that differences in test scores are due to the digital tool and not other variables."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a tech company, a new software tool (X) was introduced to improve debugging efficiency (Y). However, a major systems upgrade (Z) occurred simultaneously, enhancing performance before the tool was used. The upgrade occurred a week earlier than the software deployment.",
+      "claim": "Had the new software tool (X) not been introduced, debugging efficiency (Y) would have remained unchanged.",
+      "variables": {
+        "X": "New software tool",
+        "Y": "Debugging efficiency",
+        "Z": "Major systems upgrade (Preempts X)"
+      },
+      "annotations": {
+        "pearlLevel": "L3",
+        "domain": "Technology",
+        "subdomain": "Software Development",
+        "trapType": "PREEMPTION",
+        "trapSubtype": "Early_Preemption",
+        "difficulty": "medium",
+        "causalStructure": "Z -> Y",
+        "keyInsight": "The systems upgrade preempted the software tool's potential impact."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario explicitly describes that the systems upgrade (Z) happened before the software tool (X) was deployed, influencing debugging efficiency (Y) first. This early preemption by Z means that even without X, Y could have improved due to Z, making the claim invalid.",
+      "wiseRefusal": "NO - the claim is invalid. The scenario reveals an Early Preemption trap where the systems upgrade (Z) improved debugging efficiency (Y) before the software tool (X) could take effect. Therefore, it's unclear if X would impact Y independently, invalidating the counterfactual claim."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a volatile stock market, an increase in trading volume (X) often leads to higher stock prices (Y). However, the higher stock prices (Y) subsequently lead to further increases in trading volume (X), creating a feedback loop.",
+      "claim": "Had trading volume not increased, stock prices would not have risen.",
+      "variables": {
+        "X": "Trading volume",
+        "Y": "Stock prices",
+        "Z": "Feedback loop causing dynamic changes"
+      },
+      "annotations": {
+        "pearlLevel": "L3",
+        "domain": "Markets",
+        "subdomain": "Stock trading",
+        "trapType": "FEEDBACK",
+        "trapSubtype": "Dynamic_World_Divergence",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y, Y -> X",
+        "keyInsight": "Feedback loops create circular causation, invalidating counterfactual claims."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario explicitly reveals a feedback loop where changes in trading volume (X) affect stock prices (Y), and changes in stock prices (Y) then influence trading volume (X). This circular causation makes the claim invalid, as isolating the effect of trading volume on stock prices is impossible.",
+      "wiseRefusal": "NO - the claim is invalid. The scenario describes a feedback loop where trading volume and stock prices influence each other. In such a dynamic system, counterfactual claims like 'Had trading volume not increased, stock prices would not have risen' are flawed because they overlook the bidirectional causation and evolution of both variables."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A technology firm ran a simulation comparing two strategies for a new software rollout: immediate launch (X) and delayed launch with beta testing (Z). In the simulation, immediate launch showed a 40% market share increase (Y), while delayed launch showed a 5% decline. The firm chose immediate launch (X), and market share increased by 40%.",
+      "claim": "Had the firm chosen the delayed launch strategy, their market share would have declined.",
+      "variables": {
+        "X": "Immediate launch strategy",
+        "Y": "Market share increase"
+      },
+      "annotations": {
+        "pearlLevel": "L3",
+        "domain": "Technology",
+        "subdomain": "Software rollout",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, X -> Y, Z -> Y",
+        "keyInsight": "Simulation provides explicit counterfactual evidence supporting the claim."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the scenario includes a simulation that directly compares the counterfactual outcomes of two rollout strategies with all other factors held constant. The simulation's results offer explicit counterfactual evidence that allows us to reliably infer the outcome had the alternate strategy been chosen.",
+      "wiseRefusal": "YES - the claim is supported. The scenario provides explicit counterfactual evidence through a simulation, which isolates the impact of the rollout strategy on market share. This allows us to confidently assert the counterfactual outcome because the simulation controlled for other variables, showing a decline in market share with the alternative strategy."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In the tech industry, a sudden surge in cybersecurity certifications (X) is followed by a decrease in data breaches (Y). At the same time, there is an increase in cybersecurity threats due to more sophisticated hacking techniques (Z).",
+      "claim": "If cybersecurity certifications (X) had not surged, data breaches (Y) would not have decreased.",
+      "variables": {
+        "X": "Surge in cybersecurity certifications",
+        "Y": "Decrease in data breaches",
+        "Z": "Increase in sophisticated hacking techniques (Confounder)"
+      },
+      "annotations": {
+        "pearlLevel": "L3",
+        "domain": "Technology",
+        "subdomain": "Cybersecurity",
+        "trapType": "CONFOUNDING",
+        "trapSubtype": "Cross-world_Confounder",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, Z -> Y",
+        "keyInsight": "More sophisticated threats (Z) prompt both increased certifications (X) and influence data breach patterns (Y)."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario reveals a confounding trap with the variable Z (more sophisticated hacking techniques) causing both the increase in cybersecurity certifications (X) and influencing the decrease in data breaches (Y). The claim fails because it assumes a direct causal relationship between X and Y without accounting for Z's influence.",
+      "wiseRefusal": "NO - the claim is invalid. The decrease in data breaches (Y) isn't solely caused by the increase in cybersecurity certifications (X). Both phenomena are influenced by the increase in sophisticated hacking techniques (Z), a confounder affecting both the factual and counterfactual worlds."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a study of tech startups that successfully reached IPO (Z), the initial use of agile development methodologies (X) was noted. Analysts claim that without agile methods, startups would not have achieved this level of success (Y). However, only successful IPOs are analyzed, excluding those that failed (Z).",
+      "claim": "Without agile development methodologies, these startups would not have achieved IPO success.",
+      "variables": {
+        "X": "Agile development methodologies",
+        "Y": "IPO success",
+        "Z": "Successful IPOs (Condition)"
+      },
+      "annotations": {
+        "pearlLevel": "L3",
+        "domain": "Technology",
+        "subdomain": "Startup success",
+        "trapType": "SELECTION",
+        "trapSubtype": "Counterfactual_Conditioning",
+        "difficulty": "medium",
+        "causalStructure": "Z -> Y, Z -> X",
+        "keyInsight": "Examining only successful IPOs introduces selection bias."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario explicitly examines only startups that successfully reached IPO, excluding those that failed. This introduces selection bias, as the sample is not representative of all startups, distorting the inference about the necessity of agile methodologies.",
+      "wiseRefusal": "NO - the claim is invalid. The analysis focuses solely on startups that achieved IPO success, ignoring those that did not. This selection bias suggests agile methods are crucial, without considering that other factors could lead to failure, thus undermining causal claims."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a tech company, increased use of a new collaboration software (X) initially boosts team productivity (Y). However, as productivity rises, reliance on the software grows, leading to system overuse and subsequent productivity declines (Y impacts X).",
+      "claim": "Had the collaboration software not been adopted, team productivity would have remained the same.",
+      "variables": {
+        "X": "Use of collaboration software",
+        "Y": "Team productivity",
+        "Z": "Feedback cycle of software reliance and productivity decline (Dynamic World Divergence)"
+      },
+      "annotations": {
+        "pearlLevel": "L3",
+        "domain": "Technology",
+        "subdomain": "Software adoption",
+        "trapType": "FEEDBACK",
+        "trapSubtype": "Dynamic_World_Divergence",
+        "difficulty": "medium",
+        "causalStructure": "X <-> Y",
+        "keyInsight": "Feedback loops make isolating causal effects challenging."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario explicitly reveals a feedback loop where increased productivity leads to increased software reliance, eventually causing productivity declines. This circular causation violates the assumption needed to isolate the effect of the software on productivity.",
+      "wiseRefusal": "NO - the claim is invalid. The scenario describes a feedback loop where the increased use of software (X) initially boosts productivity (Y), but over-reliance then diminishes it. This dynamic interaction means we cannot determine what productivity would have been if the software had not been used, due to the evolving feedback cycle."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "ASSUME commodity prices are solely driven by supply changes. A severe drought (X) reduced agricultural output by 30%. Commodity prices rose by 50% (Y).",
+      "claim": "Had there been no drought, commodity prices would not have risen.",
+      "variables": {
+        "X": "Severe drought",
+        "Y": "Commodity prices rise"
+      },
+      "annotations": {
+        "pearlLevel": "L3",
+        "domain": "Markets",
+        "subdomain": "Commodities",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "The scenario provides an explicit structural assumption linking supply to prices, supporting counterfactual reasoning."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the scenario explicitly states that commodity prices are driven solely by supply changes. This structural assumption means that without the drought, which affected supply, there would be no reason for prices to have risen. Thus, the counterfactual reasoning is sound.",
+      "wiseRefusal": "YES - the claim is supported. The scenario clearly posits that commodity prices are driven solely by changes in supply. This structural assumption allows us to conclude that without the drought, which reduced supply, prices would not have increased, validating the counterfactual claim."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A tech firm's adoption of a new AI tool (X) is followed by a significant rise in cybersecurity breaches (Y). There was a concurrent increase in remote work arrangements (Z), which led to both the need for advanced AI tools and more cyber vulnerabilities.",
+      "claim": "If the AI tool had not been adopted, cybersecurity breaches would not have increased.",
+      "variables": {
+        "X": "Adoption of AI tool",
+        "Y": "Rise in cybersecurity breaches",
+        "Z": "Increase in remote work (Cross-world Confounder)"
+      },
+      "annotations": {
+        "pearlLevel": "L3",
+        "domain": "Technology",
+        "subdomain": "Cybersecurity",
+        "trapType": "CONFOUNDING",
+        "trapSubtype": "Cross-world_Confounder",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, Z -> Y",
+        "keyInsight": "Remote work increase independently affects both AI adoption and breaches."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario reveals a confounding trap: the increase in remote work (Z) leads to both the adoption of the AI tool (X) and the rise in cybersecurity breaches (Y). The claim ignores the role of Z, which affects both X and Y independently.",
+      "wiseRefusal": "NO - the claim is invalid. The scenario shows that remote work arrangements (Z) are the true common cause influencing both the adoption of AI tools (X) and the rise in cybersecurity breaches (Y). The observed correlation is spurious, not causal."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A university tested the impact of a new online grading system (X) on student satisfaction (Y). A simulation compared campus A implementing the system with campus B using the old system. Campus A showed a 30% increase in satisfaction, while campus B saw no change. Researchers simulated identical conditions for both campuses.",
+      "claim": "Had campus B implemented the new system, student satisfaction would have increased.",
+      "variables": {
+        "X": "Implementation of the new online grading system",
+        "Y": "Student satisfaction"
+      },
+      "annotations": {
+        "pearlLevel": "L3",
+        "domain": "Education",
+        "subdomain": "University administration",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Counterfactual reasoning is valid due to explicit simulation showing different outcomes under controlled conditions."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the scenario provides explicit counterfactual evidence from a controlled simulation. The simulation held all other conditions constant between campuses, demonstrating that the new grading system was the factor leading to increased student satisfaction.",
+      "wiseRefusal": "YES - the claim is supported. The scenario includes a simulation comparing the impact of the new system under identical conditions. This provides a valid basis for counterfactual reasoning, showing that the system itself caused the increase in satisfaction."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A central bank's economic model simulated two scenarios: Scenario A held interest rates constant, and Scenario B raised rates by 3% (X). Scenario A showed a steady currency appreciation, while Scenario B resulted in a 15% depreciation (Y). The bank chose to raise rates, resulting in the currency depreciating by 15%.",
+      "claim": "Had the central bank held interest rates constant, the currency would have appreciated instead of depreciating.",
+      "variables": {
+        "X": "Raising interest rates by 3%",
+        "Y": "Currency depreciation"
+      },
+      "annotations": {
+        "pearlLevel": "L3",
+        "domain": "Markets",
+        "subdomain": "Macroeconomics",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "The scenario provides explicit counterfactual evidence from a simulation."
+      },
+      "groundTruth": "YES",
+      "explanation": "The scenario includes explicit counterfactual evidence from a simulation that isolates the effect of holding interest rates constant on currency appreciation. This provides a valid basis for concluding the currency would have appreciated had rates not been raised.",
+      "wiseRefusal": "YES - the claim is supported. The scenario presents simulation results showing a direct causal link between maintaining constant interest rates and currency appreciation. This evidence supports the claim that the currency would have appreciated without the interest rate hike."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a tech firm, a new software patch (X) was implemented to prevent server failures. However, increasing server capacity (Z) had already reduced failure rates (Y) before the patch was applied. Observers note no change in server failures after the patch installation.",
+      "claim": "Had the new software patch (X) not been implemented, server failures (Y) would have increased.",
+      "variables": {
+        "X": "Software patch implementation",
+        "Y": "Server failure rate",
+        "Z": "Increased server capacity (Early Preemption)"
+      },
+      "annotations": {
+        "pearlLevel": "L3",
+        "domain": "Technology",
+        "subdomain": "Software Performance",
+        "trapType": "PREEMPTION",
+        "trapSubtype": "Early_Preemption",
+        "difficulty": "medium",
+        "causalStructure": "Z -> Y",
+        "keyInsight": "Server capacity increase preempts the software patch's effect."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario explicitly mentions that increasing server capacity (Z) reduced failure rates (Y) prior to the implementation of the software patch (X). This early preemption by Z invalidates the claim that the patch alone prevented server failures.",
+      "wiseRefusal": "NO - the claim is invalid. The increase in server capacity (Z) preempted any effect the software patch (X) might have had on server failures (Y). The observed reduction in failures was already achieved through capacity increase, not the patch."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a study of successful investors (Z) who consistently outperformed the market, researchers found they frequently used a specific trading algorithm (X). These investors also reported significant portfolio growth (Y) annually. The study did not include investors who did not outperform the market.",
+      "claim": "Had other investors used the same trading algorithm (X), they would have also experienced significant portfolio growth (Y).",
+      "variables": {
+        "X": "Specific trading algorithm",
+        "Y": "Portfolio growth",
+        "Z": "Successful investors (Condition)"
+      },
+      "annotations": {
+        "pearlLevel": "L3",
+        "domain": "Markets",
+        "subdomain": "Stock Trading",
+        "trapType": "SELECTION",
+        "trapSubtype": "Counterfactual_Conditioning",
+        "difficulty": "medium",
+        "causalStructure": "Z -> X, Z -> Y",
+        "keyInsight": "Results are skewed by studying only successful investors."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario explicitly states that the study only included successful investors. This non-random selection of investors who outperformed creates a Selection Bias, as it fails to account for those who used the same algorithm but did not succeed. Thus, it is inaccurate to claim that the algorithm would guarantee similar success for others.",
+      "wiseRefusal": "NO - the claim is invalid. The study only considered successful investors, creating a Selection Bias. Without including those who did not outperform, the claim that using the algorithm guarantees significant portfolio growth for all is unsupported."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In a city, traffic congestion (Y) led to the introduction of congestion pricing (X). However, the pricing incentivized alternative travel (Z), which altered traffic patterns and congestion levels. Later, reduced congestion feedback led to adjustments in pricing.",
+      "claim": "Had congestion pricing not been introduced (X), traffic congestion (Y) would have remained the same.",
+      "variables": {
+        "X": "Congestion pricing",
+        "Y": "Traffic congestion",
+        "Z": "Alternative travel patterns (Condition)"
+      },
+      "annotations": {
+        "pearlLevel": "L3",
+        "domain": "Markets",
+        "subdomain": "Urban Planning",
+        "trapType": "FEEDBACK",
+        "trapSubtype": "Dynamic_World_Divergence",
+        "difficulty": "medium",
+        "causalStructure": "X <-> Y, Y -> Z, Z -> X",
+        "keyInsight": "Dynamic feedback loops create evolving conditions affecting outcomes."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario shows congestion pricing (X) affects traffic congestion (Y), but congestion changes due to alternative travel (Z) impact future pricing. Thus, the system's dynamics create a feedback loop, invalidating the claim.",
+      "wiseRefusal": "NO - the claim is invalid. The scenario illustrates a feedback loop where congestion pricing (X) affects traffic levels (Y), while altered travel patterns (Z) influence future pricing. This dynamic interaction means traffic conditions would have evolved differently even without initial pricing changes."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A technology company ran two controlled experiments on their recommendation algorithm. Experiment A (algorithm version X) resulted in a 20% increase in user engagement (Y). Experiment B (current algorithm) showed no increase. The company deployed algorithm version X.",
+      "claim": "Had the company continued using the current algorithm, user engagement would not have increased.",
+      "variables": {
+        "X": "Algorithm version used",
+        "Y": "User engagement"
+      },
+      "annotations": {
+        "pearlLevel": "L3",
+        "domain": "Technology",
+        "subdomain": "Recommendation algorithms",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "The scenario provides explicit counterfactual evidence from two controlled experiments."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported by two controlled experiments comparing the outcomes of two algorithm versions. Experiment B, which continued with the current algorithm, showed no increase in user engagement, while experiment A, with algorithm version X, demonstrated a positive effect. This direct comparison supports the counterfactual claim.",
+      "wiseRefusal": "YES - the claim is supported. The scenario describes two controlled experiments, providing explicit counterfactual evidence. By showing user engagement increased only with algorithm version X and not with the current version, it supports the claim about what would have occurred had the current algorithm continued."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A central bank model tested two scenarios with all other economic factors held constant: Scenario A (currency devaluation) showed a 25% increase in exports, while Scenario B (currency stable) showed a 5% increase. The bank chose devaluation (X) and exports increased 25% (Y).",
+      "claim": "Had the bank held the currency stable, the exports would not have increased by 25%.",
+      "variables": {
+        "X": "Currency devaluation",
+        "Y": "Increase in exports"
+      },
+      "annotations": {
+        "pearlLevel": "L3",
+        "domain": "Markets",
+        "subdomain": "Macroeconomics",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "Scenario provides explicit counterfactual evidence through model simulation."
+      },
+      "groundTruth": "YES",
+      "explanation": "The scenario explicitly provides counterfactual evidence from a central bank model, comparing the outcomes of devaluation versus stable currency. This satisfies L3 requirements by showing directly observable differences between the scenarios, supporting the claim.",
+      "wiseRefusal": "YES - the claim is supported. The scenario presents a clear counterfactual comparison using a model simulation where all other factors were held constant, directly supporting the claim about the outcome of currency stability versus devaluation on exports."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "In the cryptocurrency market, it is observed that when a significant drop in coin value (Y) occurs, there is a surge in social media discussions (X) about that coin. Analysts notice these discussions and predict further drops.",
+      "claim": "Had there been no social media discussions (X), the cryptocurrency value would not have dropped (Y).",
+      "variables": {
+        "X": "Social media discussions",
+        "Y": "Drop in cryptocurrency value",
+        "Z": "Market volatility (Latent Cause)"
+      },
+      "annotations": {
+        "pearlLevel": "L3",
+        "domain": "Markets",
+        "subdomain": "Cryptocurrency",
+        "trapType": "REVERSE",
+        "trapSubtype": "Outcome-dependent_Worlds",
+        "difficulty": "medium",
+        "causalStructure": "Y -> X, Z -> Y, Z -> X",
+        "keyInsight": "Social media discussions (X) are a reaction to the drop (Y), not its cause."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario implies that social media discussions (X) follow a drop in cryptocurrency value (Y), suggesting Y is causing X, not the other way around. Additionally, market volatility (Z) may cause both the value drop and heightened discussions, further negating the claim.",
+      "wiseRefusal": "NO - the claim is invalid. The increase in social media discussions (X) occurs as a response to the drop in cryptocurrency value (Y), not as a causal factor. Market volatility (Z) likely induces both the value drop and increased discussions, illustrating reverse causation."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A company reports that launching a new innovative product (Y) significantly increased their R&D spending (X). Despite higher R&D costs, profits rose as the product succeeded in the market. The increase in R&D spending occurred after the product's market success.",
+      "claim": "Had the company not launched the innovative product (Y), their R&D spending (X) would have been lower.",
+      "variables": {
+        "X": "R&D spending",
+        "Y": "Innovative product launch",
+        "Z": "Market success (Outcome-dependent Worlds)"
+      },
+      "annotations": {
+        "pearlLevel": "L3",
+        "domain": "Markets",
+        "subdomain": "Product Development",
+        "trapType": "REVERSE",
+        "trapSubtype": "Outcome-dependent_Worlds",
+        "difficulty": "medium",
+        "causalStructure": "Y -> X",
+        "keyInsight": "The product's success likely drove increased R&D spending, not the other way around."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario reveals Reverse Causation as the product's launch and subsequent success (Y) is reported to lead to increased R&D spending (X), implying the market success (Z) drives higher R&D, not merely the product launch itself.",
+      "wiseRefusal": "NO - the claim is invalid. The increase in R&D spending (X) is more likely a result of the product's success (Y) and subsequent need for further development, not the mere act of launching the product itself. Market success (Z) in reality influences both the need and justification for increased R&D."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A new federal regulation (X) was introduced to stabilize the currency. Following this, the national currency (Y) appreciated by 10%. Meanwhile, global commodity prices (Z) dropped sharply.",
+      "claim": "Had the new regulation not been introduced, the currency would not have appreciated.",
+      "variables": {
+        "X": "New federal regulation",
+        "Y": "Currency appreciation",
+        "Z": "Global commodity prices drop"
+      },
+      "annotations": {
+        "pearlLevel": "L3",
+        "domain": "Markets",
+        "subdomain": "Macroeconomics",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "hard",
+        "causalStructure": null,
+        "keyInsight": "Missing information about the timing and causal impact of Z relative to X on Y."
+      },
+      "groundTruth": "AMBIGUOUS",
+      "explanation": "The scenario is ambiguous because we lack information about the timing and magnitude of the effects of the global commodity price drop (Z) relative to the new regulation (X) on the currency appreciation (Y). Without knowing whether Z occurred before or after X, we cannot definitively assess the primary cause of currency appreciation.",
+      "wiseRefusal": "AMBIGUOUS - cannot definitively evaluate. The scenario lacks information on whether the global commodity price drop preceded or followed the regulation, and how each factor individually influenced the currency appreciation. Detailed data on the timing and magnitude of these effects would help resolve the ambiguity."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A tech company performed a controlled simulation to evaluate the impact of an AI optimization on server efficiency. The simulation held all other variables constant and compared two scenarios: standard configuration (X) and optimized AI configuration (Z). Scenario Z showed a 25% increase in server processing speed (Y).",
+      "claim": "Had the standard configuration remained, server processing speed would not have increased by 25%.",
+      "variables": {
+        "X": "Standard server configuration",
+        "Y": "Server processing speed"
+      },
+      "annotations": {
+        "pearlLevel": "L3",
+        "domain": "Technology",
+        "subdomain": "AI optimization",
+        "trapType": "NONE",
+        "trapSubtype": "NONE",
+        "difficulty": "medium",
+        "causalStructure": "X -> Y",
+        "keyInsight": "The controlled simulation provides explicit counterfactual evidence."
+      },
+      "groundTruth": "YES",
+      "explanation": "The claim is supported because the scenario describes a controlled simulation holding all other variables constant, providing explicit counterfactual evidence. This allows for valid counterfactual reasoning that the server's processing speed would not have increased by 25% without the AI optimization.",
+      "wiseRefusal": "YES - the claim is supported. The scenario describes a controlled simulation that holds all other variables constant, allowing for the explicit comparison between two scenarios. This provides the necessary counterfactual evidence to support the claim."
+    },
+    {
+      "caseId": "G.10",
+      "scenario": "A study in stock markets shows that when institutional investors adopt algorithmic trading strategies (X), short-term market volatility decreases (Y). However, the effect is analyzed while fixing transaction costs (Z) during high-frequency trades, which serve as a mediator between X and Y.",
+      "claim": "Had transaction costs been lower, short-term market volatility would have decreased even more.",
+      "variables": {
+        "X": "Institutional use of algorithmic trading",
+        "Y": "Short-term market volatility",
+        "Z": "Transaction costs (Mediator)"
+      },
+      "annotations": {
+        "pearlLevel": "L3",
+        "domain": "Markets",
+        "subdomain": "Stock trading",
+        "trapType": "CONFOUNDER_MEDIATOR",
+        "trapSubtype": "Mediator_Fixing_Error",
+        "difficulty": "medium",
+        "causalStructure": "X -> Z -> Y",
+        "keyInsight": "Fixing a mediator in counterfactual analysis distorts causal interpretations."
+      },
+      "groundTruth": "NO",
+      "explanation": "The scenario incorrectly fixes transaction costs (Z), a mediator, in counterfactual analysis. This violates the causal chain X -> Z -> Y, as transaction costs influence the effect of algorithmic trading on market volatility. Altering Z, which is part of the causal path, distorts what would have happened under different conditions.",
+      "wiseRefusal": "NO - the claim is invalid. Fixing transaction costs (Z) as a mediator in counterfactual analysis leads to erroneous conclusions about the relationship between algorithmic trading (X) and market volatility (Y), as it disrupts the causal pathway X -> Z -> Y."
+    }
+  ]
+}
