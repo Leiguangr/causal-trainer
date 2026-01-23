@@ -211,7 +211,7 @@ export interface QuizConfig {
   includeSubtypes: boolean;
 }
 
-// Question for Quiz (matches SCHEMA.md)
+// Question for Quiz (matches SCHEMA.md) - Legacy format
 export interface QuizQuestion {
   id: string;                    // Database ID
   sourceCase?: string;           // Original case ID (e.g., "3.43")
@@ -235,3 +235,78 @@ export interface QuizQuestion {
   wiseRefusal: string;           // Complete answer with verdict
 }
 
+// T3-L1 Case (new format)
+export interface L1Case {
+  id: string;
+  scenario: string;
+  claim: string;
+  groundTruth: GroundTruth;
+  evidenceClass: 'WOLF' | 'SHEEP' | 'NONE';
+  evidenceType: string | null;   // W1..W10, S1..S8, or null for AMBIGUOUS
+  whyFlawedOrValid: string;
+  domain?: string | null;
+  subdomain?: string | null;
+  difficulty: Difficulty;
+  variables?: {
+    X: string;
+    Y: string;
+    Z?: string[];
+  } | null;
+  causalStructure?: string | null;
+  dataset: string;
+  author?: string | null;
+  sourceCase?: string | null;
+  isVerified: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// T3-L3 Case (new format with F1-F8 families)
+export type L3Family = 'F1' | 'F2' | 'F3' | 'F4' | 'F5' | 'F6' | 'F7' | 'F8';
+
+// L3 Ground Truth (different from L1/L2 - uses VALID/INVALID/CONDITIONAL)
+export type L3GroundTruth = 'VALID' | 'INVALID' | 'CONDITIONAL';
+
+export interface L3Case {
+  id: string;
+  caseId?: string | null;
+  domain?: string | null;
+  family: string; // F1-F8
+  difficulty: Difficulty;
+  scenario: string;
+  counterfactualClaim: string;
+  variables: {
+    X: string;
+    Y: string;
+    Z: string;
+  };
+  invariants: string[];
+  groundTruth: L3GroundTruth;
+  justification: string;
+  wiseResponse: string;
+  dataset: string;
+  author?: string | null;
+  sourceCase?: string | null;
+  isVerified: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Generated L3 case from API (for parsing)
+export interface GeneratedL3Case {
+  caseId?: string;
+  domain?: string;
+  family: string;
+  difficulty: string;
+  scenario: string;
+  counterfactualClaim: string;
+  variables: {
+    X: string;
+    Y: string;
+    Z: string;
+  };
+  invariants: string[];
+  groundTruth: L3GroundTruth;
+  justification: string;
+  wiseResponse: string;
+}

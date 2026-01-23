@@ -59,6 +59,97 @@ model Question {
   evaluations       CaseEvaluation[]
 }
 
+// =============================================================================
+// NEW: Per-level case tables (new source of truth going forward)
+// - These are intentionally mutually different schemas.
+// - Existing Question table remains intact for legacy data flows.
+// =============================================================================
+
+model L1Case {
+  id              String   @id @default(cuid())
+  scenario        String
+  claim           String
+  groundTruth     String   // YES, NO, AMBIGUOUS
+
+  // Evidence classification (T3-L1)
+  evidenceClass   String   // WOLF, SHEEP, NONE
+  evidenceType    String?  // W1..W10, S1..S8 (null for AMBIGUOUS)
+
+  // “Why Flawed/Valid”
+  whyFlawedOrValid String
+
+  // Optional metadata (kept close to existing app needs)
+  domain          String?
+  subdomain       String?
+  difficulty      String   @default("medium") // easy, medium, hard
+  variables       String?  // JSON: { X, Y, Z[] }
+  causalStructure String?  // Optional; may be null for AMBIGUOUS
+
+  dataset         String   @default("default")
+  author          String?  // e.g., "LLM"
+  sourceCase      String?  // Optional external ID
+  generationBatchId String?
+
+  isVerified      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  generationBatch GenerationBatch? @relation(fields: [generationBatchId], references: [id])
+}
+
+model L2Case {
+  id             String   @id @default(cuid())
+
+  // Revamped L2 schema (T1..T17)
+  scenario       String
+  variables      String?  // JSON: { X, Y, Z, ... } (stored as string for SQLite)
+
+  trapType       String   // T1..T17
+  difficulty     String   @default("medium") // easy, medium, hard
+  causalStructure String?
+
+  hiddenQuestion String
+  answerIfA      String
+  answerIfB      String
+  wiseRefusal    String
+
+  dataset         String   @default("default")
+  author          String?  // e.g., "LLM"
+  sourceCase      String?  // Optional external ID
+  generationBatchId String?
+
+  isVerified      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  generationBatch GenerationBatch? @relation(fields: [generationBatchId], references: [id])
+}
+
+model L3Case {
+  id                  String   @id @default(cuid())
+  caseId              String?  // Case ID (e.g., "G.123")
+  domain              String?  // D1-D10
+  family              String   // F1-F8
+  difficulty          String   @default("medium") // easy, medium, hard
+  scenario            String   // 2-5 sentences: what happened in World A
+  counterfactualClaim String   // "If [X had been different], then [Y]."
+  variables           String   // JSON: { X, Y, Z }
+  invariants          String   // JSON array of invariant strings
+  groundTruth         String   // VALID, INVALID, CONDITIONAL
+  justification       String   // 2-4 sentences grounded in Scenario + Invariants
+  wiseResponse        String   // Brief structured reasoning template
+
+  dataset             String   @default("default")
+  author              String?  // e.g., "LLM"
+  sourceCase          String?  // Optional external ID
+  generationBatchId   String?
+  isVerified          Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  generationBatch     GenerationBatch? @relation(fields: [generationBatchId], references: [id])
+}
+
 model QuizSession {
   id              String      @id @default(cuid())
   userId          String
@@ -123,6 +214,9 @@ model GenerationBatch {
   createdBy       User?       @relation(fields: [createdById], references: [id])
 
   questions       Question[]
+  l1Cases         L1Case[]
+  l2Cases         L2Case[]
+  l3Cases         L3Case[]
 }
 
 // Evaluation Agent observations for proofreading and report aggregation

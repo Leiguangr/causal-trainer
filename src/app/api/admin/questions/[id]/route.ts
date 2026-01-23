@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+// Legacy endpoint: Only handles Question table records
+// For T3 cases (L1Case, L2Case, L3Case), use /api/admin/t3-cases/[id]
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -9,7 +11,7 @@ export async function PATCH(
     const body = await req.json();
     const { id } = await params;
 
-    // Update question
+    // Update question (legacy Question table only)
     const question = await prisma.question.update({
       where: { id },
       data: {
@@ -53,10 +55,10 @@ export async function DELETE(
   try {
     const { id } = await params;
 
+    // Delete from Question table (legacy only)
     await prisma.question.delete({
       where: { id },
     });
-
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Delete question error:', error);

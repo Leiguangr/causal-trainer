@@ -5,11 +5,12 @@ import { CHEATSHEET_TAXONOMY } from '@/lib/cheatsheet-taxonomy';
 export async function GET() {
   try {
     // Count questions by Pearl level (total and verified)
+    // L1 now comes from L1Case table; L2/L3 still from Question table (legacy)
     const [l1Count, l2Count, l3Count, l1Verified, l2Verified, l3Verified] = await Promise.all([
-      prisma.question.count({ where: { pearlLevel: 'L1' } }),
+      prisma.l1Case.count(),
       prisma.question.count({ where: { pearlLevel: 'L2' } }),
       prisma.question.count({ where: { pearlLevel: 'L3' } }),
-      prisma.question.count({ where: { pearlLevel: 'L1', isVerified: true } }),
+      prisma.l1Case.count({ where: { isVerified: true } }),
       prisma.question.count({ where: { pearlLevel: 'L2', isVerified: true } }),
       prisma.question.count({ where: { pearlLevel: 'L3', isVerified: true } }),
     ]);

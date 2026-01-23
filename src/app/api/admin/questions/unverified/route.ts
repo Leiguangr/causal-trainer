@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
+// Legacy endpoint: Only returns Question table records
+// For T3 cases (L1Case, L2Case, L3Case), use /api/admin/t3-cases/unverified
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -79,16 +81,26 @@ export async function GET(req: NextRequest) {
     }
 
     // Get distinct values for filter dropdowns
-    const distinctDomains = await prisma.question.findMany({
-      where: { isVerified: false },
-      select: { domain: true },
-      distinct: ['domain'],
-    });
-    const distinctTrapTypes = await prisma.question.findMany({
-      where: { isVerified: false },
-      select: { trapType: true },
-      distinct: ['trapType'],
-    });
+    const [distinctDomains, distinctTrapTypes] = await Promise.all([
+      prisma.question.findMany({
+        where: { isVerified: false },
+        select: { domain: true },
+        distinct: ['domain'],
+      }),
+      prisma.question.findMany({
+        where: { isVerified: false },
+        select: { trapType: true },
+        distinct: ['trapType'],
+      }),
+    ]);
+
+    const allTrapTypes = new Set(
+      distinctTrapTypes.map(t => t.trapType).filter(Boolean)
+    );
+    
+    const allDomains = new Set(
+      distinctDomains.map(d => d.domain).filter(Boolean)
+    );
 
     return NextResponse.json({
       questions,
@@ -96,8 +108,8 @@ export async function GET(req: NextRequest) {
       offset,
       limit,
       filters: {
-        domains: distinctDomains.map(d => d.domain).filter(Boolean).sort(),
-        trapTypes: distinctTrapTypes.map(t => t.trapType).filter(Boolean).sort(),
+        domains: Array.from(allDomains).sort(),
+        trapTypes: Array.from(allTrapTypes).sort(),
       },
     });
   } catch (error) {

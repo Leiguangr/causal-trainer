@@ -14,6 +14,8 @@ export default function ExportPage() {
   const [includeL1, setIncludeL1] = useState(true);
   const [includeL2, setIncludeL2] = useState(true);
   const [includeL3, setIncludeL3] = useState(true);
+  const [includeLegacy, setIncludeLegacy] = useState(true);
+  const [includeT3, setIncludeT3] = useState(true);
   const [verifiedOnly, setVerifiedOnly] = useState(true);
   const [stats, setStats] = useState<Stats>({
     L1: { current: 0, verified: 0, target: 50 },
@@ -50,6 +52,8 @@ export default function ExportPage() {
       const params = new URLSearchParams({
         pearlLevels: levels.join(','),
         verifiedOnly: verifiedOnly.toString(),
+        includeLegacy: includeLegacy.toString(),
+        includeT3: includeT3.toString(),
       });
 
       const res = await fetch(`/api/admin/export?${params}`);
@@ -73,6 +77,8 @@ export default function ExportPage() {
     const params = new URLSearchParams({
       pearlLevels: levels.join(','),
       verifiedOnly: verifiedOnly.toString(),
+      includeLegacy: includeLegacy.toString(),
+      includeT3: includeT3.toString(),
       format: 'json',
     });
 
@@ -103,6 +109,34 @@ export default function ExportPage() {
           <h2 className="text-xl font-semibold mb-4">Export Filters</h2>
           
           <div className="space-y-4">
+            <div>
+              <h3 className="font-medium text-gray-700 mb-2">Data Sources</h3>
+              <div className="space-y-2">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={includeLegacy}
+                    onChange={(e) => setIncludeLegacy(e.target.checked)}
+                    className="mr-2"
+                  />
+                  <span>
+                    Include Legacy Questions (Question table)
+                  </span>
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={includeT3}
+                    onChange={(e) => setIncludeT3(e.target.checked)}
+                    className="mr-2"
+                  />
+                  <span>
+                    Include T3 Cases (L1Case, L2Case, L3Case tables)
+                  </span>
+                </label>
+              </div>
+            </div>
+
             <div>
               <h3 className="font-medium text-gray-700 mb-2">Pearl Levels</h3>
               <div className="space-y-2">
@@ -224,13 +258,23 @@ export default function ExportPage() {
                 {preview.questions.slice(0, 3).map((q: any, idx: number) => (
                   <div key={idx} className="bg-gray-50 p-4 rounded border border-gray-200">
                     <p className="font-medium text-sm text-gray-600 mb-1">
-                      Case {q.annotations?.caseId || idx + 1} • {q.annotations?.pearlLevel} • {q.annotations?.domain}
+                      Case {q.annotations?.caseId || idx + 1} • {q.annotations?.pearlLevel} • {q.annotations?.domain || 'N/A'}
                     </p>
                     <p className="text-sm mb-2">
                       <span className="font-medium">Scenario:</span> {q.scenario?.substring(0, 200)}...
                     </p>
+                    {q.counterfactualClaim && (
+                      <p className="text-sm mb-2">
+                        <span className="font-medium">Counterfactual Claim:</span> {q.counterfactualClaim}
+                      </p>
+                    )}
+                    {q.hiddenQuestion && (
+                      <p className="text-sm mb-2">
+                        <span className="font-medium">Hidden Question:</span> {q.hiddenQuestion}
+                      </p>
+                    )}
                     <p className="text-sm mt-2">
-                      <span className="font-medium">Trap:</span> {q.annotations?.trapType || 'NONE'} ({q.annotations?.trapSubtype || 'NONE'})
+                      <span className="font-medium">Trap/Family:</span> {q.annotations?.trapType || q.annotations?.family || 'NONE'} {q.annotations?.trapSubtype ? `(${q.annotations.trapSubtype})` : ''}
                     </p>
                     <p className="text-sm">
                       <span className="font-medium">Ground Truth:</span> {q.groundTruth}

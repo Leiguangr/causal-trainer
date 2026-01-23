@@ -210,15 +210,29 @@ export default function AdminDashboard() {
 
           <div className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow">
             <div className="text-4xl mb-4">✏️</div>
-            <h3 className="text-xl font-semibold mb-2">Review Questions</h3>
+            <h3 className="text-xl font-semibold mb-2">Review Legacy Questions</h3>
             <p className="text-gray-600 mb-4">
-              Review and annotate AI-generated questions before approval
+              Review and annotate legacy questions from the Question table
             </p>
             <button
               onClick={() => router.push('/admin/review')}
               className="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700"
             >
-              Review →
+              Review Legacy →
+            </button>
+          </div>
+
+          <div className="bg-white rounded-lg shadow-sm p-6 hover:shadow-md transition-shadow">
+            <div className="text-4xl mb-4">🔬</div>
+            <h3 className="text-xl font-semibold mb-2">Review T3 Cases</h3>
+            <p className="text-gray-600 mb-4">
+              Review and annotate T3 cases (L1Case, L2Case, L3Case) with proper schemas
+            </p>
+            <button
+              onClick={() => router.push('/admin/review/t3')}
+              className="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700"
+            >
+              Review T3 →
             </button>
           </div>
 

@@ -23,6 +23,17 @@ export async function GET(
           },
           orderBy: { createdAt: 'asc' },
         },
+        l1Cases: {
+          select: {
+            id: true,
+            evidenceClass: true,
+            evidenceType: true,
+            domain: true,
+            groundTruth: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
       },
     });
 
@@ -47,7 +58,24 @@ export async function GET(
       createdAt: batch.createdAt,
       completedAt: batch.completedAt,
       errorMessage: batch.errorMessage,
-      questions: batch.questions,
+      questions: [
+        ...batch.questions.map(q => ({
+          id: q.id,
+          pearlLevel: q.pearlLevel,
+          trapType: q.trapType,
+          trapSubtype: q.trapSubtype,
+          domain: q.domain,
+          groundTruth: q.groundTruth,
+        })),
+        ...batch.l1Cases.map(c => ({
+          id: c.id,
+          pearlLevel: 'L1',
+          trapType: c.evidenceClass, // displayed in UI; legacy label says "trapType"
+          trapSubtype: c.evidenceType || 'NONE',
+          domain: c.domain || 'N/A',
+          groundTruth: c.groundTruth,
+        })),
+      ],
     });
 
   } catch (error) {

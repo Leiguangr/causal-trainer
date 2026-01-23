@@ -304,13 +304,21 @@ export default function ReviewPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-bold mb-4">No unverified questions</h2>
-          <button
-            onClick={() => router.push('/admin/generate')}
-            className="bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700"
-          >
-            Generate Questions
-          </button>
+          <h2 className="text-2xl font-bold mb-4">No unverified legacy questions</h2>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={() => router.push('/admin/generate')}
+              className="bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700"
+            >
+              Generate Questions
+            </button>
+            <button
+              onClick={() => router.push('/admin/review/t3')}
+              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700"
+            >
+              Review T3 Cases
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -324,9 +332,12 @@ export default function ReviewPage() {
         {/* Header */}
         <div className="mb-4 flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Review Questions</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Review Legacy Questions</h1>
             <p className="text-gray-600 mt-1">
               {total} unverified total • Showing {questions.length} matching filters
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              Legacy Question table only • For T3 cases (L1/L2/L3), use Review T3
             </p>
           </div>
           <div className="flex items-center gap-3">
