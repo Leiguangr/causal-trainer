@@ -31,7 +31,7 @@ export interface GeneratedQuestion {
   variables: {
     X: string;
     Y: string;
-    Z: string[];
+    Z?: string;
   };
   causalStructure: string;
   keyInsight: string;
@@ -124,7 +124,7 @@ Always respond with valid JSON in this exact format:
       "variables": {
         "X": "The exposure/treatment variable (brief description)",
         "Y": "The outcome variable (brief description)",
-        "Z": ["List of confounders, mediators, colliders, or mechanisms involved"]
+        "Z": "Optional single confounder/mediator/collider/mechanism variable (brief description)"
       },
       "causalStructure": "Brief description of the causal graph (e.g., 'X → Y is confounded by Z' or 'Z is a collider between X and Y')",
       "keyInsight": "One-line takeaway lesson (e.g., 'Conditioning on a collider induces spurious correlation')",
@@ -148,41 +148,17 @@ function buildUserPrompt(
     L3: 'Counterfactual (what-if reasoning, alternative worlds)',
   }[level];
 
-  // Scenario structure guidance by Pearl level
-  const scenarioStructure = {
-    L1: `SCENARIO STRUCTURE FOR L1 (Data-Centric):
-- Focus on describing the DATA PATTERN itself
-- Show observational correlations, associations, or patterns
-- No actor/analyst persona required - the data speaks for itself`,
-
-    L2: `SCENARIO STRUCTURE FOR L2 (Actor-Centric):
-- The scenario MUST include someone who TOOK AN ACTION and MAKES A CLAIM about its effect
-- This could be: an analyst, policy maker, CEO, researcher, doctor, manager, etc.
-- Show: (1) what intervention they did, (2) what they observed, (3) their causal conclusion
-- The trap is in their METHODOLOGY or INTERPRETATION, not just the data`,
-
-    L3: `SCENARIO STRUCTURE FOR L3 (Reasoning-Centric):
-- The scenario MUST include someone making a COUNTERFACTUAL CLAIM ("what if" / "had X not happened")
-- Show: (1) what happened, (2) their counterfactual reasoning about alternatives
-- The trap is in their COUNTERFACTUAL LOGIC (preemption, cross-world confounding, etc.)`,
-  }[level];
-
   let prompt = `Generate ${count} causal reasoning problem(s) with these specifications:
 
 **Pearl Level**: ${level} - ${levelDesc}
 **Domain**: ${domain}
 **Trap Type**: ${trapDef.type} (${trapDef.label})
 **Description**: ${trapDef.description}
-
-${scenarioStructure}
 `;
 
   if (subtypeDef) {
     prompt += `**Subtype**: ${subtypeDef.name}
-**Definition**: ${subtypeDef.description}
-${subtypeDef.minimalGraph ? `**Causal Graph**: ${subtypeDef.minimalGraph}` : ''}
-${subtypeDef.mathSignature ? `**What Goes Wrong**: ${subtypeDef.mathSignature}` : ''}
-${subtypeDef.howItHappens ? `**Practical Example**: ${subtypeDef.howItHappens}` : ''}
+**Subtype Description**: ${subtypeDef.description}
 `;
   }
 

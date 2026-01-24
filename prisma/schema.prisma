@@ -82,7 +82,7 @@ model L1Case {
   domain          String?
   subdomain       String?
   difficulty      String   @default("medium") // easy, medium, hard
-  variables       String?  // JSON: { X, Y, Z[] }
+  variables       String?  // JSON: { X, Y, Z? } (Z is a single optional variable, not an array)
   causalStructure String?  // Optional; may be null for AMBIGUOUS
 
   dataset         String   @default("default")

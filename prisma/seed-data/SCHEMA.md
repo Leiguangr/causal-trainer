@@ -19,7 +19,7 @@ This document defines the standard schema for quiz questions derived from Bucket
   "variables": {
     "X": "string (required) - The exposure/treatment/predictor variable",
     "Y": "string (required) - The outcome variable",
-    "Z": "string[] (required) - Confounders, mediators, colliders, or mechanisms"
+    "Z": "string (optional) - Single confounder/mediator/collider/mechanism (legacy exports may still contain an array)"
   },
   "causalStructure": "string (required) - Brief description of the causal graph",
   "keyInsight": "string (required) - One-line memorable takeaway",
@@ -113,10 +113,9 @@ Causal diagram components:
   - Format: `"Variable Name (Role)"`
   - Example: `"High Price (Outcome)"`
 
-- **`Z`** (string[]): Array of other relevant variables
-  - Confounders, mediators, colliders, mechanisms
-  - Format: `["Variable (Role)", "Another Variable (Role)"]`
-  - Example: `["Supply/Demand Elasticity (Mechanism)"]`
+- **`Z`** (string, optional): Single other relevant variable
+  - Confounder, mediator, collider, or mechanism
+  - Example: `"Supply/Demand Elasticity (Mechanism)"`
 
 ### `causalStructure` (string, required)
 Brief description of the causal graph or relationships.
@@ -227,7 +226,7 @@ Example: *"The counterfactual claim is VALID. Agricultural pricing is supply-dri
 2. `pearlLevel` must be exactly `"L1"`, `"L2"`, or `"L3"`
 3. `difficulty` must be exactly `"easy"`, `"medium"`, or `"hard"` (note: PDF uses "Medium" but normalize to lowercase)
 4. `groundTruth` must be exactly `"VALID"`, `"INVALID"`, or `"CONDITIONAL"`
-5. `variables.Z` must be an array (even if single element)
+5. `variables.Z` should be a single string when authoring new cases (some older datasets may use an array)
 6. `sourceCase` should be unique across the dataset
 7. `scenario` should not contain the answer or trap type name
 8. `claim` should be a testable causal or counterfactual statement

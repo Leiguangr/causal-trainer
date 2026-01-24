@@ -39,9 +39,33 @@ type GenerationDomain = typeof GENERATION_DOMAINS[number];
 // Subdomains for within-domain diversity (rotated through)
 const DOMAIN_SUBDOMAINS: Record<GenerationDomain, string[]> = {
   Markets: [
-    'cryptocurrency trading', 'forex markets', 'commodity futures', 'equity derivatives',
-    'real estate investment', 'hedge fund strategies', 'retail banking', 'insurance underwriting',
-    'venture capital', 'bond markets', 'algorithmic trading', 'pension funds'
+    // Asset classes & venues
+    'Equities', 'Fixed Income', 'Foreign Exchange', 'Commodities', 'Cryptocurrency',
+    'Exchange-Traded Funds', 'Mutual Funds', 'Pension Funds',
+    // Derivatives & structured products
+    'Options Markets', 'Futures Markets', 'Equity Derivatives', 'Credit Derivatives',
+    'Volatility Products', 'Structured Products',
+    // Market microstructure & trading
+    'Market Microstructure', 'Algorithmic Trading', 'High-Frequency Trading', 'Market Making',
+    'Liquidity And Spreads', 'Order Books And Execution', 'Price Discovery', 'Slippage And Market Impact',
+    // Risk & portfolio management
+    'Risk Management', 'Portfolio Construction', 'Factor Investing', 'Asset Allocation',
+    'Risk Parity', 'Stress Testing', 'Hedging Strategies',
+    // Credit & banking
+    'Corporate Credit', 'Securitization', 'Retail Banking', 'Commercial Banking',
+    'Insurance Underwriting', 'Credit Scoring And Underwriting',
+    // Macro & policy
+    'Monetary Policy', 'Inflation And Rates', 'Business Cycles', 'Currency Pegs And Crises',
+    // Corporate finance & deal markets
+    'Initial Public Offerings', 'Mergers And Acquisitions', 'Merger Arbitrage',
+    // Funds & intermediaries
+    'Asset Management', 'Hedge Funds', 'Venture Capital', 'Private Equity',
+    // Behavioral & information
+    'Behavioral Finance', 'Market Sentiment', 'Information Leakage And Insider Trading',
+    // Real assets & real estate
+    'Real Estate Markets', 'Housing Finance',
+    // Operational plumbing
+    'Clearing And Settlement', 'Regulation And Compliance'
   ],
   Medicine: [
     'oncology treatment', 'psychiatric care', 'epidemiology studies', 'surgical outcomes',
@@ -88,10 +112,39 @@ function getDomainContext(domain: GenerationDomain, subdomain: string): string {
     causalPatterns: string[];
   }> = {
     Markets: {
-      terminology: ['returns', 'volatility', 'liquidity', 'spread', 'yield', 'portfolio', 'asset allocation', 'risk-adjusted', 'correlation', 'beta', 'alpha', 'sharpe ratio'],
-      actors: ['portfolio manager', 'trader', 'analyst', 'hedge fund manager', 'risk officer', 'investment advisor', 'quantitative researcher'],
-      commonScenarios: ['market movements', 'trading strategies', 'portfolio performance', 'risk management', 'regulatory changes', 'economic indicators'],
-      causalPatterns: ['market conditions affecting returns', 'trading volume influencing prices', 'regulatory changes impacting behavior', 'risk factors driving outcomes'],
+      terminology: [
+        // Prices/returns & risk
+        'returns', 'price impact', 'volatility', 'realized volatility', 'implied volatility',
+        'beta', 'alpha', 'correlation', 'drawdown', 'risk premia', 'risk-adjusted returns', 'Sharpe ratio',
+        // Market microstructure
+        'liquidity', 'bid-ask spread', 'order book', 'limit order', 'market order', 'slippage',
+        'market making', 'price discovery', 'flow', 'volume', 'open interest',
+        // Rates/credit
+        'yield', 'yield curve', 'duration', 'credit spread', 'default risk', 'refinancing',
+        // Institutional plumbing
+        'margin', 'leverage', 'collateral', 'clearing', 'settlement', 'counterparty risk',
+        // Macro links
+        'inflation', 'policy rate', 'rate hike', 'quantitative easing', 'risk-off',
+      ],
+      actors: [
+        'portfolio manager', 'trader', 'sell-side analyst', 'buy-side analyst', 'market maker',
+        'quantitative researcher', 'risk manager', 'treasurer', 'central banker',
+        'regulator', 'exchange operator', 'prime broker',
+      ],
+      commonScenarios: [
+        'macro announcements and rate decisions', 'earnings and guidance surprises',
+        'index inclusion/rebalancing flows', 'options expiration and hedging flows',
+        'liquidity shocks and execution constraints', 'credit events and spread widening',
+        'regulatory or rule changes', 'information leakage and rumor-driven moves',
+        'stablecoin de-pegs and market stress', 'supply shocks in commodities',
+      ],
+      causalPatterns: [
+        'mechanical flows moving prices (forced buying/selling, hedging, index tracking)',
+        'confounding from shared macro shocks (rates, inflation, risk sentiment) affecting both X and Y',
+        'reverse causality in reactive systems (algorithms, margin calls, policy responses)',
+        'selection/collider effects from conditioning on survivors, funded firms, published strategies, or traded instruments',
+        'timing ambiguity where ordering determines whether X causes Y or merely reacts to Y',
+      ],
     },
     Medicine: {
       terminology: ['treatment efficacy', 'adverse events', 'dosage', 'patient outcomes', 'clinical trials', 'biomarkers', 'symptom severity', 'recovery rate', 'mortality', 'morbidity'],
@@ -380,6 +433,25 @@ function buildL1Prompt(
   recentScenarios: string[],
   promptNotes?: string
 ): string {
+  const globalGuardrails = `GLOBAL GUARDRAILS (APPLY TO ALL OUTPUT):
+1) SELF-CONTAINED EPISTEMOLOGY:
+   - Determine validity ONLY from facts EXPLICITLY stated in the scenario text.
+   - Do NOT use external domain knowledge to fill gaps.
+   - If evaluating the claim would require facts not stated, make the case AMBIGUOUS (not YES/NO).
+
+2) OBSERVABLE-ONLY DISCIPLINE:
+   - Describe ONLY observable actions, measurements, and outcomes.
+   - NEVER describe intentions, motivations, or mental states.
+
+3) VARIABLE HYGIENE:
+   - X, Y, Z must be DISTINCT concepts (no overlap/synonyms).
+   - Do not define Z as a rewording of X, or vice versa.
+   - Keep variables concrete and scenario-grounded (not abstract labels like "economic conditions").
+
+4) OUTPUT DISCIPLINE:
+   - Return ONLY valid JSON with the exact keys in the specified output format.
+   - No extra keys, no commentary, no markdown.`;
+
   const diversityBlock = recentScenarios.length > 0 ? `
 DIVERSITY REQUIREMENTS - CRITICAL:
 You MUST create a scenario that is DISTINCTLY DIFFERENT from these recent scenarios:
@@ -440,6 +512,8 @@ MANDATORY SPECIFICATIONS:
 
 ${domainContext}
 
+${globalGuardrails}
+
 SCENARIO STRUCTURE (T3-L1):
 - Scenario: 2-4 sentences narrative, grounded in observable facts (use inline variable notation (X), (Y), (Z) in-text)
 - Claim: 1 sentence with explicit causal language ("X causes Y")
@@ -489,6 +563,23 @@ function buildL2Prompt(
   recentScenarios: string[],
   promptNotes?: string
 ): string {
+  const globalGuardrails = `GLOBAL GUARDRAILS (APPLY TO ALL OUTPUT):
+1) SELF-CONTAINED EPISTEMOLOGY:
+   - The case must be solvable ONLY from facts explicitly stated in the scenario.
+   - Do NOT rely on external market/medical/legal knowledge.
+
+2) OBSERVABLE-ONLY DISCIPLINE:
+   - Describe ONLY observable actions, measurements, and outcomes.
+   - NEVER describe intentions, motivations, or mental states.
+
+3) VARIABLE HYGIENE:
+   - X, Y, Z must be DISTINCT concepts and clearly labeled in-text.
+   - Z must be the ambiguous variable that drives the hidden question (not a duplicate of X).
+
+4) OUTPUT DISCIPLINE:
+   - Return ONLY valid JSON with the exact keys in the specified output format.
+   - No extra keys, no commentary, no markdown.`;
+
   const trapDef = getL2TrapByCode(trapType);
   if (!trapDef) {
     throw new Error(`Invalid L2 trap type: ${trapType}`);
@@ -538,6 +629,8 @@ MANDATORY SPECIFICATIONS:
 - Trap Type: ${trapType} (${trapDef.name})
 
 ${domainContext}
+
+${globalGuardrails}
 
 L2 CASE STRUCTURE (Revamped):
 - Scenario: Narrative (3-6 sentences) describing a situation with X, Y, and optionally Z clearly labeled inline as (X), (Y), (Z)
@@ -591,6 +684,24 @@ function buildL3Prompt(
   recentScenarios: string[],
   promptNotes?: string
 ): string {
+  const globalGuardrails = `GLOBAL GUARDRAILS (APPLY TO ALL OUTPUT):
+1) SELF-CONTAINED EPISTEMOLOGY:
+   - All causal force must come from facts explicitly stated in the scenario + invariants.
+   - Do NOT use external domain knowledge to justify the counterfactual.
+   - If key invariants/mechanisms are missing, the label should be CONDITIONAL (not VALID/INVALID).
+
+2) OBSERVABLE-ONLY DISCIPLINE:
+   - Describe ONLY observable actions, measurements, and outcomes.
+   - NEVER describe intentions, motivations, or mental states.
+
+3) VARIABLE HYGIENE:
+   - X (antecedent), Y (consequent), Z (mechanism/context) must be DISTINCT.
+   - Make Z a concrete mechanism or constraint (e.g., order-book liquidity, contractual payout rule, margin constraints).
+
+4) OUTPUT DISCIPLINE:
+   - Return ONLY valid JSON with the exact keys in the specified output format.
+   - No extra keys, no commentary, no markdown.`;
+
   const familyDef = getL3FamilyByCode(family);
   if (!familyDef) {
     throw new Error(`Invalid L3 family: ${family}`);
@@ -644,6 +755,8 @@ MANDATORY SPECIFICATIONS:
 - Target Ground Truth: ${l3GroundTruth} (this must match groundTruth after applying family logic)
 
 ${domainContext}
+
+${globalGuardrails}
 
 COUNTERFACTUAL-SPECIFIC DOMAIN GUIDANCE:
 When creating counterfactual scenarios in ${subdomain}, consider:
