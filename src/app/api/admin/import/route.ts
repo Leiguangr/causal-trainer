@@ -117,15 +117,6 @@ async function upsertQuestionByDatasetSourceCase(args: {
   };
 }) {
   const { dataset, sourceCase, data } = args;
-  if (sourceCase) {
-    const existing = await prisma.question.findFirst({
-      where: { dataset, sourceCase },
-      select: { id: true },
-    });
-    if (existing) {
-      return prisma.question.update({ where: { id: existing.id }, data });
-    }
-  }
   return prisma.question.create({
     data: { ...data, dataset, sourceCase: sourceCase || null, isLLMGenerated: false },
   });
@@ -150,13 +141,6 @@ async function upsertL1ByDatasetSourceCase(args: {
   };
 }) {
   const { dataset, sourceCase, data } = args;
-  if (sourceCase) {
-    const existing = await prisma.l1Case.findFirst({
-      where: { dataset, sourceCase },
-      select: { id: true },
-    });
-    if (existing) return prisma.l1Case.update({ where: { id: existing.id }, data });
-  }
   return prisma.l1Case.create({ data: { ...data, dataset, sourceCase: sourceCase || null } });
 }
 
@@ -177,13 +161,6 @@ async function upsertL2ByDatasetSourceCase(args: {
   };
 }) {
   const { dataset, sourceCase, data } = args;
-  if (sourceCase) {
-    const existing = await prisma.l2Case.findFirst({
-      where: { dataset, sourceCase },
-      select: { id: true },
-    });
-    if (existing) return prisma.l2Case.update({ where: { id: existing.id }, data });
-  }
   return prisma.l2Case.create({ data: { ...data, dataset, sourceCase: sourceCase || null } });
 }
 
@@ -206,13 +183,6 @@ async function upsertL3ByDatasetSourceCase(args: {
   };
 }) {
   const { dataset, sourceCase, data } = args;
-  if (sourceCase) {
-    const existing = await prisma.l3Case.findFirst({
-      where: { dataset, sourceCase },
-      select: { id: true },
-    });
-    if (existing) return prisma.l3Case.update({ where: { id: existing.id }, data });
-  }
   return prisma.l3Case.create({ data: { ...data, dataset, sourceCase: sourceCase || null } });
 }
 
@@ -226,25 +196,49 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing file' }, { status: 400 });
     }
 
-    const raw = await file.text();
-    const cleaned = raw.replace(/^\uFEFF/, '').trim(); // strip UTF-8 BOM + whitespace
+    // Handle files saved as UTF-8, UTF-8-BOM, or UTF-16 (common on Windows).
+    const buf = Buffer.from(await file.arrayBuffer());
+    const b0 = buf[0];
+    const b1 = buf[1];
+
+    let rawText: string;
+    if (b0 === 0xff && b1 === 0xfe) {
+      // UTF-16 LE BOM
+      rawText = new TextDecoder('utf-16le').decode(buf);
+    } else if (b0 === 0xfe && b1 === 0xff) {
+      // UTF-16 BE BOM
+      rawText = new TextDecoder('utf-16be').decode(buf);
+    } else {
+      // Default: assume UTF-8 (with or without BOM)
+      rawText = new TextDecoder('utf-8').decode(buf);
+    }
+
+    const cleaned = rawText.replace(/^\uFEFF/, '').trim();
     let parsed: unknown;
     try {
       parsed = JSON.parse(cleaned);
-    } catch {
-      return NextResponse.json({ error: 'Invalid JSON file' }, { status: 400 });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Invalid JSON';
+      return NextResponse.json({ error: `Invalid JSON file: ${msg}` }, { status: 400 });
     }
 
-    if (!Array.isArray(parsed)) {
-      return NextResponse.json({ error: 'Expected JSON array (exported questions)' }, { status: 400 });
+    // Accept either the raw export array, or a wrapper object with `questions: []`
+    const items: unknown =
+      Array.isArray(parsed) ? parsed : (parsed && typeof parsed === 'object' && 'questions' in (parsed as any) ? (parsed as any).questions : null);
+
+    if (!Array.isArray(items)) {
+      return NextResponse.json(
+        { error: 'Expected JSON array (export) or object with { questions: [...] }' },
+        { status: 400 }
+      );
     }
 
     const errors: Array<{ index: number; error: string }> = [];
     let imported = { question: 0, l1: 0, l2: 0, l3: 0 };
 
     // Process sequentially to keep sqlite happy and make failures attributable
-    for (let i = 0; i < parsed.length; i++) {
-      const item = parsed[i] as ExportItem;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i] as ExportItem;
 
       const level = getPearlLevel(item);
       const scenarioCombined = asString(item.scenario);
@@ -396,7 +390,7 @@ export async function POST(req: NextRequest) {
       success: true,
       dataset,
       imported,
-      total: parsed.length,
+      total: items.length,
       errors,
     });
   } catch (error) {
