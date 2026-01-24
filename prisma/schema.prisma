@@ -95,6 +95,8 @@ model L1Case {
   updatedAt       DateTime @updatedAt
 
   generationBatch GenerationBatch? @relation(fields: [generationBatchId], references: [id])
+
+  evaluations     CaseEvaluation[]
 }
 
 model L2Case {
@@ -123,6 +125,8 @@ model L2Case {
   updatedAt       DateTime @updatedAt
 
   generationBatch GenerationBatch? @relation(fields: [generationBatchId], references: [id])
+
+  evaluations     CaseEvaluation[]
 }
 
 model L3Case {
@@ -148,6 +152,8 @@ model L3Case {
   updatedAt           DateTime @updatedAt
 
   generationBatch     GenerationBatch? @relation(fields: [generationBatchId], references: [id])
+
+  evaluations         CaseEvaluation[]
 }
 
 model QuizSession {
@@ -222,8 +228,14 @@ model GenerationBatch {
 // Evaluation Agent observations for proofreading and report aggregation
 model CaseEvaluation {
   id              String      @id @default(cuid())
-  questionId      String
-  question        Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId      String?
+  question        Question?   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  l1CaseId        String?
+  l1Case          L1Case?     @relation(fields: [l1CaseId], references: [id], onDelete: Cascade)
+  l2CaseId        String?
+  l2Case          L2Case?     @relation(fields: [l2CaseId], references: [id], onDelete: Cascade)
+  l3CaseId        String?
+  l3Case          L3Case?     @relation(fields: [l3CaseId], references: [id], onDelete: Cascade)
   evaluationBatchId String?
   evaluationBatch EvaluationBatch? @relation(fields: [evaluationBatchId], references: [id])
 
@@ -262,6 +274,9 @@ model CaseEvaluation {
 
   // Report Aggregation Tags
   reportTags              String?   // JSON array of tags for report categorization
+
+  // Rubric-based scoring
+  rubricScore             String?   // JSON: RubricScore object with category scores and notes
 
   createdAt               DateTime  @default(now())
   updatedAt               DateTime  @updatedAt

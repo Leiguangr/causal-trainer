@@ -1,26 +1,17 @@
 import OpenAI from 'openai';
 import { prisma } from './prisma';
+import {
+  buildRubricPromptFromQuestion,
+  type QuestionForEvaluationLegacy,
+  type RubricScore,
+} from './rubric-prompts';
+import type { PearlLevel } from '@/types';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export interface QuestionForEvaluation {
-  id: string;
-  scenario: string;
-  claim: string;
-  pearlLevel: string;
-  domain: string;
-  subdomain?: string | null;
-  trapType: string;
-  trapSubtype: string;
-  groundTruth: string;
-  explanation: string;
-  variables?: string | null;
-  causalStructure?: string | null;
-  keyInsight?: string | null;
-  wiseRefusal?: string | null;
-}
+export type QuestionForEvaluation = QuestionForEvaluationLegacy;
 
 export interface EvaluationResult {
   // Structural assessments
@@ -53,32 +44,22 @@ export interface EvaluationResult {
   suggestedCorrections: string;
   priorityLevel: number; // 1=urgent, 2=normal, 3=minor
   reportTags: string[];
+
+  // Rubric-based scoring
+  rubricScore?: RubricScore;
 }
 
-const EVALUATION_SYSTEM_PROMPT = `You are an expert evaluator of causal reasoning questions. Your task is to proofread and assess the quality of generated questions for a causal inference training dataset.
+const RUBRIC_SCORING_SYSTEM_PROMPT = `You are an expert evaluator using standardized rubrics to assess the quality of causal reasoning cases. Your task is to apply the appropriate rubric (L1, L2, or L3) to evaluate case quality and return structured scoring results.
 
-You will analyze each question for:
-1. **Pearl Level Accuracy**: Is the assigned Pearl level (L1/L2/L3) correct for the claim?
-   - L1 (Association): Observational claims like "X is correlated/associated with Y"
-   - L2 (Intervention): Causal claims like "X causes Y" or "doing X leads to Y"
-   - L3 (Counterfactual): What-if reasoning like "If X had/hadn't happened, Y would..."
+You must:
+1. Carefully read the rubric instructions
+2. Evaluate each category according to the rubric criteria
+3. Assign points based on the scoring guidelines
+4. Provide clear justifications for each score
+5. Calculate the total score and determine the acceptance threshold
+6. Return ONLY valid JSON matching the specified format
 
-2. **Trap Type/Subtype Accuracy**: Does the scenario actually exhibit the labeled trap?
-
-3. **Ground Truth Accuracy**: Is YES/NO/AMBIGUOUS correct for this claim?
-   - YES: The claim is causally valid and supported
-   - NO: There's a causal fallacy/trap making the claim invalid
-   - AMBIGUOUS: Information is insufficient to evaluate the claim
-
-4. **Logical Consistency**: Does the explanation match the scenario and claim?
-
-5. **Domain Accuracy**: Are there factual errors in the domain knowledge?
-
-6. **Clarity**: Is the scenario clear and understandable?
-
-7. **Variable Accuracy**: Are X, Y, Z correctly identified?
-
-Respond with a JSON object containing your assessment.`;
+Be strict but fair in your evaluation.`;
 
 function buildEvaluationPrompt(question: QuestionForEvaluation): string {
   let variables: { X?: string; Y?: string; Z?: string[] } = {};
@@ -152,7 +133,85 @@ Report tags should include relevant categories like:
 - "needs_stronger_trap", "overcomplicated", "too_simple"`;
 }
 
+/**
+ * Score a case using the appropriate rubric (L1, L2, or L3)
+ */
+export async function scoreCaseWithRubric(
+  question: QuestionForEvaluation,
+  pearlLevel: PearlLevel
+): Promise<RubricScore> {
+  const rubricPrompt = buildRubricPromptFromQuestion(question, pearlLevel);
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [
+      { role: 'system', content: RUBRIC_SCORING_SYSTEM_PROMPT },
+      { role: 'user', content: rubricPrompt },
+    ],
+    temperature: 0.3,
+    response_format: { type: 'json_object' },
+  });
+
+  const content = response.choices[0]?.message?.content;
+  if (!content) {
+    throw new Error('Empty response from rubric scoring agent');
+  }
+
+  const parsed = JSON.parse(content) as {
+    categoryScores: Record<string, number>;
+    categoryNotes: Record<string, string>;
+    totalScore: number;
+  };
+
+  // Validate and construct RubricScore
+  const totalScore = parsed.totalScore;
+  const calculatedTotal = Object.values(parsed.categoryScores).reduce(
+    (sum, score) => sum + score,
+    0
+  );
+
+  // Warn if totals don't match, but use the calculated total
+  if (Math.abs(totalScore - calculatedTotal) > 0.1) {
+    console.warn(
+      `Rubric score mismatch: reported ${totalScore}, calculated ${calculatedTotal}`
+    );
+  }
+
+  // Determine acceptance threshold based on calculated total
+  let acceptanceThreshold: 'ACCEPT' | 'REVISE' | 'REJECT';
+  if (calculatedTotal >= 8) {
+    acceptanceThreshold = 'ACCEPT';
+  } else if (calculatedTotal >= 6) {
+    acceptanceThreshold = 'REVISE';
+  } else {
+    acceptanceThreshold = 'REJECT';
+  }
+
+  // Determine rubric version based on level
+  const rubricVersion = `${pearlLevel}-v1.0`;
+
+  return {
+    totalScore: calculatedTotal,
+    categoryScores: parsed.categoryScores,
+    categoryNotes: parsed.categoryNotes,
+    acceptanceThreshold,
+    rubricVersion,
+  };
+}
+
 export async function evaluateQuestion(question: QuestionForEvaluation): Promise<EvaluationResult> {
+  // Score using rubric
+  const pearlLevel = question.pearlLevel as PearlLevel;
+  let rubricScore: RubricScore | undefined;
+  
+  try {
+    rubricScore = await scoreCaseWithRubric(question, pearlLevel);
+  } catch (error) {
+    console.error('Failed to score with rubric:', error);
+    // Continue with evaluation even if rubric scoring fails
+  }
+
+  // Build legacy evaluation prompt for backward compatibility
   const prompt = buildEvaluationPrompt(question);
 
   const response = await openai.chat.completions.create({
@@ -171,8 +230,48 @@ export async function evaluateQuestion(question: QuestionForEvaluation): Promise
   }
 
   const result = JSON.parse(content) as EvaluationResult;
+  
+  // Merge rubric score into result
+  if (rubricScore) {
+    result.rubricScore = rubricScore;
+    
+    // Update overallVerdict based on rubric if available
+    if (rubricScore.acceptanceThreshold === 'ACCEPT') {
+      result.overallVerdict = 'APPROVED';
+    } else if (rubricScore.acceptanceThreshold === 'REJECT') {
+      result.overallVerdict = 'REJECTED';
+    } else {
+      result.overallVerdict = 'NEEDS_REVIEW';
+    }
+  }
+
   return result;
 }
+
+const EVALUATION_SYSTEM_PROMPT = `You are an expert evaluator of causal reasoning questions. Your task is to proofread and assess the quality of generated questions for a causal inference training dataset.
+
+You will analyze each question for:
+1. **Pearl Level Accuracy**: Is the assigned Pearl level (L1/L2/L3) correct for the claim?
+   - L1 (Association): Observational claims like "X is correlated/associated with Y"
+   - L2 (Intervention): Causal claims like "X causes Y" or "doing X leads to Y"
+   - L3 (Counterfactual): What-if reasoning like "If X had/hadn't happened, Y would..."
+
+2. **Trap Type/Subtype Accuracy**: Does the scenario actually exhibit the labeled trap?
+
+3. **Ground Truth Accuracy**: Is YES/NO/AMBIGUOUS correct for this claim?
+   - YES: The claim is causally valid and supported
+   - NO: There's a causal fallacy/trap making the claim invalid
+   - AMBIGUOUS: Information is insufficient to evaluate the claim
+
+4. **Logical Consistency**: Does the explanation match the scenario and claim?
+
+5. **Domain Accuracy**: Are there factual errors in the domain knowledge?
+
+6. **Clarity**: Is the scenario clear and understandable?
+
+7. **Variable Accuracy**: Are X, Y, Z correctly identified?
+
+Respond with a JSON object containing your assessment.`;
 
 export async function evaluateBatch(
   batchId: string,
@@ -226,6 +325,7 @@ export async function evaluateBatch(
           suggestedCorrections: result.suggestedCorrections,
           priorityLevel: result.priorityLevel,
           reportTags: JSON.stringify(result.reportTags || []),
+          rubricScore: result.rubricScore ? JSON.stringify(result.rubricScore) : null,
         },
       });
 
@@ -259,12 +359,79 @@ export async function evaluateBatch(
 export async function generateReport(evaluationBatchId: string): Promise<string> {
   const evaluations = await prisma.caseEvaluation.findMany({
     where: { evaluationBatchId },
-    include: { question: true },
+    include: { question: true, l1Case: true, l2Case: true, l3Case: true },
   });
 
   if (evaluations.length === 0) {
     return '# Evaluation Report\n\nNo evaluations found for this batch.';
   }
+
+  // Parse rubric scores (legacy RubricScore or T3 StoredRubricScore)
+  const rubricScores: Array<RubricScore | (Pick<RubricScore, 'totalScore' | 'categoryScores' | 'categoryNotes'> & { acceptanceThreshold?: RubricScore['acceptanceThreshold'] })> = [];
+  evaluations.forEach(e => {
+    if (e.rubricScore) {
+      try {
+        const parsed = JSON.parse(e.rubricScore) as Partial<RubricScore> & {
+          categoryScores?: Record<string, number>;
+          categoryNotes?: Record<string, string>;
+          totalScore?: number;
+        };
+
+        const totalScore = typeof parsed.totalScore === 'number' ? parsed.totalScore : 0;
+        const acceptanceThreshold: RubricScore['acceptanceThreshold'] =
+          parsed.acceptanceThreshold ??
+          (totalScore >= 8 ? 'ACCEPT' : totalScore >= 6 ? 'REVISE' : 'REJECT');
+
+        rubricScores.push({
+          totalScore,
+          categoryScores: parsed.categoryScores || {},
+          categoryNotes: parsed.categoryNotes || {},
+          acceptanceThreshold,
+          rubricVersion: parsed.rubricVersion || 'unknown',
+        });
+      } catch {
+        // ignore parse errors
+      }
+    }
+  });
+
+  const getCaseType = (e: (typeof evaluations)[number]): PearlLevel | 'UNKNOWN' => {
+    if (e.question?.pearlLevel === 'L1' || e.question?.pearlLevel === 'L2' || e.question?.pearlLevel === 'L3') {
+      return e.question.pearlLevel as PearlLevel;
+    }
+    if (e.l1Case) return 'L1';
+    if (e.l2Case) return 'L2';
+    if (e.l3Case) return 'L3';
+    return 'UNKNOWN';
+  };
+
+  const getGroundTruth = (e: (typeof evaluations)[number]): string => {
+    return (
+      e.question?.groundTruth ??
+      e.l1Case?.groundTruth ??
+      e.l2Case?.trapType /* L2 has no groundTruth; keep something informative */ ??
+      e.l3Case?.groundTruth ??
+      'UNKNOWN'
+    );
+  };
+
+  const getTrapType = (e: (typeof evaluations)[number]): string => {
+    return e.question?.trapType ?? e.l2Case?.trapType ?? 'N/A';
+  };
+
+  const getSourceCase = (e: (typeof evaluations)[number]): string => {
+    return (
+      e.question?.sourceCase ??
+      e.l1Case?.sourceCase ??
+      e.l2Case?.sourceCase ??
+      e.l3Case?.sourceCase ??
+      e.id.slice(0, 8)
+    );
+  };
+
+  const getScenario = (e: (typeof evaluations)[number]): string => {
+    return e.question?.scenario ?? e.l1Case?.scenario ?? e.l2Case?.scenario ?? e.l3Case?.scenario ?? '';
+  };
 
   // Aggregate statistics
   const stats = {
@@ -279,26 +446,34 @@ export async function generateReport(evaluationBatchId: string): Promise<string>
     logicalIssues: evaluations.filter(e => e.hasLogicalIssues).length,
     domainErrors: evaluations.filter(e => e.hasDomainErrors).length,
     avgClarity: evaluations.reduce((sum, e) => sum + e.clarityScore, 0) / evaluations.length,
+    rubricScored: rubricScores.length,
+    avgRubricScore: rubricScores.length > 0
+      ? rubricScores.reduce((sum, s) => sum + s.totalScore, 0) / rubricScores.length
+      : 0,
+    rubricAccept: rubricScores.filter(s => s.acceptanceThreshold === 'ACCEPT').length,
+    rubricRevise: rubricScores.filter(s => s.acceptanceThreshold === 'REVISE').length,
+    rubricReject: rubricScores.filter(s => s.acceptanceThreshold === 'REJECT').length,
   };
 
   // Pearl level distribution
   const pearlDist = {
-    L1: evaluations.filter(e => e.question.pearlLevel === 'L1').length,
-    L2: evaluations.filter(e => e.question.pearlLevel === 'L2').length,
-    L3: evaluations.filter(e => e.question.pearlLevel === 'L3').length,
+    L1: evaluations.filter(e => getCaseType(e) === 'L1').length,
+    L2: evaluations.filter(e => getCaseType(e) === 'L2').length,
+    L3: evaluations.filter(e => getCaseType(e) === 'L3').length,
   };
 
   // Ground truth distribution
   const gtDist = {
-    YES: evaluations.filter(e => e.question.groundTruth === 'YES').length,
-    NO: evaluations.filter(e => e.question.groundTruth === 'NO').length,
-    AMBIGUOUS: evaluations.filter(e => e.question.groundTruth === 'AMBIGUOUS').length,
+    YES: evaluations.filter(e => getGroundTruth(e) === 'YES' || getGroundTruth(e) === 'VALID').length,
+    NO: evaluations.filter(e => getGroundTruth(e) === 'NO' || getGroundTruth(e) === 'INVALID').length,
+    AMBIGUOUS: evaluations.filter(e => getGroundTruth(e) === 'AMBIGUOUS' || getGroundTruth(e) === 'CONDITIONAL').length,
   };
 
   // Trap type distribution
   const trapTypes: Record<string, number> = {};
   evaluations.forEach(e => {
-    trapTypes[e.question.trapType] = (trapTypes[e.question.trapType] || 0) + 1;
+    const t = getTrapType(e);
+    trapTypes[t] = (trapTypes[t] || 0) + 1;
   });
 
   // Collect all tags
@@ -368,13 +543,124 @@ ${Object.entries(trapTypes).sort((a, b) => b[1] - a[1]).map(([type, count]) => `
 
 ---
 
-## (B) Issue Tags Distribution
+## (B) Rubric-Based Quality Scoring
+
+${stats.rubricScored > 0 ? `
+### Rubric Score Statistics
+- **Cases Scored**: ${stats.rubricScored} / ${stats.total} (${(stats.rubricScored / stats.total * 100).toFixed(1)}%)
+- **Average Rubric Score**: ${stats.avgRubricScore.toFixed(2)} / 10.0
+
+### Rubric Acceptance Thresholds
+| Threshold | Count | Percentage |
+|-----------|-------|------------|
+| ✅ ACCEPT (8-10) | ${stats.rubricAccept} | ${(stats.rubricAccept / stats.rubricScored * 100).toFixed(1)}% |
+| ⚠️ REVISE (6-7) | ${stats.rubricRevise} | ${(stats.rubricRevise / stats.rubricScored * 100).toFixed(1)}% |
+| ❌ REJECT (≤5) | ${stats.rubricReject} | ${(stats.rubricReject / stats.rubricScored * 100).toFixed(1)}% |
+
+### Category-Level Breakdown (L1 Rubric)
+${(() => {
+  if (rubricScores.length === 0) return '_No rubric scores available._';
+  
+  const categories = [
+    'scenarioClarity',
+    'causalClaimExplicitness',
+    'wiseRefusalQuality',
+    'groundTruthUnambiguity',
+    'difficultyCalibration',
+    'domainPlausibility',
+    'noiseDiscipline',
+    'hiddenQuestionQuality',
+    'conditionalAnswerA',
+    'conditionalAnswerB',
+    'selfContained',
+    'clarity',
+    'correctness',
+    'familyFit',
+    'novelty',
+    'realism'
+  ];
+  const categoryStats: Record<string, { total: number; count: number; avg: number }> = {};
+  
+  categories.forEach(cat => {
+    categoryStats[cat] = { total: 0, count: 0, avg: 0 };
+  });
+  
+  rubricScores.forEach(score => {
+    Object.entries(score.categoryScores).forEach(([cat, points]) => {
+      if (categoryStats[cat]) {
+        categoryStats[cat].total += points;
+        categoryStats[cat].count += 1;
+      }
+    });
+  });
+  
+  Object.keys(categoryStats).forEach(cat => {
+    if (categoryStats[cat].count > 0) {
+      categoryStats[cat].avg = categoryStats[cat].total / categoryStats[cat].count;
+    }
+  });
+  
+  const maxPoints: Record<string, number> = {
+    scenarioClarity: 2,
+    causalClaimExplicitness: 1,
+    wiseRefusalQuality: 2,
+    groundTruthUnambiguity: 2,
+    difficultyCalibration: 1,
+    domainPlausibility: 1,
+    noiseDiscipline: 1,
+    hiddenQuestionQuality: 2,
+    conditionalAnswerA: 1.5,
+    conditionalAnswerB: 1.5,
+    selfContained: 2,
+    clarity: 2,
+    correctness: 2,
+    familyFit: 1.5,
+    novelty: 1.5,
+    realism: 1,
+  };
+  
+  const categoryLabels: Record<string, string> = {
+    scenarioClarity: 'Scenario Clarity',
+    causalClaimExplicitness: 'Causal Claim Explicitness',
+    wiseRefusalQuality: 'Wise Refusal Quality',
+    groundTruthUnambiguity: 'Ground Truth Unambiguity',
+    difficultyCalibration: 'Difficulty Calibration',
+    domainPlausibility: 'Domain Plausibility',
+    noiseDiscipline: 'Noise Discipline',
+    hiddenQuestionQuality: 'Hidden Question Quality',
+    conditionalAnswerA: 'Conditional Answer A',
+    conditionalAnswerB: 'Conditional Answer B',
+    selfContained: 'Self-Contained',
+    clarity: 'Clarity of Variables',
+    correctness: 'Counterfactual Correctness',
+    familyFit: 'Family Fit',
+    novelty: 'Novelty',
+    realism: 'Realism',
+  };
+  
+  return `| Category | Avg Score | Max Points | Performance |
+|----------|-----------|------------|-------------|
+${categories.filter(cat => categoryStats[cat].count > 0).map(cat => {
+  const stats = categoryStats[cat];
+  const max = maxPoints[cat] || 1;
+  const pct = (stats.avg / max * 100).toFixed(1);
+  const performance = stats.avg >= max * 0.8 ? '✅' : stats.avg >= max * 0.6 ? '⚠️' : '❌';
+  return `| ${categoryLabels[cat]} | ${stats.avg.toFixed(2)} | ${max} | ${performance} ${pct}% |`;
+}).join('\n')}`;
+})()}
+` : `
+_No rubric scores available for this batch._
+`}
+
+---
+
+## (C) Issue Tags Distribution
 
 ${Object.entries(tagCounts).sort((a, b) => b[1] - a[1]).map(([tag, count]) => `- **${tag}**: ${count} cases`).join('\n')}
 
 ---
 
-## (C) Cases Needing Attention
+## (D) Cases Needing Attention
 
 ### Priority 1 (Urgent)
 `;
@@ -384,8 +670,8 @@ ${Object.entries(tagCounts).sort((a, b) => b[1] - a[1]).map(([tag, count]) => `-
     report += '_No urgent issues found._\n\n';
   } else {
     urgent.forEach(e => {
-      report += `#### Case: ${e.question.sourceCase || e.questionId.slice(0, 8)}\n`;
-      report += `- **Scenario**: ${e.question.scenario.slice(0, 100)}...\n`;
+      report += `#### Case: ${getSourceCase(e)}\n`;
+      report += `- **Scenario**: ${getScenario(e).slice(0, 100)}...\n`;
       report += `- **Issues**: ${e.suggestedCorrections || e.structuralNotes}\n\n`;
     });
   }
@@ -408,7 +694,7 @@ Based on this evaluation:
   // Calculate cell sizes
   const cells: Record<string, number> = {};
   evaluations.forEach(e => {
-    const key = `${e.question.pearlLevel}-${e.question.groundTruth}`;
+    const key = `${getCaseType(e)}-${getGroundTruth(e)}`;
     cells[key] = (cells[key] || 0) + 1;
   });
   Object.entries(cells).forEach(([key, count]) => {
@@ -420,7 +706,7 @@ Based on this evaluation:
 
 ---
 
-## (E) Recommendations
+## (F) Recommendations
 
 ${stats.pearlLevelMismatches > stats.total * 0.1
   ? '- ⚠️ High Pearl level mismatch rate suggests generation prompts need refinement\n'

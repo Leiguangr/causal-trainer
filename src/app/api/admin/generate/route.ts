@@ -79,6 +79,61 @@ function getRotatedSubdomain(domain: GenerationDomain, index: number): string {
   return subdomains[index % subdomains.length];
 }
 
+// Get domain-specific context to seed scenario generation
+function getDomainContext(domain: GenerationDomain, subdomain: string): string {
+  const domainContexts: Record<GenerationDomain, {
+    terminology: string[];
+    actors: string[];
+    commonScenarios: string[];
+    causalPatterns: string[];
+  }> = {
+    Markets: {
+      terminology: ['returns', 'volatility', 'liquidity', 'spread', 'yield', 'portfolio', 'asset allocation', 'risk-adjusted', 'correlation', 'beta', 'alpha', 'sharpe ratio'],
+      actors: ['portfolio manager', 'trader', 'analyst', 'hedge fund manager', 'risk officer', 'investment advisor', 'quantitative researcher'],
+      commonScenarios: ['market movements', 'trading strategies', 'portfolio performance', 'risk management', 'regulatory changes', 'economic indicators'],
+      causalPatterns: ['market conditions affecting returns', 'trading volume influencing prices', 'regulatory changes impacting behavior', 'risk factors driving outcomes'],
+    },
+    Medicine: {
+      terminology: ['treatment efficacy', 'adverse events', 'dosage', 'patient outcomes', 'clinical trials', 'biomarkers', 'symptom severity', 'recovery rate', 'mortality', 'morbidity'],
+      actors: ['physician', 'researcher', 'epidemiologist', 'clinical trial coordinator', 'public health official', 'pharmacist', 'nurse practitioner'],
+      commonScenarios: ['treatment interventions', 'drug studies', 'patient care protocols', 'disease surveillance', 'preventive measures', 'diagnostic procedures'],
+      causalPatterns: ['treatment effects on outcomes', 'disease progression factors', 'intervention timing', 'patient characteristics influencing response'],
+    },
+    Law: {
+      terminology: ['liability', 'precedent', 'jurisdiction', 'burden of proof', 'damages', 'settlement', 'verdict', 'statute', 'regulation', 'compliance'],
+      actors: ['attorney', 'judge', 'regulator', 'compliance officer', 'legal analyst', 'policy maker', 'court clerk'],
+      commonScenarios: ['legal disputes', 'regulatory enforcement', 'policy changes', 'case outcomes', 'compliance violations', 'sentencing decisions'],
+      causalPatterns: ['legal actions causing outcomes', 'regulatory changes affecting behavior', 'precedent influencing decisions', 'evidence affecting verdicts'],
+    },
+    Technology: {
+      terminology: ['performance metrics', 'user engagement', 'conversion rate', 'latency', 'throughput', 'error rate', 'uptime', 'scalability', 'optimization'],
+      actors: ['product manager', 'data scientist', 'engineer', 'analyst', 'researcher', 'system architect', 'UX designer'],
+      commonScenarios: ['feature launches', 'A/B tests', 'system performance', 'user behavior', 'algorithm changes', 'infrastructure updates'],
+      causalPatterns: ['feature changes affecting metrics', 'algorithm updates influencing behavior', 'infrastructure changes impacting performance', 'design decisions driving outcomes'],
+    },
+    Education: {
+      terminology: ['test scores', 'learning outcomes', 'retention rate', 'engagement', 'curriculum', 'pedagogy', 'intervention', 'achievement gap', 'graduation rate'],
+      actors: ['teacher', 'principal', 'researcher', 'curriculum designer', 'policy maker', 'administrator', 'tutor'],
+      commonScenarios: ['educational interventions', 'curriculum changes', 'teaching methods', 'student performance', 'policy reforms', 'program evaluations'],
+      causalPatterns: ['instructional methods affecting learning', 'interventions influencing outcomes', 'policy changes impacting performance', 'student characteristics affecting achievement'],
+    },
+  };
+
+  const context = domainContexts[domain];
+  return `
+DOMAIN CONTEXT - USE THIS TO SEED YOUR SCENARIO:
+- Domain: ${domain}
+- Subdomain: ${subdomain} (YOU MUST use terminology and concepts specific to this subdomain)
+
+Domain-Specific Elements to Incorporate:
+- Terminology: Use terms like ${context.terminology.slice(0, 5).join(', ')}, and other ${domain.toLowerCase()}-specific language
+- Actors: Consider roles like ${context.actors.slice(0, 3).join(', ')}, or other relevant ${domain.toLowerCase()} professionals
+- Scenarios: Ground your case in ${context.commonScenarios.slice(0, 2).join(' or ')}, or similar ${domain.toLowerCase()} contexts
+- Causal Patterns: Consider patterns like ${context.causalPatterns.slice(0, 2).join('; ')}
+
+CRITICAL: Your scenario MUST feel authentic to ${subdomain}. Use specific terminology, realistic actors, and plausible ${domain.toLowerCase()} contexts.`;
+}
+
 interface TrapSelection {
   pearlLevel: PearlLevel;
   trapType: string;
@@ -334,25 +389,35 @@ ${recentScenarios.slice(0, 10).map((s, i) => `${i + 1}. ${s}`).join('\n')}
   const cls = validityToEvidenceClass(validity);
   const evidence = evidenceSelection?.evidence;
 
+  // Get domain-specific context for seeding
+  const domainContext = getDomainContext(domain, subdomain);
+
   const evidenceBlock = evidence
     ? `
-EVIDENCE TYPE (MUST FOLLOW EXACTLY):
+EVIDENCE TYPE (MUST FOLLOW EXACTLY - ALL FIELDS ARE MANDATORY):
 - evidenceClass: ${evidence.class}
 - evidenceType: ${evidence.code} (${evidence.label})
 - definition: ${evidence.definition}
 - ${evidence.class === 'WOLF' ? 'why flawed' : 'why valid'}: ${evidence.failureOrValidityMode}
-- required elements:
+- tier: ${evidence.tier} (CORE or ADVANCED)
+
+REQUIRED ELEMENTS (ALL must appear in your scenario):
 ${evidence.requiredElements.map(e => `  - ${e}`).join('\n')}
-- canonical structure:
+
+CANONICAL STRUCTURE (follow this narrative pattern):
 ${evidence.canonicalStructure.map(s => `  - ${s}`).join('\n')}
-- design notes:
+
+DESIGN NOTES (critical guidance for implementation):
 ${evidence.designNotes.map(n => `  - ${n}`).join('\n')}
-${evidence.keySignalWords?.length ? `- key signal words: ${evidence.keySignalWords.join(', ')}` : ''}
+${evidence.keySignalWords?.length ? `- KEY SIGNAL WORDS to incorporate naturally: ${evidence.keySignalWords.join(', ')}` : ''}
+
+IMPLIED GROUND TRUTH: ${evidence.impliedGroundTruth} (this evidence type maps to groundTruth="${evidence.impliedGroundTruth}")
 `
     : `
 EVIDENCE TYPE:
 - evidenceClass: NONE
 - evidenceType: null
+- This is an AMBIGUOUS case where the scenario lacks sufficient information to determine validity.
 `;
 
   const groundTruthRules = `GROUND TRUTH + EVIDENCE RULES (MUST OBEY):
@@ -370,8 +435,10 @@ EVIDENCE TYPE:
 MANDATORY SPECIFICATIONS:
 - Pearl Level: L1 (Association-level evidence, but the claim is explicitly causal)
 - Domain: ${domain}
-- REQUIRED Subdomain: ${subdomain} (YOU MUST set this scenario specifically in ${subdomain})
+- REQUIRED Subdomain: ${subdomain} (YOU MUST set this scenario specifically in ${subdomain} - use subdomain-specific terminology, actors, and contexts)
 - Target: ${validity} (this must match groundTruth after applying evidence rules)
+
+${domainContext}
 
 SCENARIO STRUCTURE (T3-L1):
 - Scenario: 2-4 sentences narrative, grounded in observable facts (use inline variable notation (X), (Y), (Z) in-text)
@@ -384,6 +451,7 @@ STYLE CONSTRAINTS:
 - Be concise (40-100 words total for scenario+claim)
 - Describe ONLY observable behaviors/outcomes. Do NOT describe intentions/motivations/mental states.
 - Keep it single-type: do NOT mix multiple evidence/trap types.
+- Use domain-appropriate terminology from ${subdomain} to make the scenario feel authentic and grounded.
 
 ${evidenceBlock}
 ${groundTruthRules}
@@ -432,22 +500,32 @@ You MUST create a scenario that is DISTINCTLY DIFFERENT from these recent scenar
 ${recentScenarios.slice(0, 10).map((s, i) => `${i + 1}. ${s}`).join('\n')}
 ` : '';
 
+  // Get domain-specific context for seeding
+  const domainContext = getDomainContext(domain, subdomain);
+
   const trapBlock = `
-TRAP TYPE (MUST FOLLOW EXACTLY):
+TRAP TYPE (MUST FOLLOW EXACTLY - ALL FIELDS ARE MANDATORY):
 - Code: ${trapDef.code} (${trapDef.name})
 - Family: ${trapDef.family} - ${trapDef.familyName}
 - Definition: ${trapDef.definition}
+
+CORE HIDDEN QUESTION (this is the key ambiguity):
 - Core Hidden Question: ${trapDef.coreHiddenQuestion}
-- Hidden Question Pattern: ${trapDef.hiddenQuestionPattern}
-- Required Elements:
+- Hidden Question Pattern: "${trapDef.hiddenQuestionPattern}" (your hiddenQuestion MUST match this pattern exactly)
+
+REQUIRED ELEMENTS (ALL must appear in your scenario):
 ${trapDef.requiredElements.map(e => `  - ${e}`).join('\n')}
-- Canonical Structure:
+
+CANONICAL STRUCTURE (causal graph pattern to follow):
 ${trapDef.canonicalStructure.map(s => `  - ${s}`).join('\n')}
-- Case Skeleton:
+
+CASE SKELETON (narrative structure to follow):
 ${trapDef.caseSkeleton.map(s => `  - ${s}`).join('\n')}
-- Example Patterns:
+
+EXAMPLE PATTERNS (use these as inspiration, adapted to ${subdomain}):
 ${trapDef.examplePattern.map(e => `  - ${e}`).join('\n')}
-- Common Pitfalls to AVOID:
+
+COMMON PITFALLS TO AVOID (critical - do NOT make these mistakes):
 ${trapDef.commonPitfalls.map(p => `  - ${p}`).join('\n')}
 `;
 
@@ -456,8 +534,10 @@ ${trapDef.commonPitfalls.map(p => `  - ${p}`).join('\n')}
 MANDATORY SPECIFICATIONS:
 - Pearl Level: L2 (Intervention-level reasoning)
 - Domain: ${domain}
-- REQUIRED Subdomain: ${subdomain} (YOU MUST set this scenario specifically in ${subdomain})
+- REQUIRED Subdomain: ${subdomain} (YOU MUST set this scenario specifically in ${subdomain} - use subdomain-specific terminology, actors, and contexts)
 - Trap Type: ${trapType} (${trapDef.name})
+
+${domainContext}
 
 L2 CASE STRUCTURE (Revamped):
 - Scenario: Narrative (3-6 sentences) describing a situation with X, Y, and optionally Z clearly labeled inline as (X), (Y), (Z)
@@ -474,6 +554,7 @@ CRITICAL REQUIREMENTS:
 4. The wise refusal must be a REFUSAL (not a verdict) - it should explain what's missing
 5. Variables X, Y, Z must be clearly labeled in the narrative using (X), (Y), (Z) notation
 6. The scenario must support TWO coherent conditional worlds (A and B)
+7. Use domain-appropriate terminology from ${subdomain} to make the scenario feel authentic and grounded
 
 ${trapBlock}
 
@@ -525,20 +606,32 @@ ${recentScenarios.slice(0, 10).map((s, i) => `${i + 1}. ${s}`).join('\n')}
   const l3GroundTruth: 'VALID' | 'INVALID' | 'CONDITIONAL' =
     validity === 'YES' ? 'VALID' : validity === 'NO' ? 'INVALID' : 'CONDITIONAL';
 
+  // Get domain-specific context for seeding
+  const domainContext = getDomainContext(domain, subdomain);
+
   const familyBlock = `
-FAMILY (MUST FOLLOW EXACTLY):
+FAMILY (MUST FOLLOW EXACTLY - ALL FIELDS ARE MANDATORY):
 - Code: ${familyDef.code} (${familyDef.name})
-- Guiding Question: ${familyDef.guidingQuestion}
-- Definition: ${familyDef.definition}
-- Required Elements:
+- Guiding Question: "${familyDef.guidingQuestion}" (this is the key question your counterfactual must address)
+
+DEFINITION:
+${familyDef.definition}
+
+REQUIRED ELEMENTS (ALL must appear in your scenario):
 ${familyDef.requiredElements.map(e => `  - ${e}`).join('\n')}
-- Canonical Case Structure:
+
+CANONICAL CASE STRUCTURE (narrative pattern to follow):
 ${familyDef.canonicalCaseStructure.map(s => `  - ${s}`).join('\n')}
-- Label Differentiation Logic:
-  * VALID: ${familyDef.labelDifferentiation.valid}
-  * INVALID: ${familyDef.labelDifferentiation.invalid}
-  * CONDITIONAL: ${familyDef.labelDifferentiation.conditional}
-- Generator Heuristic: ${familyDef.generatorHeuristic}
+
+LABEL DIFFERENTIATION LOGIC (critical for determining groundTruth="${l3GroundTruth}"):
+- VALID: ${familyDef.labelDifferentiation.valid}
+- INVALID: ${familyDef.labelDifferentiation.invalid}
+- CONDITIONAL: ${familyDef.labelDifferentiation.conditional}
+
+GENERATOR HEURISTIC (use this to guide your scenario design):
+${familyDef.generatorHeuristic}
+
+TYPICAL MAJORITY LABEL: ${familyDef.typicalMajorityLabel} (but you are targeting ${l3GroundTruth})
 `;
 
   return `You are generating ONE T3-L3 counterfactual reasoning case.
@@ -546,9 +639,18 @@ ${familyDef.canonicalCaseStructure.map(s => `  - ${s}`).join('\n')}
 MANDATORY SPECIFICATIONS:
 - Pearl Level: L3 (Counterfactual-level reasoning)
 - Domain: ${domain}
-- REQUIRED Subdomain: ${subdomain} (YOU MUST set this scenario specifically in ${subdomain})
+- REQUIRED Subdomain: ${subdomain} (YOU MUST set this scenario specifically in ${subdomain} - use subdomain-specific terminology, actors, and contexts)
 - Family: ${family} (${familyDef.name})
 - Target Ground Truth: ${l3GroundTruth} (this must match groundTruth after applying family logic)
+
+${domainContext}
+
+COUNTERFACTUAL-SPECIFIC DOMAIN GUIDANCE:
+When creating counterfactual scenarios in ${subdomain}, consider:
+- What mechanisms or rules govern causality in this subdomain?
+- What would be plausible alternative worlds given ${subdomain} constraints?
+- How do invariants (rules, mechanisms, structures) apply in ${domain.toLowerCase()} contexts?
+- What domain-specific terminology captures counterfactual reasoning (e.g., "would have", "had X not occurred", "alternative scenario")?
 
 GLOBAL L3 DESIGN CONSTRAINTS (apply to all families):
 1. Explicit alternative world: Every case must be evaluable via:
@@ -581,6 +683,7 @@ STYLE CONSTRAINTS:
 - Use explicit counterfactual language ("would have", "had X not occurred")
 - Clearly state invariants - they determine the label
 - All causal reasoning must be derivable from the scenario text
+- Use domain-appropriate terminology from ${subdomain} to make the scenario feel authentic and grounded
 
 ${promptNotes ? `ADDITIONAL INSTRUCTIONS:\n${promptNotes}\n` : ''}
 ${diversityBlock}

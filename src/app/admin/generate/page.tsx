@@ -67,6 +67,16 @@ export default function GeneratePage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
 
+  // Upload existing exported dataset
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<{
+    dataset: string;
+    imported: { question: number; l1: number; l2: number; l3: number };
+    total: number;
+    errors: Array<{ index: number; error: string }>;
+  } | null>(null);
+
   // Distribution matrix state (for matrix mode)
   const [distributionMatrix, setDistributionMatrix] = useState<DistributionMatrix>({
     L1: { yes: 5, no: 15, ambiguous: 5 },
@@ -269,6 +279,33 @@ export default function GeneratePage() {
     }
   };
 
+  const handleUploadDataset = async () => {
+    if (!uploadFile) return;
+    setIsUploading(true);
+    setUploadResult(null);
+
+    try {
+      const form = new FormData();
+      form.append('file', uploadFile);
+      form.append('dataset', selectedDataset || 'default');
+
+      const res = await fetch('/api/admin/import', { method: 'POST', body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || 'Upload failed');
+      }
+
+      setUploadResult(data);
+      await fetchDatasets();
+      await fetchStats();
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert(`Failed to import: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const getProgress = (level: keyof Stats) => {
     const { current, target } = stats[level];
     return Math.min((current / target) * 100, 100);
@@ -417,6 +454,76 @@ export default function GeneratePage() {
               <p className="text-xs text-blue-700 mt-1">
                 Questions will be added to: <strong>{selectedDataset || 'default'}</strong>
               </p>
+            </div>
+
+            {/* Upload exported dataset */}
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <label className="block text-sm font-medium text-gray-900 mb-2">
+                Upload exported dataset (JSON)
+              </label>
+              <p className="text-xs text-gray-600 mb-3">
+                Upload a JSON file exported from <code>/admin/export</code>. Items will be imported into legacy and/or T3 tables
+                depending on their shape, under the selected dataset.
+              </p>
+              <div className="flex flex-col md:flex-row gap-3 md:items-center">
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={handleUploadDataset}
+                  disabled={!uploadFile || isUploading}
+                  className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-black disabled:bg-gray-400"
+                >
+                  {isUploading ? 'Importing...' : 'Import into dataset'}
+                </button>
+              </div>
+
+              {uploadResult && (
+                <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-3">
+                  <div className="text-sm text-green-900 font-medium">
+                    Imported into <strong>{uploadResult.dataset}</strong>
+                  </div>
+                  <div className="text-xs text-green-900 mt-1">
+                    Legacy Questions: <strong>{uploadResult.imported.question}</strong> · L1: <strong>{uploadResult.imported.l1}</strong> ·
+                    L2: <strong>{uploadResult.imported.l2}</strong> · L3: <strong>{uploadResult.imported.l3}</strong> (of {uploadResult.total})
+                  </div>
+                  {uploadResult.errors?.length > 0 && (
+                    <details className="mt-2">
+                      <summary className="text-xs text-green-900 cursor-pointer">
+                        {uploadResult.errors.length} item(s) skipped due to validation issues
+                      </summary>
+                      <div className="mt-2 max-h-40 overflow-y-auto text-xs text-green-900 font-mono whitespace-pre-wrap">
+                        {uploadResult.errors.slice(0, 50).map((e, idx) => (
+                          <div key={`${e.index}-${idx}`}>
+                            #{e.index}: {e.error}
+                          </div>
+                        ))}
+                        {uploadResult.errors.length > 50 && <div>...and {uploadResult.errors.length - 50} more</div>}
+                      </div>
+                    </details>
+                  )}
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => router.push('/admin/evaluate')}
+                      className="px-3 py-1.5 bg-purple-600 text-white rounded hover:bg-purple-700 text-sm"
+                    >
+                      Run legacy evaluator →
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => router.push('/admin/grading')}
+                      className="px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
+                    >
+                      View grading dashboard →
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Domain (shared between modes) */}
