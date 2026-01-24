@@ -6,34 +6,77 @@ export const dynamic = 'force-dynamic';
 // GET: List all datasets with counts
 export async function GET() {
   try {
-    // Get distinct datasets with counts
-    const datasets = await prisma.question.groupBy({
-      by: ['dataset'],
-      _count: {
-        id: true,
-      },
-      orderBy: {
-        dataset: 'asc',
-      },
-    });
+    // Datasets exist across legacy Question table and new per-level case tables.
+    const [qAll, qVerified, l1All, l1Verified, l2All, l2Verified, l3All, l3Verified] = await Promise.all([
+      prisma.question.groupBy({
+        by: ['dataset'],
+        _count: { id: true },
+      }),
+      prisma.question.groupBy({
+        by: ['dataset'],
+        where: { isVerified: true },
+        _count: { id: true },
+      }),
+      prisma.l1Case.groupBy({
+        by: ['dataset'],
+        _count: { id: true },
+      }),
+      prisma.l1Case.groupBy({
+        by: ['dataset'],
+        where: { isVerified: true },
+        _count: { id: true },
+      }),
+      prisma.l2Case.groupBy({
+        by: ['dataset'],
+        _count: { id: true },
+      }),
+      prisma.l2Case.groupBy({
+        by: ['dataset'],
+        where: { isVerified: true },
+        _count: { id: true },
+      }),
+      prisma.l3Case.groupBy({
+        by: ['dataset'],
+        _count: { id: true },
+      }),
+      prisma.l3Case.groupBy({
+        by: ['dataset'],
+        where: { isVerified: true },
+        _count: { id: true },
+      }),
+    ]);
 
-    // Get verified counts for each dataset
-    const verifiedCounts = await prisma.question.groupBy({
-      by: ['dataset'],
-      where: { isVerified: true },
-      _count: {
-        id: true,
-      },
-    });
+    const totals = new Map<string, number>();
+    const verified = new Map<string, number>();
 
-    const verifiedMap = new Map(
-      verifiedCounts.map(d => [d.dataset, d._count.id])
-    );
+    const addCounts = (
+      rows: Array<{ dataset: string; _count: { id: number } }>,
+      target: Map<string, number>
+    ) => {
+      for (const row of rows) {
+        target.set(row.dataset, (target.get(row.dataset) || 0) + row._count.id);
+      }
+    };
 
-    const result = datasets.map(d => ({
-      name: d.dataset,
-      totalCount: d._count.id,
-      verifiedCount: verifiedMap.get(d.dataset) || 0,
+    addCounts(qAll, totals);
+    addCounts(l1All, totals);
+    addCounts(l2All, totals);
+    addCounts(l3All, totals);
+
+    addCounts(qVerified, verified);
+    addCounts(l1Verified, verified);
+    addCounts(l2Verified, verified);
+    addCounts(l3Verified, verified);
+
+    // Union of dataset names across all sources.
+    const allNames = Array.from(
+      new Set<string>([...totals.keys(), ...verified.keys()])
+    ).sort((a, b) => a.localeCompare(b));
+
+    const result = allNames.map(name => ({
+      name,
+      totalCount: totals.get(name) || 0,
+      verifiedCount: verified.get(name) || 0,
     }));
 
     return NextResponse.json({

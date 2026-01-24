@@ -474,7 +474,7 @@ OUTPUT FORMAT (valid JSON only):
   "variables": {
     "X": "Primary cause variable",
     "Y": "Outcome variable",
-    "Z": ["Optional: confounders/selection/collider/etc. as needed"]
+    "Z": "Optional: single additional variable (e.g., confounder/context/selection/collider) if needed"
   },
   "causalStructure": "Optional: causal edges only, e.g. 'Z -> X, Z -> Y' (null allowed)"
 }
@@ -1207,9 +1207,12 @@ Generate the question now. Return ONLY valid JSON, no other text.`;
 
 // Distribution matrix: specify exact counts for each Pearl level × validity combination
 interface DistributionMatrix {
+  // L1 uses YES/NO/AMBIGUOUS
   L1?: { yes?: number; no?: number; ambiguous?: number };
-  L2?: { yes?: number; no?: number; ambiguous?: number };
-  L3?: { yes?: number; no?: number; ambiguous?: number };
+  // L2 (revamped) produces ambiguous-only cases with a trap type (T1..T17)
+  L2?: { ambiguous?: number };
+  // L3 uses VALID/INVALID/CONDITIONAL
+  L3?: { valid?: number; invalid?: number; conditional?: number };
 }
 
 interface GenerateRequest {
@@ -1334,18 +1337,30 @@ function selectValidity(
 function expandDistributionMatrix(matrix: DistributionMatrix): GenerationTask[] {
   const tasks: GenerationTask[] = [];
   const levels: PearlLevel[] = ['L1', 'L2', 'L3'];
-  const validities: ValidityType[] = ['YES', 'NO', 'AMBIGUOUS'];
 
   for (const level of levels) {
-    const levelConfig = matrix[level];
+    const levelConfig: any = (matrix as any)[level];
     if (!levelConfig) continue;
 
-    for (const validity of validities) {
-      const key = validity.toLowerCase() as 'yes' | 'no' | 'ambiguous';
-      const count = levelConfig[key] || 0;
-      for (let i = 0; i < count; i++) {
-        tasks.push({ pearlLevel: level, validity });
-      }
+    if (level === 'L1') {
+      const yes = Number(levelConfig.yes || 0);
+      const no = Number(levelConfig.no || 0);
+      const ambiguous = Number(levelConfig.ambiguous || 0);
+      for (let i = 0; i < yes; i++) tasks.push({ pearlLevel: 'L1', validity: 'YES' });
+      for (let i = 0; i < no; i++) tasks.push({ pearlLevel: 'L1', validity: 'NO' });
+      for (let i = 0; i < ambiguous; i++) tasks.push({ pearlLevel: 'L1', validity: 'AMBIGUOUS' });
+    } else if (level === 'L2') {
+      const ambiguous = Number(levelConfig.ambiguous || 0);
+      for (let i = 0; i < ambiguous; i++) tasks.push({ pearlLevel: 'L2', validity: 'AMBIGUOUS' });
+    } else if (level === 'L3') {
+      // Map matrix labels to internal validity type used by prompt builder:
+      // VALID -> YES, INVALID -> NO, CONDITIONAL -> AMBIGUOUS
+      const valid = Number(levelConfig.valid || 0);
+      const invalid = Number(levelConfig.invalid || 0);
+      const conditional = Number(levelConfig.conditional || 0);
+      for (let i = 0; i < valid; i++) tasks.push({ pearlLevel: 'L3', validity: 'YES' });
+      for (let i = 0; i < invalid; i++) tasks.push({ pearlLevel: 'L3', validity: 'NO' });
+      for (let i = 0; i < conditional; i++) tasks.push({ pearlLevel: 'L3', validity: 'AMBIGUOUS' });
     }
   }
 
@@ -1517,6 +1532,17 @@ async function runBackgroundGeneration(
             (generated.difficulty?.toLowerCase() as 'easy' | 'medium' | 'hard' | undefined) ||
             (evidenceSelection ? inferDifficultyForL1(evidenceSelection.evidence) : 'medium');
 
+          // Enforce: variables.Z should be a single (optional) variable, not an array.
+          // Some older prompt shapes encouraged Z: string[]; normalize to a single string.
+          let variablesToStore: Record<string, unknown> | null = generated.variables || null;
+          if (variablesToStore && Object.prototype.hasOwnProperty.call(variablesToStore, 'Z')) {
+            const zVal = (variablesToStore as any).Z;
+            if (Array.isArray(zVal)) {
+              const normalized = zVal.map(v => String(v)).filter(Boolean).join('; ');
+              (variablesToStore as any).Z = normalized || undefined;
+            }
+          }
+
           await prisma.l1Case.create({
             data: {
               scenario: generated.scenario,
@@ -1528,7 +1554,7 @@ async function runBackgroundGeneration(
               domain: generated.domain || currentDomain,
               subdomain: generated.subdomain || currentSubdomain,
               difficulty,
-              variables: generated.variables ? JSON.stringify(generated.variables) : null,
+              variables: variablesToStore ? JSON.stringify(variablesToStore) : null,
               causalStructure: generated.causalStructure ?? null,
               dataset,
               author: 'LLM',
@@ -1551,7 +1577,7 @@ async function runBackgroundGeneration(
           console.error(`[Batch ${batchId}] Error generating L1 case ${i + 1}:`, error);
           errorCount++;
         }
-      } else if (trap.pearlLevel === 'L2' && useRevampedL2) {
+      } else if (taskPearlLevel === 'L2' || (trap.pearlLevel === 'L2' && useRevampedL2)) {
         // Revamped L2 generation path (T1-T17)
         const selectedTrapType = await selectNextL2TrapType(dataset);
         console.log(
@@ -1946,12 +1972,20 @@ export async function POST(req: NextRequest) {
       // Build summary for logging
       const summaryParts: string[] = [];
       for (const level of ['L1', 'L2', 'L3'] as const) {
-        const cfg = distributionMatrix[level];
+        const cfg: any = (distributionMatrix as any)[level];
         if (cfg) {
           const counts = [];
-          if (cfg.yes) counts.push(`${cfg.yes} YES`);
-          if (cfg.no) counts.push(`${cfg.no} NO`);
-          if (cfg.ambiguous) counts.push(`${cfg.ambiguous} AMB`);
+          if (level === 'L1') {
+            if (cfg.yes) counts.push(`${cfg.yes} YES`);
+            if (cfg.no) counts.push(`${cfg.no} NO`);
+            if (cfg.ambiguous) counts.push(`${cfg.ambiguous} AMB`);
+          } else if (level === 'L2') {
+            if (cfg.ambiguous) counts.push(`${cfg.ambiguous} AMB`);
+          } else if (level === 'L3') {
+            if (cfg.valid) counts.push(`${cfg.valid} VALID`);
+            if (cfg.invalid) counts.push(`${cfg.invalid} INVALID`);
+            if (cfg.conditional) counts.push(`${cfg.conditional} COND`);
+          }
           if (counts.length > 0) {
             summaryParts.push(`${level}: ${counts.join(', ')}`);
           }

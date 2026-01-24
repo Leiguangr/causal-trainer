@@ -34,6 +34,24 @@ export async function GET(
           },
           orderBy: { createdAt: 'asc' },
         },
+        l2Cases: {
+          select: {
+            id: true,
+            trapType: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+        l3Cases: {
+          select: {
+            id: true,
+            family: true,
+            domain: true,
+            groundTruth: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
       },
     });
 
@@ -72,6 +90,22 @@ export async function GET(
           pearlLevel: 'L1',
           trapType: c.evidenceClass, // displayed in UI; legacy label says "trapType"
           trapSubtype: c.evidenceType || 'NONE',
+          domain: c.domain || 'N/A',
+          groundTruth: c.groundTruth,
+        })),
+        ...batch.l2Cases.map(c => ({
+          id: c.id,
+          pearlLevel: 'L2',
+          trapType: c.trapType, // displayed in UI; legacy label says "trapType"
+          trapSubtype: 'N/A',
+          domain: 'N/A',
+          groundTruth: 'N/A',
+        })),
+        ...batch.l3Cases.map(c => ({
+          id: c.id,
+          pearlLevel: 'L3',
+          trapType: c.family, // displayed in UI; legacy label says "trapType"
+          trapSubtype: 'N/A',
           domain: c.domain || 'N/A',
           groundTruth: c.groundTruth,
         })),

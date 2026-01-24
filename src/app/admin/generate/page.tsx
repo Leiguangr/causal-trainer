@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface Stats {
@@ -33,11 +33,14 @@ interface Dataset {
   verifiedCount: number;
 }
 
-// Distribution matrix type
+// Distribution matrix type (matches backend expectations)
+// - L1: YES/NO/AMBIGUOUS
+// - L2: AMBIGUOUS-only (revamped L2 cases)
+// - L3: VALID/INVALID/CONDITIONAL
 interface DistributionMatrix {
   L1: { yes: number; no: number; ambiguous: number };
-  L2: { yes: number; no: number; ambiguous: number };
-  L3: { yes: number; no: number; ambiguous: number };
+  L2: { ambiguous: number };
+  L3: { valid: number; invalid: number; conditional: number };
 }
 
 type GenerationMode = 'simple' | 'matrix';
@@ -80,36 +83,69 @@ export default function GeneratePage() {
   // Distribution matrix state (for matrix mode)
   const [distributionMatrix, setDistributionMatrix] = useState<DistributionMatrix>({
     L1: { yes: 5, no: 15, ambiguous: 5 },
-    L2: { yes: 10, no: 25, ambiguous: 10 },
-    L3: { yes: 5, no: 15, ambiguous: 5 },
+    L2: { ambiguous: 45 },
+    L3: { valid: 5, invalid: 15, conditional: 5 },
   });
 
   // Helper to update matrix cell
-  const updateMatrixCell = (level: 'L1' | 'L2' | 'L3', validity: 'yes' | 'no' | 'ambiguous', value: number) => {
+  const updateMatrixCell = (
+    level: 'L1' | 'L2' | 'L3',
+    key: 'yes' | 'no' | 'ambiguous' | 'valid' | 'invalid' | 'conditional',
+    value: number
+  ) => {
     setDistributionMatrix(prev => ({
       ...prev,
       [level]: {
-        ...prev[level],
-        [validity]: Math.max(0, value),
-      },
+        ...(prev as any)[level],
+        [key]: Math.max(0, value),
+      } as any,
     }));
   };
 
   // Calculate matrix totals
   const getMatrixTotal = () => {
-    return Object.values(distributionMatrix).reduce(
-      (sum, level) => sum + level.yes + level.no + level.ambiguous,
-      0
+    return (
+      distributionMatrix.L1.yes +
+      distributionMatrix.L1.no +
+      distributionMatrix.L1.ambiguous +
+      distributionMatrix.L2.ambiguous +
+      distributionMatrix.L3.valid +
+      distributionMatrix.L3.invalid +
+      distributionMatrix.L3.conditional
     );
   };
 
   const getLevelTotal = (level: 'L1' | 'L2' | 'L3') => {
-    const l = distributionMatrix[level];
-    return l.yes + l.no + l.ambiguous;
+    if (level === 'L1') return distributionMatrix.L1.yes + distributionMatrix.L1.no + distributionMatrix.L1.ambiguous;
+    if (level === 'L2') return distributionMatrix.L2.ambiguous;
+    return distributionMatrix.L3.valid + distributionMatrix.L3.invalid + distributionMatrix.L3.conditional;
   };
 
-  const getValidityTotal = (validity: 'yes' | 'no' | 'ambiguous') => {
-    return distributionMatrix.L1[validity] + distributionMatrix.L2[validity] + distributionMatrix.L3[validity];
+  const getL1Total = (key: 'yes' | 'no' | 'ambiguous') => distributionMatrix.L1[key];
+  const getL2Total = () => distributionMatrix.L2.ambiguous;
+  const getL3Total = (key: 'valid' | 'invalid' | 'conditional') => distributionMatrix.L3[key];
+
+  const matrixLevelTextClass = (level: 'L1' | 'L2' | 'L3') =>
+    level === 'L1' ? 'text-blue-700' : level === 'L2' ? 'text-purple-700' : 'text-orange-700';
+
+  const matrixInputClass = (variant: 'green' | 'red' | 'yellow', disabled: boolean) => {
+    const base = 'w-full rounded px-2 py-1 text-center border';
+    const enabledVariant =
+      variant === 'green'
+        ? 'border-green-300 bg-white'
+        : variant === 'red'
+          ? 'border-red-300 bg-white'
+          : 'border-yellow-300 bg-white';
+
+    // Make disabled cells *very* obvious in the matrix.
+    const disabledVariant =
+      variant === 'green'
+        ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+        : variant === 'red'
+          ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+          : 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed';
+
+    return `${base} ${disabled ? disabledVariant : enabledVariant}`;
   };
 
   useEffect(() => {
@@ -652,51 +688,111 @@ export default function GeneratePage() {
                     <thead>
                       <tr>
                         <th className="p-2 text-left font-medium text-gray-700"></th>
-                        <th className="p-2 text-center font-medium text-green-700">✓ YES</th>
-                        <th className="p-2 text-center font-medium text-red-700">✗ NO</th>
-                        <th className="p-2 text-center font-medium text-yellow-700">? AMBIGUOUS</th>
+                        <th className="p-2 text-center font-medium text-green-700">
+                          ✓ Positive
+                          <div className="text-[11px] font-normal text-gray-500">
+                            L1: YES · L3: VALID
+                          </div>
+                        </th>
+                        <th className="p-2 text-center font-medium text-red-700">
+                          ✗ Negative
+                          <div className="text-[11px] font-normal text-gray-500">
+                            L1: NO · L3: INVALID
+                          </div>
+                        </th>
+                        <th className="p-2 text-center font-medium text-yellow-700">
+                          ? Uncertain
+                          <div className="text-[11px] font-normal text-gray-500">
+                            L1/L2: AMBIGUOUS · L3: CONDITIONAL
+                          </div>
+                        </th>
                         <th className="p-2 text-center font-medium text-gray-500">Total</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(['L1', 'L2', 'L3'] as const).map((level) => (
                         <tr key={level} className="border-t border-purple-200">
-                          <td className={`p-2 font-medium ${
-                            level === 'L1' ? 'text-blue-700' :
-                            level === 'L2' ? 'text-purple-700' :
-                            'text-orange-700'
-                          }`}>
+                          <td className={`p-2 font-medium ${matrixLevelTextClass(level)}`}>
                             {level}
                           </td>
                           <td className="p-2">
+                            {(() => {
+                              const disabled = level !== 'L1' && level !== 'L3';
+                              const value =
+                                level === 'L1'
+                                  ? distributionMatrix.L1.yes
+                                  : level === 'L3'
+                                    ? distributionMatrix.L3.valid
+                                    : 0;
+                              return (
                             <input
                               type="number"
                               min="0"
                               max="200"
-                              value={distributionMatrix[level].yes}
-                              onChange={(e) => updateMatrixCell(level, 'yes', parseInt(e.target.value) || 0)}
-                              className="w-full border border-green-300 rounded px-2 py-1 text-center bg-white"
+                              value={value}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value) || 0;
+                                if (level === 'L1') updateMatrixCell('L1', 'yes', val);
+                                if (level === 'L3') updateMatrixCell('L3', 'valid', val);
+                              }}
+                              disabled={disabled}
+                              className={matrixInputClass('green', disabled)}
                             />
+                              );
+                            })()}
                           </td>
                           <td className="p-2">
+                            {(() => {
+                              const disabled = level !== 'L1' && level !== 'L3';
+                              const value =
+                                level === 'L1'
+                                  ? distributionMatrix.L1.no
+                                  : level === 'L3'
+                                    ? distributionMatrix.L3.invalid
+                                    : 0;
+                              return (
                             <input
                               type="number"
                               min="0"
                               max="200"
-                              value={distributionMatrix[level].no}
-                              onChange={(e) => updateMatrixCell(level, 'no', parseInt(e.target.value) || 0)}
-                              className="w-full border border-red-300 rounded px-2 py-1 text-center bg-white"
+                              value={value}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value) || 0;
+                                if (level === 'L1') updateMatrixCell('L1', 'no', val);
+                                if (level === 'L3') updateMatrixCell('L3', 'invalid', val);
+                              }}
+                              disabled={disabled}
+                              className={matrixInputClass('red', disabled)}
                             />
+                              );
+                            })()}
                           </td>
                           <td className="p-2">
+                            {(() => {
+                              const disabled = false;
+                              const value =
+                                level === 'L1'
+                                  ? distributionMatrix.L1.ambiguous
+                                  : level === 'L2'
+                                    ? distributionMatrix.L2.ambiguous
+                                    : distributionMatrix.L3.conditional;
+                              return (
                             <input
                               type="number"
                               min="0"
                               max="200"
-                              value={distributionMatrix[level].ambiguous}
-                              onChange={(e) => updateMatrixCell(level, 'ambiguous', parseInt(e.target.value) || 0)}
-                              className="w-full border border-yellow-300 rounded px-2 py-1 text-center bg-white"
+                              value={value}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value) || 0;
+                                if (level === 'L1') updateMatrixCell('L1', 'ambiguous', val);
+                                if (level === 'L2') updateMatrixCell('L2', 'ambiguous', val);
+                                if (level === 'L3') updateMatrixCell('L3', 'conditional', val);
+                              }}
+                              disabled={disabled}
+                              className={matrixInputClass('yellow', disabled)}
                             />
+                              );
+                            })()}
                           </td>
                           <td className="p-2 text-center font-medium text-gray-600">
                             {getLevelTotal(level)}
@@ -705,9 +801,9 @@ export default function GeneratePage() {
                       ))}
                       <tr className="border-t-2 border-purple-300 bg-purple-100">
                         <td className="p-2 font-medium text-gray-700">Total</td>
-                        <td className="p-2 text-center font-medium text-green-700">{getValidityTotal('yes')}</td>
-                        <td className="p-2 text-center font-medium text-red-700">{getValidityTotal('no')}</td>
-                        <td className="p-2 text-center font-medium text-yellow-700">{getValidityTotal('ambiguous')}</td>
+                        <td className="p-2 text-center font-medium text-green-700">{getL1Total('yes') + getL3Total('valid')}</td>
+                        <td className="p-2 text-center font-medium text-red-700">{getL1Total('no') + getL3Total('invalid')}</td>
+                        <td className="p-2 text-center font-medium text-yellow-700">{getL1Total('ambiguous') + getL2Total() + getL3Total('conditional')}</td>
                         <td className="p-2 text-center font-bold text-purple-900">{getMatrixTotal()}</td>
                       </tr>
                     </tbody>
@@ -881,6 +977,12 @@ export default function GeneratePage() {
                   Review Questions →
                 </button>
                 <button
+                  onClick={() => router.push('/admin/review/t3')}
+                  className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
+                >
+                  Review T3 Cases →
+                </button>
+                <button
                   onClick={() => {
                     setBatchStatus(null);
                     setCurrentBatchId(null);
@@ -903,6 +1005,12 @@ export default function GeneratePage() {
               className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
             >
               Review Unverified
+            </button>
+            <button
+              onClick={() => router.push('/admin/review/t3')}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700"
+            >
+              Review T3 Cases
             </button>
             <button
               onClick={() => router.push('/admin/export')}
