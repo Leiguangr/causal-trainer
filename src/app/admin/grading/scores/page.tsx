@@ -21,9 +21,20 @@ type AnyCase =
       sourceCase: string | null;
       pearlLevel?: string | null;
       trapType?: string | null;
+      trapSubtype?: string | null;
       groundTruth?: string | null;
       scenario?: string | null;
       claim?: string | null;
+      explanation?: string | null;
+      wiseRefusal?: string | null;
+      hiddenQuestion?: string | null;
+      answerIfA?: string | null;
+      answerIfB?: string | null;
+      variables?: string | null;
+      causalStructure?: string | null;
+      domain?: string | null;
+      subdomain?: string | null;
+      difficulty?: string | null;
       dataset?: string | null;
     }
   | {
@@ -33,6 +44,14 @@ type AnyCase =
       groundTruth?: string | null;
       scenario?: string | null;
       claim?: string | null;
+      whyFlawedOrValid?: string | null;
+      evidenceClass?: string | null;
+      evidenceType?: string | null;
+      variables?: string | null;
+      causalStructure?: string | null;
+      domain?: string | null;
+      subdomain?: string | null;
+      difficulty?: string | null;
       dataset?: string | null;
     }
   | {
@@ -40,6 +59,14 @@ type AnyCase =
       id: string;
       sourceCase: string | null;
       scenario?: string | null;
+      hiddenQuestion?: string | null;
+      answerIfA?: string | null;
+      answerIfB?: string | null;
+      wiseRefusal?: string | null;
+      trapType?: string | null;
+      variables?: string | null;
+      causalStructure?: string | null;
+      difficulty?: string | null;
       dataset?: string | null;
     }
   | {
@@ -49,6 +76,13 @@ type AnyCase =
       groundTruth?: string | null;
       scenario?: string | null;
       counterfactualClaim?: string | null;
+      justification?: string | null;
+      wiseResponse?: string | null;
+      family?: string | null;
+      domain?: string | null;
+      variables?: string | null;
+      invariants?: string | null;
+      difficulty?: string | null;
       dataset?: string | null;
     };
 
@@ -123,9 +157,20 @@ function getCaseFromEvaluation(e: CaseEvaluation): AnyCase {
       sourceCase: e.question.sourceCase ?? null,
       pearlLevel: e.question.pearlLevel ?? null,
       trapType: e.question.trapType ?? null,
+      trapSubtype: e.question.trapSubtype ?? null,
       groundTruth: e.question.groundTruth ?? null,
       scenario: e.question.scenario ?? null,
       claim: e.question.claim ?? null,
+      explanation: e.question.explanation ?? null,
+      wiseRefusal: e.question.wiseRefusal ?? null,
+      hiddenQuestion: e.question.hiddenQuestion ?? null,
+      answerIfA: e.question.answerIfA ?? null,
+      answerIfB: e.question.answerIfB ?? null,
+      variables: e.question.variables ?? null,
+      causalStructure: e.question.causalStructure ?? null,
+      domain: e.question.domain ?? null,
+      subdomain: e.question.subdomain ?? null,
+      difficulty: e.question.difficulty ?? null,
       dataset: e.question.dataset ?? null,
     };
   }
@@ -137,6 +182,14 @@ function getCaseFromEvaluation(e: CaseEvaluation): AnyCase {
       groundTruth: e.l1Case.groundTruth ?? null,
       scenario: e.l1Case.scenario ?? null,
       claim: e.l1Case.claim ?? null,
+      whyFlawedOrValid: e.l1Case.whyFlawedOrValid ?? null,
+      evidenceClass: e.l1Case.evidenceClass ?? null,
+      evidenceType: e.l1Case.evidenceType ?? null,
+      variables: e.l1Case.variables ?? null,
+      causalStructure: e.l1Case.causalStructure ?? null,
+      domain: e.l1Case.domain ?? null,
+      subdomain: e.l1Case.subdomain ?? null,
+      difficulty: e.l1Case.difficulty ?? null,
       dataset: e.l1Case.dataset ?? null,
     };
   }
@@ -146,6 +199,14 @@ function getCaseFromEvaluation(e: CaseEvaluation): AnyCase {
       id: e.l2Case.id,
       sourceCase: e.l2Case.sourceCase ?? null,
       scenario: e.l2Case.scenario ?? null,
+      hiddenQuestion: e.l2Case.hiddenQuestion ?? null,
+      answerIfA: e.l2Case.answerIfA ?? null,
+      answerIfB: e.l2Case.answerIfB ?? null,
+      wiseRefusal: e.l2Case.wiseRefusal ?? null,
+      trapType: e.l2Case.trapType ?? null,
+      variables: e.l2Case.variables ?? null,
+      causalStructure: e.l2Case.causalStructure ?? null,
+      difficulty: e.l2Case.difficulty ?? null,
       dataset: e.l2Case.dataset ?? null,
     };
   }
@@ -157,6 +218,13 @@ function getCaseFromEvaluation(e: CaseEvaluation): AnyCase {
       groundTruth: e.l3Case.groundTruth ?? null,
       scenario: e.l3Case.scenario ?? null,
       counterfactualClaim: e.l3Case.counterfactualClaim ?? null,
+      justification: e.l3Case.justification ?? null,
+      wiseResponse: e.l3Case.wiseResponse ?? null,
+      family: e.l3Case.family ?? null,
+      domain: e.l3Case.domain ?? null,
+      variables: e.l3Case.variables ?? null,
+      invariants: e.l3Case.invariants ?? null,
+      difficulty: e.l3Case.difficulty ?? null,
       dataset: e.l3Case.dataset ?? null,
     };
   }
@@ -375,28 +443,241 @@ export default function ScoresPage() {
                   </div>
                 </div>
 
-                {/* Case Content */}
-                <div className="mb-6 space-y-3">
+                {/* Action Buttons */}
+                <div className="flex gap-2 mb-4">
+                  <button
+                    onClick={async () => {
+                      if (!confirm(`Delete this ${c.kind} case? This will also delete its evaluation.`)) return;
+                      try {
+                        const endpoint = c.kind === 'legacy' 
+                          ? `/api/admin/questions/${c.id}`
+                          : `/api/admin/t3-cases/${c.id}`;
+                        const res = await fetch(endpoint, { method: 'DELETE' });
+                        if (res.ok) {
+                          alert('Case deleted. Refreshing...');
+                          window.location.reload();
+                        } else {
+                          const error = await res.json();
+                          alert(`Failed to delete: ${error.error || 'Unknown error'}`);
+                        }
+                      } catch (error) {
+                        console.error('Delete error:', error);
+                        alert('Failed to delete case');
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+                  >
+                    Delete
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!confirm(`Delete this ${c.kind} case? You can then use the Generate page to create a new case with similar parameters.`)) return;
+                      try {
+                        const res = await fetch('/api/admin/regenerate-case', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            caseId: c.id,
+                            caseType: c.kind,
+                          }),
+                        });
+                        if (res.ok) {
+                          const data = await res.json();
+                          const params = data.regenerationParams;
+                          const paramStr = params ? ` (${params.pearlLevel}${params.domain ? `, ${params.domain}` : ''}${params.trapType ? `, ${params.trapType}` : ''}${params.family ? `, ${params.family}` : ''})` : '';
+                          alert(`Case deleted${paramStr}. Use the Generate page to create a new case. Refreshing...`);
+                          window.location.reload();
+                        } else {
+                          const error = await res.json();
+                          alert(`Failed to delete: ${error.error || 'Unknown error'}`);
+                        }
+                      } catch (error) {
+                        console.error('Regenerate error:', error);
+                        alert('Failed to delete case');
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                  >
+                    Delete & Regenerate
+                  </button>
+                </div>
+
+                {/* Case Content - Expanded */}
+                <div className="mb-6 space-y-4 bg-gray-50 rounded-lg p-4">
+                  <h3 className="text-base font-semibold text-gray-900 mb-3">Case Data</h3>
+                  
                   {c.scenario && (
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-700 mb-1">Scenario</h3>
-                      <p className="text-sm text-gray-800 whitespace-pre-wrap">{c.scenario}</p>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-1">Scenario</h4>
+                      <p className="text-sm text-gray-800 whitespace-pre-wrap bg-white p-2 rounded border">{c.scenario}</p>
                     </div>
                   )}
+                  
                   {c.claim && (
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-700 mb-1">Claim</h3>
-                      <p className="text-sm text-gray-800">{c.claim}</p>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-1">Claim</h4>
+                      <p className="text-sm text-gray-800 bg-white p-2 rounded border">{c.claim}</p>
                     </div>
                   )}
+
                   {c.kind === 'L3' && c.counterfactualClaim && (
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-700 mb-1">
-                        Counterfactual Claim
-                      </h3>
-                      <p className="text-sm text-gray-800">{c.counterfactualClaim}</p>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-1">Counterfactual Claim</h4>
+                      <p className="text-sm text-gray-800 bg-white p-2 rounded border">{c.counterfactualClaim}</p>
                     </div>
                   )}
+
+                  {c.kind === 'L1' && c.whyFlawedOrValid && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-1">Why Flawed/Valid</h4>
+                      <p className="text-sm text-gray-800 bg-white p-2 rounded border whitespace-pre-wrap">{c.whyFlawedOrValid}</p>
+                    </div>
+                  )}
+
+                  {c.kind === 'L3' && c.justification && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-1">Justification</h4>
+                      <p className="text-sm text-gray-800 bg-white p-2 rounded border whitespace-pre-wrap">{c.justification}</p>
+                    </div>
+                  )}
+
+                  {(c.kind === 'legacy' || c.kind === 'L2') && c.wiseRefusal && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-1">Wise Refusal</h4>
+                      <p className="text-sm text-gray-800 bg-white p-2 rounded border whitespace-pre-wrap">{c.wiseRefusal}</p>
+                    </div>
+                  )}
+
+                  {c.kind === 'L3' && c.wiseResponse && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-1">Wise Response</h4>
+                      <p className="text-sm text-gray-800 bg-white p-2 rounded border whitespace-pre-wrap">{c.wiseResponse}</p>
+                    </div>
+                  )}
+
+                  {c.kind === 'legacy' && c.explanation && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-1">Explanation</h4>
+                      <p className="text-sm text-gray-800 bg-white p-2 rounded border whitespace-pre-wrap">{c.explanation}</p>
+                    </div>
+                  )}
+
+                  {(c.kind === 'L2' || c.kind === 'legacy') && c.hiddenQuestion && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-1">Hidden Question</h4>
+                      <p className="text-sm text-gray-800 bg-white p-2 rounded border">{c.hiddenQuestion}</p>
+                    </div>
+                  )}
+
+                  {(c.kind === 'L2' || c.kind === 'legacy') && c.answerIfA && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-1">Answer If A</h4>
+                      <p className="text-sm text-gray-800 bg-white p-2 rounded border whitespace-pre-wrap">{c.answerIfA}</p>
+                    </div>
+                  )}
+
+                  {(c.kind === 'L2' || c.kind === 'legacy') && c.answerIfB && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-1">Answer If B</h4>
+                      <p className="text-sm text-gray-800 bg-white p-2 rounded border whitespace-pre-wrap">{c.answerIfB}</p>
+                    </div>
+                  )}
+
+                  {c.variables && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-1">Variables</h4>
+                      <div className="text-sm text-gray-800 bg-white p-2 rounded border">
+                        <pre className="whitespace-pre-wrap font-mono text-xs">
+                          {(() => {
+                            try {
+                              const parsed = typeof c.variables === 'string' ? JSON.parse(c.variables) : c.variables;
+                              return JSON.stringify(parsed, null, 2);
+                            } catch {
+                              return c.variables;
+                            }
+                          })()}
+                        </pre>
+                      </div>
+                    </div>
+                  )}
+
+                  {c.kind === 'L3' && c.invariants && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-1">Invariants</h4>
+                      <div className="text-sm text-gray-800 bg-white p-2 rounded border">
+                        <pre className="whitespace-pre-wrap font-mono text-xs">
+                          {(() => {
+                            try {
+                              const parsed = typeof c.invariants === 'string' ? JSON.parse(c.invariants) : c.invariants;
+                              return JSON.stringify(parsed, null, 2);
+                            } catch {
+                              return c.invariants;
+                            }
+                          })()}
+                        </pre>
+                      </div>
+                    </div>
+                  )}
+
+                  {c.causalStructure && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-1">Causal Structure</h4>
+                      <p className="text-sm text-gray-800 bg-white p-2 rounded border">{c.causalStructure}</p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                    {c.domain && (
+                      <div>
+                        <span className="text-gray-600">Domain:</span> <span className="font-medium">{c.domain}</span>
+                      </div>
+                    )}
+                    {c.subdomain && (
+                      <div>
+                        <span className="text-gray-600">Subdomain:</span> <span className="font-medium">{c.subdomain}</span>
+                      </div>
+                    )}
+                    {c.difficulty && (
+                      <div>
+                        <span className="text-gray-600">Difficulty:</span> <span className="font-medium">{c.difficulty}</span>
+                      </div>
+                    )}
+                    {c.kind === 'L1' && c.evidenceClass && (
+                      <div>
+                        <span className="text-gray-600">Evidence Class:</span> <span className="font-medium">{c.evidenceClass}</span>
+                      </div>
+                    )}
+                    {c.kind === 'L1' && c.evidenceType && (
+                      <div>
+                        <span className="text-gray-600">Evidence Type:</span> <span className="font-medium">{c.evidenceType}</span>
+                      </div>
+                    )}
+                    {c.kind === 'L2' && c.trapType && (
+                      <div>
+                        <span className="text-gray-600">Trap Type:</span> <span className="font-medium">{c.trapType}</span>
+                      </div>
+                    )}
+                    {c.kind === 'L3' && c.family && (
+                      <div>
+                        <span className="text-gray-600">Family:</span> <span className="font-medium">{c.family}</span>
+                      </div>
+                    )}
+                    {c.kind === 'legacy' && c.trapType && (
+                      <div>
+                        <span className="text-gray-600">Trap Type:</span> <span className="font-medium">{c.trapType}</span>
+                      </div>
+                    )}
+                    {c.kind === 'legacy' && c.trapSubtype && (
+                      <div>
+                        <span className="text-gray-600">Trap Subtype:</span> <span className="font-medium">{c.trapSubtype}</span>
+                      </div>
+                    )}
+                    {c.groundTruth && (
+                      <div>
+                        <span className="text-gray-600">Ground Truth:</span> <span className="font-medium">{c.groundTruth}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Rubric Score Section - Prominently Displayed */}
