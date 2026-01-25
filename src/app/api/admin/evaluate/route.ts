@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { evaluateBatch, generateReport } from '@/lib/evaluation-agent';
+import { evaluateLegacyQuestions } from '@/lib/t3-evaluator';
+import { generateReport } from '@/lib/evaluation-agent';
 
-export interface EvaluateRequest {
-  dataset?: string;         // Filter by dataset name
-  questionIds?: string[];   // Specific question IDs to evaluate
-  batchId?: string;         // Generation batch ID to evaluate
-  unverifiedOnly?: boolean; // Only evaluate unverified questions
-  skipAlreadyEvaluated?: boolean; // Skip questions that already have evaluations
-}
+// Evaluation endpoint for legacy Question records
+// For T3 cases (L1Case, L2Case, L3Case), use /api/admin/evaluate-t3-cases
 
 // GET - List evaluation batches
 export async function GET(req: NextRequest) {
@@ -16,12 +12,17 @@ export async function GET(req: NextRequest) {
   const batchId = searchParams.get('batchId');
 
   if (batchId) {
-    // Get specific batch with evaluations
+    // Get specific batch with evaluations (include L1/L2/L3 for T3 batches)
     const batch = await prisma.evaluationBatch.findUnique({
       where: { id: batchId },
       include: {
         evaluations: {
-          include: { question: true },
+          include: {
+            question: true,
+            l1Case: true,
+            l2Case: true,
+            l3Case: true,
+          },
           orderBy: { priorityLevel: 'asc' },
         },
       },
@@ -43,7 +44,15 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ batches });
 }
 
-// POST - Start new evaluation batch
+export interface EvaluateRequest {
+  dataset?: string;         // Filter by dataset name
+  questionIds?: string[];   // Specific question IDs to evaluate
+  batchId?: string;         // Generation batch ID to evaluate
+  unverifiedOnly?: boolean; // Only evaluate unverified questions
+  skipAlreadyEvaluated?: boolean; // Skip questions that already have evaluations
+}
+
+// POST - Start evaluation for legacy Question records
 export async function POST(req: NextRequest) {
   try {
     const body: EvaluateRequest = await req.json();
@@ -111,10 +120,23 @@ export async function POST(req: NextRequest) {
           data: { status: 'running' },
         });
 
-        await evaluateBatch(evalBatch.id, questionIds_);
+        await evaluateLegacyQuestions(evalBatch.id, questionIds_);
 
         // Generate report after completion
-        await generateReport(evalBatch.id);
+        try {
+          await generateReport(evalBatch.id);
+        } catch (error) {
+          console.error('Failed to generate report:', error);
+          // Don't fail the batch if report generation fails
+        }
+
+        await prisma.evaluationBatch.update({
+          where: { id: evalBatch.id },
+          data: {
+            status: 'completed',
+            completedAt: new Date(),
+          },
+        });
       } catch (error) {
         console.error('Evaluation batch error:', error);
         await prisma.evaluationBatch.update({
@@ -131,7 +153,7 @@ export async function POST(req: NextRequest) {
       success: true,
       evaluationBatchId: evalBatch.id,
       questionsCount: questions.length,
-      message: `Started evaluation of ${questions.length} questions. Poll GET /api/admin/evaluate?batchId=${evalBatch.id} for status.`,
+      message: `Started evaluation of ${questions.length} legacy questions. Poll GET /api/admin/evaluate?batchId=${evalBatch.id} for status.`,
     });
   } catch (error) {
     console.error('Evaluate API error:', error);

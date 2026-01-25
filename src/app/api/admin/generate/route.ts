@@ -627,6 +627,7 @@ MANDATORY SPECIFICATIONS:
 - Domain: ${domain}
 - REQUIRED Subdomain: ${subdomain} (YOU MUST set this scenario specifically in ${subdomain} - use subdomain-specific terminology, actors, and contexts)
 - Trap Type: ${trapType} (${trapDef.name})
+- Ground Truth: NO (INVALID) - The causal claim is INVALID due to the ${trapDef.name} trap
 
 ${domainContext}
 
@@ -636,17 +637,17 @@ L2 CASE STRUCTURE (Revamped):
 - Scenario: Narrative (3-6 sentences) describing a situation with X, Y, and optionally Z clearly labeled inline as (X), (Y), (Z)
 - Variables: X (exposure/intervention), Y (outcome), Z (ambiguous - could be confounder, mediator, collider, etc.)
 - Hidden Question: The critical question that must be asked to resolve the ambiguity (must align with "${trapDef.hiddenQuestionPattern}")
-- Answer if A: Interpretation when condition A is true (one coherent world)
-- Answer if B: Interpretation when condition B is true (alternative coherent world)
+- Answer if A: Interpretation when condition A is true (one coherent world where the claim is INVALID)
+- Answer if B: Interpretation when condition B is true (alternative coherent world where the claim is INVALID)
 - Wise Refusal: A refusal to answer definitively, explaining what information is missing and why it matters
 
 CRITICAL REQUIREMENTS:
-1. The scenario must make the causal structure PLAUSIBLE but UNRESOLVED
+1. The scenario must make the causal structure PLAUSIBLE but UNRESOLVED - the claim is INVALID (NO) regardless of which condition holds
 2. The hidden question MUST match the pattern: "${trapDef.hiddenQuestionPattern}"
-3. Answer if A and Answer if B must be MUTUALLY EXCLUSIVE and COHERENT
-4. The wise refusal must be a REFUSAL (not a verdict) - it should explain what's missing
+3. Answer if A and Answer if B must be MUTUALLY EXCLUSIVE and COHERENT - both should show the claim is INVALID, but for different reasons
+4. The wise refusal must be a REFUSAL (not a verdict) - it should explain what's missing to definitively identify the trap
 5. Variables X, Y, Z must be clearly labeled in the narrative using (X), (Y), (Z) notation
-6. The scenario must support TWO coherent conditional worlds (A and B)
+6. The scenario must support TWO coherent conditional worlds (A and B) where the claim is INVALID
 7. Use domain-appropriate terminology from ${subdomain} to make the scenario feel authentic and grounded
 
 ${trapBlock}
@@ -1322,8 +1323,8 @@ Generate the question now. Return ONLY valid JSON, no other text.`;
 interface DistributionMatrix {
   // L1 uses YES/NO/AMBIGUOUS
   L1?: { yes?: number; no?: number; ambiguous?: number };
-  // L2 (revamped) produces ambiguous-only cases with a trap type (T1..T17)
-  L2?: { ambiguous?: number };
+  // L2 (revamped) produces NO (INVALID) cases with a trap type (T1..T17)
+  L2?: { no?: number };
   // L3 uses VALID/INVALID/CONDITIONAL
   L3?: { valid?: number; invalid?: number; conditional?: number };
 }
@@ -1463,8 +1464,8 @@ function expandDistributionMatrix(matrix: DistributionMatrix): GenerationTask[] 
       for (let i = 0; i < no; i++) tasks.push({ pearlLevel: 'L1', validity: 'NO' });
       for (let i = 0; i < ambiguous; i++) tasks.push({ pearlLevel: 'L1', validity: 'AMBIGUOUS' });
     } else if (level === 'L2') {
-      const ambiguous = Number(levelConfig.ambiguous || 0);
-      for (let i = 0; i < ambiguous; i++) tasks.push({ pearlLevel: 'L2', validity: 'AMBIGUOUS' });
+      const no = Number(levelConfig.no || 0);
+      for (let i = 0; i < no; i++) tasks.push({ pearlLevel: 'L2', validity: 'NO' });
     } else if (level === 'L3') {
       // Map matrix labels to internal validity type used by prompt builder:
       // VALID -> YES, INVALID -> NO, CONDITIONAL -> AMBIGUOUS

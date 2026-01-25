@@ -35,11 +35,11 @@ interface Dataset {
 
 // Distribution matrix type (matches backend expectations)
 // - L1: YES/NO/AMBIGUOUS
-// - L2: AMBIGUOUS-only (revamped L2 cases)
+// - L2: NO-only (revamped L2 cases are always INVALID)
 // - L3: VALID/INVALID/CONDITIONAL
 interface DistributionMatrix {
   L1: { yes: number; no: number; ambiguous: number };
-  L2: { ambiguous: number };
+  L2: { no: number };
   L3: { valid: number; invalid: number; conditional: number };
 }
 
@@ -83,7 +83,7 @@ export default function GeneratePage() {
   // Distribution matrix state (for matrix mode)
   const [distributionMatrix, setDistributionMatrix] = useState<DistributionMatrix>({
     L1: { yes: 5, no: 15, ambiguous: 5 },
-    L2: { ambiguous: 45 },
+    L2: { no: 45 },
     L3: { valid: 5, invalid: 15, conditional: 5 },
   });
 
@@ -93,6 +93,8 @@ export default function GeneratePage() {
     key: 'yes' | 'no' | 'ambiguous' | 'valid' | 'invalid' | 'conditional',
     value: number
   ) => {
+    // L2 only supports 'no'
+    if (level === 'L2' && key !== 'no') return;
     setDistributionMatrix(prev => ({
       ...prev,
       [level]: {
@@ -108,7 +110,7 @@ export default function GeneratePage() {
       distributionMatrix.L1.yes +
       distributionMatrix.L1.no +
       distributionMatrix.L1.ambiguous +
-      distributionMatrix.L2.ambiguous +
+      distributionMatrix.L2.no +
       distributionMatrix.L3.valid +
       distributionMatrix.L3.invalid +
       distributionMatrix.L3.conditional
@@ -117,12 +119,12 @@ export default function GeneratePage() {
 
   const getLevelTotal = (level: 'L1' | 'L2' | 'L3') => {
     if (level === 'L1') return distributionMatrix.L1.yes + distributionMatrix.L1.no + distributionMatrix.L1.ambiguous;
-    if (level === 'L2') return distributionMatrix.L2.ambiguous;
+    if (level === 'L2') return distributionMatrix.L2.no;
     return distributionMatrix.L3.valid + distributionMatrix.L3.invalid + distributionMatrix.L3.conditional;
   };
 
   const getL1Total = (key: 'yes' | 'no' | 'ambiguous') => distributionMatrix.L1[key];
-  const getL2Total = () => distributionMatrix.L2.ambiguous;
+  const getL2Total = () => distributionMatrix.L2.no;
   const getL3Total = (key: 'valid' | 'invalid' | 'conditional') => distributionMatrix.L3[key];
 
   const matrixLevelTextClass = (level: 'L1' | 'L2' | 'L3') =>
@@ -703,7 +705,7 @@ export default function GeneratePage() {
                         <th className="p-2 text-center font-medium text-yellow-700">
                           ? Uncertain
                           <div className="text-[11px] font-normal text-gray-500">
-                            L1/L2: AMBIGUOUS · L3: CONDITIONAL
+                            L1: AMBIGUOUS · L3: CONDITIONAL
                           </div>
                         </th>
                         <th className="p-2 text-center font-medium text-gray-500">Total</th>
@@ -743,13 +745,15 @@ export default function GeneratePage() {
                           </td>
                           <td className="p-2">
                             {(() => {
-                              const disabled = level !== 'L1' && level !== 'L3';
+                              const disabled = false; // L1, L2, L3 all support NO/INVALID
                               const value =
                                 level === 'L1'
                                   ? distributionMatrix.L1.no
-                                  : level === 'L3'
-                                    ? distributionMatrix.L3.invalid
-                                    : 0;
+                                  : level === 'L2'
+                                    ? distributionMatrix.L2.no
+                                    : level === 'L3'
+                                      ? distributionMatrix.L3.invalid
+                                      : 0;
                               return (
                             <input
                               type="number"
@@ -759,6 +763,7 @@ export default function GeneratePage() {
                               onChange={(e) => {
                                 const val = parseInt(e.target.value) || 0;
                                 if (level === 'L1') updateMatrixCell('L1', 'no', val);
+                                if (level === 'L2') updateMatrixCell('L2', 'no', val);
                                 if (level === 'L3') updateMatrixCell('L3', 'invalid', val);
                               }}
                               disabled={disabled}
@@ -769,12 +774,12 @@ export default function GeneratePage() {
                           </td>
                           <td className="p-2">
                             {(() => {
-                              const disabled = false;
+                              const disabled = level === 'L2'; // L2 doesn't support ambiguous
                               const value =
                                 level === 'L1'
                                   ? distributionMatrix.L1.ambiguous
                                   : level === 'L2'
-                                    ? distributionMatrix.L2.ambiguous
+                                    ? 0 // L2 doesn't have ambiguous
                                     : distributionMatrix.L3.conditional;
                               return (
                             <input
@@ -785,7 +790,6 @@ export default function GeneratePage() {
                               onChange={(e) => {
                                 const val = parseInt(e.target.value) || 0;
                                 if (level === 'L1') updateMatrixCell('L1', 'ambiguous', val);
-                                if (level === 'L2') updateMatrixCell('L2', 'ambiguous', val);
                                 if (level === 'L3') updateMatrixCell('L3', 'conditional', val);
                               }}
                               disabled={disabled}
@@ -802,8 +806,8 @@ export default function GeneratePage() {
                       <tr className="border-t-2 border-purple-300 bg-purple-100">
                         <td className="p-2 font-medium text-gray-700">Total</td>
                         <td className="p-2 text-center font-medium text-green-700">{getL1Total('yes') + getL3Total('valid')}</td>
-                        <td className="p-2 text-center font-medium text-red-700">{getL1Total('no') + getL3Total('invalid')}</td>
-                        <td className="p-2 text-center font-medium text-yellow-700">{getL1Total('ambiguous') + getL2Total() + getL3Total('conditional')}</td>
+                        <td className="p-2 text-center font-medium text-red-700">{getL1Total('no') + getL2Total() + getL3Total('invalid')}</td>
+                        <td className="p-2 text-center font-medium text-yellow-700">{getL1Total('ambiguous') + getL3Total('conditional')}</td>
                         <td className="p-2 text-center font-bold text-purple-900">{getMatrixTotal()}</td>
                       </tr>
                     </tbody>
@@ -943,9 +947,10 @@ export default function GeneratePage() {
                     <div key={q.id} className="flex items-center gap-2 text-sm bg-gray-50 p-2 rounded">
                       <span className="font-mono text-gray-500">#{idx + 1}</span>
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                        q.groundTruth === 'YES' ? 'bg-green-100 text-green-700' :
-                        q.groundTruth === 'NO' ? 'bg-red-100 text-red-700' :
-                        'bg-yellow-100 text-yellow-700'
+                        q.groundTruth === 'YES' || q.groundTruth === 'VALID' ? 'bg-green-100 text-green-700' :
+                        q.groundTruth === 'NO' || q.groundTruth === 'INVALID' ? 'bg-red-100 text-red-700' :
+                        q.groundTruth === 'AMBIGUOUS' || q.groundTruth === 'CONDITIONAL' ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-gray-100 text-gray-700'
                       }`}>
                         {q.groundTruth}
                       </span>

@@ -186,8 +186,26 @@ export default function GradingPage() {
           <Link href="/admin" className="text-primary-600 hover:underline mb-2 inline-block">
             ← Back to Admin
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900">Grading Dashboard</h1>
-          <p className="text-gray-600 mt-2">Browse auto-evaluator results across legacy + T3 cases</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Grading Dashboard</h1>
+              <p className="text-gray-600 mt-2">Browse auto-evaluator results across legacy + T3 cases</p>
+            </div>
+            <div className="flex gap-2">
+              <Link
+                href="/admin/grading/scores"
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+              >
+                View Scores Dashboard
+              </Link>
+              <Link
+                href="/admin/grading/dashboard"
+                className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+              >
+                View Analytics Dashboard
+              </Link>
+            </div>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">

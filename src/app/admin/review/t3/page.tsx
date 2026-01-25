@@ -517,6 +517,15 @@ export default function ReviewT3Page() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
               {cases.map((c, idx) => {
                 const isApproved = approvedIds.has(c.id);
+                const groundTruth = c._caseType === 'L1' ? (c as L1Case).groundTruth : 
+                                   c._caseType === 'L3' ? (c as L3Case).groundTruth : null;
+                const groundTruthColor = groundTruth === 'YES' || groundTruth === 'VALID' 
+                  ? 'bg-green-100 text-green-700'
+                  : groundTruth === 'NO' || groundTruth === 'INVALID'
+                  ? 'bg-red-100 text-red-700'
+                  : groundTruth === 'AMBIGUOUS' || groundTruth === 'CONDITIONAL'
+                  ? 'bg-yellow-100 text-yellow-700'
+                  : '';
                 return (
                   <button
                     key={c.id}
@@ -529,16 +538,22 @@ export default function ReviewT3Page() {
                           : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
                     }`}
                   >
-                    {isApproved && <span className="text-green-600">✓ </span>}
-                    <span className="font-mono text-gray-500">#{idx + 1}</span>
-                    {' '}
-                    <span className={`px-1 rounded ${
-                      c._caseType === 'L1' ? 'bg-blue-100 text-blue-700' :
-                      c._caseType === 'L2' ? 'bg-purple-100 text-purple-700' :
-                      'bg-orange-100 text-orange-700'
-                    }`}>
-                      {c._caseType}
-                    </span>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {isApproved && <span className="text-green-600">✓ </span>}
+                      <span className="font-mono text-gray-500">#{idx + 1}</span>
+                      <span className={`px-1 rounded ${
+                        c._caseType === 'L1' ? 'bg-blue-100 text-blue-700' :
+                        c._caseType === 'L2' ? 'bg-purple-100 text-purple-700' :
+                        'bg-orange-100 text-orange-700'
+                      }`}>
+                        {c._caseType}
+                      </span>
+                      {groundTruth && groundTruthColor && (
+                        <span className={`px-1 rounded text-[10px] font-medium ${groundTruthColor}`}>
+                          {groundTruth}
+                        </span>
+                      )}
+                    </div>
                   </button>
                 );
               })}

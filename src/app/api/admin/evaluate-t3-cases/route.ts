@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { evaluateL1Cases, evaluateL2Cases, evaluateL3Cases } from '@/lib/t3-evaluator';
+import { generateReport } from '@/lib/evaluation-agent';
 
 export interface EvaluateT3Request {
   caseType: 'L1' | 'L2' | 'L3' | 'all';
@@ -162,6 +163,14 @@ export async function POST(req: NextRequest) {
             completedCount: completed,
           },
         });
+
+        // Generate report after completion
+        try {
+          await generateReport(evalBatch.id);
+        } catch (error) {
+          console.error('Failed to generate report:', error);
+          // Don't fail the batch if report generation fails
+        }
       } catch (error) {
         console.error('T3 evaluation batch error:', error);
         await prisma.evaluationBatch.update({

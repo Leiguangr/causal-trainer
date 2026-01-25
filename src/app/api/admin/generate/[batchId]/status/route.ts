@@ -98,8 +98,8 @@ export async function GET(
           pearlLevel: 'L2',
           trapType: c.trapType, // displayed in UI; legacy label says "trapType"
           trapSubtype: 'N/A',
-          domain: 'N/A',
-          groundTruth: 'N/A',
+          domain: batch.domain || 'N/A',
+          groundTruth: 'NO', // All L2 cases are INVALID (NO)
         })),
         ...batch.l3Cases.map(c => ({
           id: c.id,
