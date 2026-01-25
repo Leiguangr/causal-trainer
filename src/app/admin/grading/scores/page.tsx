@@ -293,7 +293,56 @@ export default function ScoresPage() {
                 Detailed rubric scores and evaluation comments for each case
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={async () => {
+                  try {
+                    const params = new URLSearchParams();
+                    if (dataset) params.set('dataset', dataset);
+                    if (evaluationBatchId) params.set('evaluationBatchId', evaluationBatchId);
+                    if (caseType !== 'all') params.set('caseType', caseType);
+                    if (overallVerdict) params.set('overallVerdict', overallVerdict);
+                    params.set('format', 'json');
+                    
+                    const url = `/api/admin/export-evaluations?${params.toString()}`;
+                    window.open(url, '_blank');
+                  } catch (error) {
+                    console.error('Export error:', error);
+                    alert('Failed to export evaluations');
+                  }
+                }}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              >
+                Export Evaluations
+              </button>
+              <button
+                onClick={async () => {
+                  if (!confirm('Copy all APPROVED legacy cases to the new schema? This will create new L1/L2/L3 cases based on their pearl level.')) return;
+                  try {
+                    const res = await fetch('/api/admin/copy-approved-legacy-cases', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        dataset: dataset || undefined,
+                      }),
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      alert(`Successfully copied ${data.copiedCount} approved legacy cases to new schema:\n- L1: ${data.byType.L1}\n- L2: ${data.byType.L2}\n- L3: ${data.byType.L3}\n\nRefreshing...`);
+                      window.location.reload();
+                    } else {
+                      const error = await res.json();
+                      alert(`Failed to copy: ${error.error || 'Unknown error'}`);
+                    }
+                  } catch (error) {
+                    console.error('Copy error:', error);
+                    alert('Failed to copy approved legacy cases');
+                  }
+                }}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+              >
+                Copy Approved Legacy Cases to New Schema
+              </button>
               <Link
                 href="/admin/grading"
                 className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
@@ -444,7 +493,36 @@ export default function ScoresPage() {
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex gap-2 mb-4">
+                <div className="flex gap-2 mb-4 flex-wrap">
+                  <button
+                    onClick={async () => {
+                      if (!confirm(`Use LLM to revise this ${c.kind} case based on the rubric feedback?`)) return;
+                      try {
+                        const res = await fetch('/api/admin/revise-case', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            caseId: c.id,
+                            caseType: c.kind,
+                            evaluationId: e.id,
+                          }),
+                        });
+                        if (res.ok) {
+                          alert('Case revised successfully! Refreshing...');
+                          window.location.reload();
+                        } else {
+                          const error = await res.json();
+                          alert(`Failed to revise: ${error.error || 'Unknown error'}`);
+                        }
+                      } catch (error) {
+                        console.error('Revise error:', error);
+                        alert('Failed to revise case');
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                  >
+                    LLM Revise
+                  </button>
                   <button
                     onClick={async () => {
                       if (!confirm(`Delete this ${c.kind} case? This will also delete its evaluation.`)) return;
@@ -468,37 +546,6 @@ export default function ScoresPage() {
                     className="px-3 py-1.5 bg-red-600 text-white text-sm rounded hover:bg-red-700"
                   >
                     Delete
-                  </button>
-                  <button
-                    onClick={async () => {
-                      if (!confirm(`Delete this ${c.kind} case? You can then use the Generate page to create a new case with similar parameters.`)) return;
-                      try {
-                        const res = await fetch('/api/admin/regenerate-case', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            caseId: c.id,
-                            caseType: c.kind,
-                          }),
-                        });
-                        if (res.ok) {
-                          const data = await res.json();
-                          const params = data.regenerationParams;
-                          const paramStr = params ? ` (${params.pearlLevel}${params.domain ? `, ${params.domain}` : ''}${params.trapType ? `, ${params.trapType}` : ''}${params.family ? `, ${params.family}` : ''})` : '';
-                          alert(`Case deleted${paramStr}. Use the Generate page to create a new case. Refreshing...`);
-                          window.location.reload();
-                        } else {
-                          const error = await res.json();
-                          alert(`Failed to delete: ${error.error || 'Unknown error'}`);
-                        }
-                      } catch (error) {
-                        console.error('Regenerate error:', error);
-                        alert('Failed to delete case');
-                      }
-                    }}
-                    className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-                  >
-                    Delete & Regenerate
                   </button>
                 </div>
 
