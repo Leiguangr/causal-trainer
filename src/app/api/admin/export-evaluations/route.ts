@@ -46,14 +46,18 @@ export async function GET(req: NextRequest) {
       const caseData = e.question || e.t3_case;
       const caseType_ = e.question ? 'legacy' : (e.t3_case?.pearl_level || 'UNKNOWN');
 
-      // Parse rubric score
+      // Parse rubric score - ensure it's always included, even if null
       let rubricScore = null;
-      try {
-        if (e.rubric_score) {
+      if (e.rubric_score && e.rubric_score !== 'N/A' && e.rubric_score.trim() !== '') {
+        try {
           rubricScore = JSON.parse(e.rubric_score);
+        } catch {
+          // If parsing fails, try to return a basic structure
+          rubricScore = {
+            error: 'Failed to parse rubric score',
+            rawValue: e.rubric_score,
+          };
         }
-      } catch {
-        // Ignore parse errors
       }
 
       const base = {
@@ -85,88 +89,106 @@ export async function GET(req: NextRequest) {
         createdAt: e.created_at.toISOString(),
       };
 
+      // Helper function to safely parse JSON fields
+      const safeJsonParse = (value: string | null): any => {
+        if (!value || value === 'N/A' || value.trim() === '') return null;
+        try {
+          return JSON.parse(value);
+        } catch {
+          return null;
+        }
+      };
+
+      // Helper function to safely extract conditional answers
+      const safeParseConditionalAnswers = (value: string | null) => {
+        const parsed = safeJsonParse(value);
+        if (!parsed) return { answerIfA: null, answerIfB: null };
+        return {
+          answerIfA: parsed.answer_if_condition_1 || parsed.answerIfA || null,
+          answerIfB: parsed.answer_if_condition_2 || parsed.answerIfB || null,
+        };
+      };
+
       // Add case-specific data
       if (e.question) {
+        const conditionalAnswers = safeParseConditionalAnswers(e.question.conditional_answers);
         return {
           ...base,
+          caseId: e.question.id, // Ensure unique case ID
           caseData: {
-            scenario: e.question.scenario,
-            claim: e.question.claim,
-            pearlLevel: e.question.pearl_level,
-            trapType: e.question.trap_type,
-            trapSubtype: e.question.trap_subtype,
-            groundTruth: e.question.ground_truth,
-            explanation: e.question.explanation,
-            wiseRefusal: e.question.wise_refusal,
-            hiddenQuestion: e.question.hidden_timestamp,
-            answerIfA: e.question.conditional_answers ? (JSON.parse(e.question.conditional_answers)?.answer_if_condition_1 || '') : '',
-            answerIfB: e.question.conditional_answers ? (JSON.parse(e.question.conditional_answers)?.answer_if_condition_2 || '') : '',
-            variables: e.question.variables,
-            causalStructure: e.question.causal_structure,
-            domain: e.question.domain,
-            subdomain: e.question.subdomain,
-            difficulty: e.question.difficulty,
-            dataset: e.question.dataset,
+            scenario: e.question.scenario || null,
+            claim: e.question.claim || null,
+            pearlLevel: e.question.pearl_level || null,
+            trapType: e.question.trap_type || null,
+            trapSubtype: e.question.trap_subtype || null,
+            groundTruth: e.question.ground_truth || null,
+            explanation: e.question.explanation || null,
+            wiseRefusal: e.question.wise_refusal || null,
+            hiddenQuestion: e.question.hidden_timestamp || null,
+            answerIfA: conditionalAnswers.answerIfA,
+            answerIfB: conditionalAnswers.answerIfB,
+            variables: safeJsonParse(e.question.variables),
+            causalStructure: e.question.causal_structure || null,
+            domain: e.question.domain || null,
+            subdomain: e.question.subdomain || null,
+            difficulty: e.question.difficulty || null,
+            dataset: e.question.dataset || null,
           },
         };
       } else if (e.t3_case) {
         // Parse conditional_answers and hidden_timestamp for export
-        let hiddenQuestion = e.t3_case.hidden_timestamp;
-        let answerIfA = '';
-        let answerIfB = '';
-        if (e.t3_case.conditional_answers) {
-          try {
-            const parsed = JSON.parse(e.t3_case.conditional_answers);
-            answerIfA = parsed.answer_if_condition_1 || parsed.answerIfA || '';
-            answerIfB = parsed.answer_if_condition_2 || parsed.answerIfB || '';
-          } catch {
-            // ignore
-          }
-        }
+        const conditionalAnswers = safeParseConditionalAnswers(e.t3_case.conditional_answers);
+        const hiddenQuestion = e.t3_case.hidden_timestamp || null;
         
         const t3Data: any = {
-          scenario: e.t3_case.scenario,
-          pearlLevel: e.t3_case.pearl_level,
-          label: e.t3_case.label,
-          trapType: e.t3_case.trap_type,
+          scenario: e.t3_case.scenario || null,
+          pearlLevel: e.t3_case.pearl_level || null,
+          label: e.t3_case.label || null,
+          trapType: e.t3_case.trap_type || null,
           trapSubtype: e.t3_case.trap_subtype || null,
-          variables: e.t3_case.variables,
-          causalStructure: e.t3_case.causal_structure,
-          keyInsight: e.t3_case.key_insight,
+          variables: safeJsonParse(e.t3_case.variables),
+          causalStructure: e.t3_case.causal_structure || null,
+          keyInsight: e.t3_case.key_insight || null,
           hiddenQuestion,
-          answerIfA,
-          answerIfB,
-          wiseRefusal: e.t3_case.wise_refusal,
-          goldRationale: e.t3_case.gold_rationale,
-          domain: e.t3_case.domain,
-          subdomain: e.t3_case.subdomain,
-          difficulty: e.t3_case.difficulty,
-          dataset: e.t3_case.dataset,
+          answerIfA: conditionalAnswers.answerIfA,
+          answerIfB: conditionalAnswers.answerIfB,
+          wiseRefusal: e.t3_case.wise_refusal || null,
+          goldRationale: e.t3_case.gold_rationale || null,
+          domain: e.t3_case.domain || null,
+          subdomain: e.t3_case.subdomain || null,
+          difficulty: e.t3_case.difficulty || null,
+          dataset: e.t3_case.dataset || null,
         };
         
         // Add level-specific fields
         if (e.t3_case.pearl_level === 'L1') {
-          t3Data.claim = e.t3_case.claim;
-          t3Data.groundTruth = e.t3_case.label; // L1 uses YES/NO/AMBIGUOUS
+          t3Data.claim = e.t3_case.claim || null;
+          t3Data.groundTruth = e.t3_case.label || null; // L1 uses YES/NO/AMBIGUOUS
         } else if (e.t3_case.pearl_level === 'L2') {
-          t3Data.claim = e.t3_case.claim;
+          t3Data.claim = e.t3_case.claim || null;
           t3Data.groundTruth = 'NO'; // All L2 are NO
         } else if (e.t3_case.pearl_level === 'L3') {
-          t3Data.counterfactualClaim = e.t3_case.counterfactual_claim;
-          t3Data.groundTruth = e.t3_case.label; // L3 uses VALID/INVALID/CONDITIONAL
-          t3Data.family = e.t3_case.trap_type; // L3 uses trap_type for family
-          t3Data.justification = e.t3_case.gold_rationale;
-          t3Data.wiseResponse = e.t3_case.wise_refusal;
-          t3Data.invariants = e.t3_case.invariants;
+          t3Data.counterfactualClaim = e.t3_case.counterfactual_claim || null;
+          t3Data.groundTruth = e.t3_case.label || null; // L3 uses VALID/INVALID/CONDITIONAL
+          t3Data.family = e.t3_case.trap_type || null; // L3 uses trap_type for family
+          t3Data.justification = e.t3_case.gold_rationale || null;
+          t3Data.wiseResponse = e.t3_case.wise_refusal || null;
+          t3Data.invariants = safeJsonParse(e.t3_case.invariants);
         }
         
         return {
           ...base,
+          caseId: e.t3_case.id, // Ensure unique case ID
           caseData: t3Data,
         };
       }
 
-      return base;
+      // Fallback for cases without question or t3_case
+      return {
+        ...base,
+        caseId: base.caseId || `unknown-${e.id}`, // Generate fallback ID
+        caseData: null,
+      };
     });
 
     if (format === 'json') {

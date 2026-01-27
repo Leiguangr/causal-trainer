@@ -388,6 +388,7 @@ export async function evaluateL1Cases(
 ): Promise<void> {
   const total = caseIds.length;
   const useBatch = shouldUseBatchAPI(total);
+  let batchResponses: BatchResponse[] | null = null;
 
   if (useBatch) {
     console.log(`[Evaluation Batch ${evaluationBatchId}] Using OpenAI Batch API for ${total} L1 cases (cost savings)`);
@@ -418,45 +419,73 @@ export async function evaluateL1Cases(
       };
     });
 
-    // Process batch
-    const batchResponses = await processBatch(batchRequests, (status) => {
-      console.log(`[Evaluation Batch ${evaluationBatchId}] Batch API status: ${status}`);
-    });
-
-    // Process results
-    for (let i = 0; i < validRows.length; i++) {
-      const row = validRows[i];
-      const response = batchResponses[i];
+    // Try batch processing, fall back to synchronous if token limit exceeded
+    try {
+      batchResponses = await processBatch(batchRequests, (status) => {
+        console.log(`[Evaluation Batch ${evaluationBatchId}] Batch API status: ${status}`);
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Batch processing failed';
+      const isTokenLimitError = (error as any)?.isTokenLimitError || errorMessage.includes('token_limit_exceeded') || errorMessage.includes('Enqueued token limit');
       
-      try {
-        const scored = processBatchResponse(response, 'L1', row.difficulty);
-
-        await prisma.caseEvaluation.create({
-          data: {
-            question_id: null,
-            t3_case_id: row.id,
-            evaluation_batch_id: evaluationBatchId,
-            overall_verdict: scored.overallVerdict,
-            priority_level: scored.priorityLevel,
-            rubric_score: JSON.stringify(scored.rubricScore),
-            clarity_score: scored.clarityScore,
-            difficulty_assessment: scored.difficultyAssessment,
-            pearl_level_assessment: 'CORRECT',
-            ground_truth_assessment: 'CORRECT',
-            trap_type_assessment: 'CORRECT',
-            report_tags: JSON.stringify([]),
-          },
-        });
-      } catch (error) {
-        console.error(`Failed to evaluate L1Case ${row.id}:`, error);
-      } finally {
+      if (isTokenLimitError) {
+        // Token limit exceeded - fall back to synchronous processing
+        console.warn(`[Evaluation Batch ${evaluationBatchId}] Token limit exceeded, falling back to synchronous API calls`);
+        batchResponses = null; // Will trigger fallback below
+      } else {
+        // Other errors - mark as failed
+        console.error(`[Evaluation Batch ${evaluationBatchId}] Batch API error:`, errorMessage);
         await prisma.evaluationBatch.update({
           where: { id: evaluationBatchId },
-          data: { completed_count: startingCompletedCount + i + 1 },
+          data: {
+            status: 'failed',
+            error_message: errorMessage,
+          },
         });
+        throw error;
       }
     }
-  } else {
+
+    // Process batch results if available
+    if (batchResponses) {
+      for (let i = 0; i < validRows.length; i++) {
+        const row = validRows[i];
+        const response = batchResponses[i];
+        
+        try {
+          const scored = processBatchResponse(response, 'L1', row.difficulty);
+
+          await prisma.caseEvaluation.create({
+            data: {
+              question_id: null,
+              t3_case_id: row.id,
+              evaluation_batch_id: evaluationBatchId,
+              overall_verdict: scored.overallVerdict,
+              priority_level: scored.priorityLevel,
+              rubric_score: JSON.stringify(scored.rubricScore),
+              clarity_score: scored.clarityScore,
+              difficulty_assessment: scored.difficultyAssessment,
+              pearl_level_assessment: 'CORRECT',
+              ground_truth_assessment: 'CORRECT',
+              trap_type_assessment: 'CORRECT',
+              report_tags: JSON.stringify([]),
+            },
+          });
+        } catch (error) {
+          console.error(`Failed to evaluate L1Case ${row.id}:`, error);
+        } finally {
+          await prisma.evaluationBatch.update({
+            where: { id: evaluationBatchId },
+            data: { completed_count: startingCompletedCount + i + 1 },
+          });
+        }
+      }
+      return; // Batch processing completed successfully
+    }
+  }
+  
+  // Use synchronous API if batch wasn't used or failed with token limit
+  if (!useBatch || batchResponses === null) {
     // Use synchronous API for small batches
     for (let i = 0; i < total; i++) {
       const id = caseIds[i];
@@ -504,6 +533,7 @@ export async function evaluateL2Cases(
 ): Promise<void> {
   const total = caseIds.length;
   const useBatch = shouldUseBatchAPI(total);
+  let batchResponses: BatchResponse[] | null = null;
 
   if (useBatch) {
     console.log(`[Evaluation Batch ${evaluationBatchId}] Using OpenAI Batch API for ${total} L2 cases (cost savings)`);
@@ -534,45 +564,71 @@ export async function evaluateL2Cases(
       };
     });
 
-    // Process batch
-    const batchResponses = await processBatch(batchRequests, (status) => {
-      console.log(`[Evaluation Batch ${evaluationBatchId}] Batch API status: ${status}`);
-    });
-
-    // Process results
-    for (let i = 0; i < validRows.length; i++) {
-      const row = validRows[i];
-      const response = batchResponses[i];
+    // Try batch processing, fall back to synchronous if token limit exceeded
+    try {
+      batchResponses = await processBatch(batchRequests, (status) => {
+        console.log(`[Evaluation Batch ${evaluationBatchId}] Batch API status: ${status}`);
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Batch processing failed';
+      const isTokenLimitError = (error as any)?.isTokenLimitError || errorMessage.includes('token_limit_exceeded') || errorMessage.includes('Enqueued token limit');
       
-      try {
-        const scored = processBatchResponse(response, 'L2', row.difficulty);
-
-        await prisma.caseEvaluation.create({
-          data: {
-            question_id: null,
-            t3_case_id: row.id,
-            evaluation_batch_id: evaluationBatchId,
-            overall_verdict: scored.overallVerdict,
-            priority_level: scored.priorityLevel,
-            rubric_score: JSON.stringify(scored.rubricScore),
-            clarity_score: scored.clarityScore,
-            difficulty_assessment: scored.difficultyAssessment,
-            pearl_level_assessment: 'CORRECT',
-            trap_type_assessment: 'CORRECT',
-            ground_truth_assessment: 'CORRECT',
-            report_tags: JSON.stringify([]),
-          },
-        });
-      } catch (error) {
-        console.error(`Failed to evaluate L2Case ${row.id}:`, error);
-      } finally {
+      if (isTokenLimitError) {
+        console.warn(`[Evaluation Batch ${evaluationBatchId}] Token limit exceeded, falling back to synchronous API calls`);
+        batchResponses = null;
+      } else {
+        console.error(`[Evaluation Batch ${evaluationBatchId}] Batch API error:`, errorMessage);
         await prisma.evaluationBatch.update({
           where: { id: evaluationBatchId },
-          data: { completed_count: startingCompletedCount + i + 1 },
+          data: {
+            status: 'failed',
+            error_message: errorMessage,
+          },
         });
+        throw error;
       }
     }
-  } else {
+
+    // Process batch results if available
+    if (batchResponses) {
+      for (let i = 0; i < validRows.length; i++) {
+        const row = validRows[i];
+        const response = batchResponses[i];
+        
+        try {
+          const scored = processBatchResponse(response, 'L2', row.difficulty);
+
+          await prisma.caseEvaluation.create({
+            data: {
+              question_id: null,
+              t3_case_id: row.id,
+              evaluation_batch_id: evaluationBatchId,
+              overall_verdict: scored.overallVerdict,
+              priority_level: scored.priorityLevel,
+              rubric_score: JSON.stringify(scored.rubricScore),
+              clarity_score: scored.clarityScore,
+              difficulty_assessment: scored.difficultyAssessment,
+              pearl_level_assessment: 'CORRECT',
+              trap_type_assessment: 'CORRECT',
+              ground_truth_assessment: 'CORRECT',
+              report_tags: JSON.stringify([]),
+            },
+          });
+        } catch (error) {
+          console.error(`Failed to evaluate L2Case ${row.id}:`, error);
+        } finally {
+          await prisma.evaluationBatch.update({
+            where: { id: evaluationBatchId },
+            data: { completed_count: startingCompletedCount + i + 1 },
+          });
+        }
+      }
+      return; // Batch processing completed successfully
+    }
+  }
+  
+  // Use synchronous API if batch wasn't used or failed with token limit
+  if (!useBatch || batchResponses === null) {
     // Use synchronous API for small batches
     for (let i = 0; i < total; i++) {
       const id = caseIds[i];
@@ -620,6 +676,7 @@ export async function evaluateL3Cases(
 ): Promise<void> {
   const total = caseIds.length;
   const useBatch = shouldUseBatchAPI(total);
+  let batchResponses: BatchResponse[] | null = null;
 
   if (useBatch) {
     console.log(`[Evaluation Batch ${evaluationBatchId}] Using OpenAI Batch API for ${total} L3 cases (cost savings)`);
@@ -650,45 +707,71 @@ export async function evaluateL3Cases(
       };
     });
 
-    // Process batch
-    const batchResponses = await processBatch(batchRequests, (status) => {
-      console.log(`[Evaluation Batch ${evaluationBatchId}] Batch API status: ${status}`);
-    });
-
-    // Process results
-    for (let i = 0; i < validRows.length; i++) {
-      const row = validRows[i];
-      const response = batchResponses[i];
+    // Try batch processing, fall back to synchronous if token limit exceeded
+    try {
+      batchResponses = await processBatch(batchRequests, (status) => {
+        console.log(`[Evaluation Batch ${evaluationBatchId}] Batch API status: ${status}`);
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Batch processing failed';
+      const isTokenLimitError = (error as any)?.isTokenLimitError || errorMessage.includes('token_limit_exceeded') || errorMessage.includes('Enqueued token limit');
       
-      try {
-        const scored = processBatchResponse(response, 'L3', row.difficulty);
-
-        await prisma.caseEvaluation.create({
-          data: {
-            question_id: null,
-            t3_case_id: row.id,
-            evaluation_batch_id: evaluationBatchId,
-            overall_verdict: scored.overallVerdict,
-            priority_level: scored.priorityLevel,
-            rubric_score: JSON.stringify(scored.rubricScore),
-            clarity_score: scored.clarityScore,
-            difficulty_assessment: scored.difficultyAssessment,
-            pearl_level_assessment: 'CORRECT',
-            ground_truth_assessment: 'CORRECT',
-            trap_type_assessment: 'CORRECT',
-            report_tags: JSON.stringify([]),
-          },
-        });
-      } catch (error) {
-        console.error(`Failed to evaluate L3Case ${row.id}:`, error);
-      } finally {
+      if (isTokenLimitError) {
+        console.warn(`[Evaluation Batch ${evaluationBatchId}] Token limit exceeded, falling back to synchronous API calls`);
+        batchResponses = null;
+      } else {
+        console.error(`[Evaluation Batch ${evaluationBatchId}] Batch API error:`, errorMessage);
         await prisma.evaluationBatch.update({
           where: { id: evaluationBatchId },
-          data: { completed_count: startingCompletedCount + i + 1 },
+          data: {
+            status: 'failed',
+            error_message: errorMessage,
+          },
         });
+        throw error;
       }
     }
-  } else {
+
+    // Process batch results if available
+    if (batchResponses) {
+      for (let i = 0; i < validRows.length; i++) {
+        const row = validRows[i];
+        const response = batchResponses[i];
+        
+        try {
+          const scored = processBatchResponse(response, 'L3', row.difficulty);
+
+          await prisma.caseEvaluation.create({
+            data: {
+              question_id: null,
+              t3_case_id: row.id,
+              evaluation_batch_id: evaluationBatchId,
+              overall_verdict: scored.overallVerdict,
+              priority_level: scored.priorityLevel,
+              rubric_score: JSON.stringify(scored.rubricScore),
+              clarity_score: scored.clarityScore,
+              difficulty_assessment: scored.difficultyAssessment,
+              pearl_level_assessment: 'CORRECT',
+              ground_truth_assessment: 'CORRECT',
+              trap_type_assessment: 'CORRECT',
+              report_tags: JSON.stringify([]),
+            },
+          });
+        } catch (error) {
+          console.error(`Failed to evaluate L3Case ${row.id}:`, error);
+        } finally {
+          await prisma.evaluationBatch.update({
+            where: { id: evaluationBatchId },
+            data: { completed_count: startingCompletedCount + i + 1 },
+          });
+        }
+      }
+      return; // Batch processing completed successfully
+    }
+  }
+  
+  // Use synchronous API if batch wasn't used or failed with token limit
+  if (!useBatch || batchResponses === null) {
     // Use synchronous API for small batches
     for (let i = 0; i < total; i++) {
       const id = caseIds[i];
@@ -739,6 +822,7 @@ export async function evaluateLegacyQuestions(
 ): Promise<void> {
   const total = questionIds.length;
   const useBatch = shouldUseBatchAPI(total);
+  let batchResponses: BatchResponse[] | null = null;
 
   if (useBatch) {
     console.log(`[Evaluation Batch ${evaluationBatchId}] Using OpenAI Batch API for ${total} legacy questions (cost savings)`);
@@ -769,13 +853,34 @@ export async function evaluateLegacyQuestions(
       };
     });
 
-    // Process batch
-    const batchResponses = await processBatch(batchRequests, (status) => {
-      console.log(`[Evaluation Batch ${evaluationBatchId}] Batch API status: ${status}`);
-    });
+    // Try batch processing, fall back to synchronous if token limit exceeded
+    try {
+      batchResponses = await processBatch(batchRequests, (status) => {
+        console.log(`[Evaluation Batch ${evaluationBatchId}] Batch API status: ${status}`);
+      });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Batch processing failed';
+      const isTokenLimitError = (error as any)?.isTokenLimitError || errorMessage.includes('token_limit_exceeded') || errorMessage.includes('Enqueued token limit');
+      
+      if (isTokenLimitError) {
+        console.warn(`[Evaluation Batch ${evaluationBatchId}] Token limit exceeded, falling back to synchronous API calls`);
+        batchResponses = null;
+      } else {
+        console.error(`[Evaluation Batch ${evaluationBatchId}] Batch API error:`, errorMessage);
+        await prisma.evaluationBatch.update({
+          where: { id: evaluationBatchId },
+          data: {
+            status: 'failed',
+            error_message: errorMessage,
+          },
+        });
+        throw error;
+      }
+    }
 
-    // Process results
-    for (let i = 0; i < validQuestions.length; i++) {
+    // Process batch results if available
+    if (batchResponses) {
+      for (let i = 0; i < validQuestions.length; i++) {
       const question = validQuestions[i];
       const response = batchResponses[i];
       const pearlLevel = (question.pearl_level as PearlLevel) || 'L1';
@@ -841,8 +946,12 @@ export async function evaluateLegacyQuestions(
         });
       }
     }
-  } else {
-    // Use synchronous API for small batches
+    return; // Batch processing completed successfully
+  }
+  
+  // Use synchronous API if batch wasn't used or failed with token limit
+  if (!useBatch || batchResponses === null) {
+    // Use synchronous API for small batches or fallback
     for (let i = 0; i < total; i++) {
       const id = questionIds[i];
       try {
@@ -937,5 +1046,4 @@ export async function evaluateLegacyQuestions(
     }
   }
 }
-
-
+}

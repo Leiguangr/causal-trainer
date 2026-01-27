@@ -161,8 +161,22 @@ function getCaseFromEvaluation(e: CaseEvaluation): AnyCase {
       explanation: e.question.explanation ?? null,
       wiseRefusal: e.question.wise_refusal ?? null,
       hiddenQuestion: e.question.hidden_timestamp ?? null,
-      answerIfA: e.question.conditional_answers ? (JSON.parse(e.question.conditional_answers)?.answer_if_condition_1 || null) : null,
-      answerIfB: e.question.conditional_answers ? (JSON.parse(e.question.conditional_answers)?.answer_if_condition_2 || null) : null,
+      answerIfA: e.question.conditional_answers ? (() => {
+        try {
+          const parsed = JSON.parse(e.question.conditional_answers);
+          return parsed?.answer_if_condition_1 || parsed?.answerIfA || null;
+        } catch {
+          return null;
+        }
+      })() : null,
+      answerIfB: e.question.conditional_answers ? (() => {
+        try {
+          const parsed = JSON.parse(e.question.conditional_answers);
+          return parsed?.answer_if_condition_2 || parsed?.answerIfB || null;
+        } catch {
+          return null;
+        }
+      })() : null,
       variables: e.question.variables ?? null,
       causalStructure: e.question.causal_structure ?? null,
       domain: e.question.domain ?? null,
@@ -236,6 +250,16 @@ function getCaseFromEvaluation(e: CaseEvaluation): AnyCase {
 export default function ScoresPage() {
   const [data, setData] = useState<GradingResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [copyProgress, setCopyProgress] = useState<{
+    isActive: boolean;
+    processed: number;
+    total: number;
+    skipped: number;
+    skipReasons?: { invalidPearlLevel: number };
+    byType: { L1: number; L2: number; L3: number };
+    status: string;
+    errors: number;
+  } | null>(null);
 
   const [dataset, setDataset] = useState<string>('');
   const [evaluationBatchId, setEvaluationBatchId] = useState<string>('');
@@ -318,31 +342,127 @@ export default function ScoresPage() {
               </button>
               <button
                 onClick={async () => {
-                  if (!confirm('Copy all APPROVED legacy cases to the new schema? This will create new L1/L2/L3 cases based on their pearl level.')) return;
+                  if (!confirm('Copy all APPROVED legacy cases to the new schema? This will create new L1/L2/L3 cases based on their pearl level. All fields will be validated and transformed using LLM.')) return;
+                  
+                  // Prompt for target dataset name (optional)
+                  const targetDataset = prompt('Enter target dataset name (leave empty to auto-generate):', '');
+                  
+                  // Start progress tracking
+                  setCopyProgress({
+                    isActive: true,
+                    processed: 0,
+                    total: 0,
+                    skipped: 0,
+                    byType: { L1: 0, L2: 0, L3: 0 },
+                    status: 'Starting...',
+                    errors: 0,
+                  });
+
                   try {
                     const res = await fetch('/api/admin/copy-approved-legacy-cases', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
                         dataset: dataset || undefined,
+                        targetDataset: targetDataset || undefined,
+                        streamProgress: true,
                       }),
                     });
-                    if (res.ok) {
-                      const data = await res.json();
-                      alert(`Successfully copied ${data.copiedCount} approved legacy cases to new schema:\n- L1: ${data.byType.L1}\n- L2: ${data.byType.L2}\n- L3: ${data.byType.L3}\n\nRefreshing...`);
-                      window.location.reload();
-                    } else {
+
+                    if (!res.ok) {
                       const error = await res.json();
+                      setCopyProgress(null);
                       alert(`Failed to copy: ${error.error || 'Unknown error'}`);
+                      return;
+                    }
+
+                    // Handle streaming response
+                    const reader = res.body?.getReader();
+                    const decoder = new TextDecoder();
+
+                    if (!reader) {
+                      setCopyProgress(null);
+                      alert('Failed to start copy operation');
+                      return;
+                    }
+
+                    let buffer = '';
+                    let finalResult: any = null;
+
+                    while (true) {
+                      const { done, value } = await reader.read();
+                      if (done) break;
+
+                      buffer += decoder.decode(value, { stream: true });
+                      const lines = buffer.split('\n');
+                      buffer = lines.pop() || '';
+
+                      for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                          try {
+                            const data = JSON.parse(line.slice(6));
+                            
+                            if (data.type === 'start') {
+                              setCopyProgress(prev => prev ? {
+                                ...prev,
+                                total: data.total,
+                                status: `Found ${data.total} cases to copy`,
+                              } : null);
+                            } else if (data.type === 'progress') {
+                              setCopyProgress(prev => prev ? {
+                                ...prev,
+                                processed: data.processed,
+                                total: data.total,
+                                skipped: data.skipped,
+                                skipReasons: data.skipReasons || prev?.skipReasons,
+                                byType: data.byType,
+                                status: data.status,
+                                errors: data.errors || 0,
+                              } : null);
+                            } else if (data.type === 'complete') {
+                              finalResult = data;
+                              setCopyProgress(prev => prev ? {
+                                ...prev,
+                                processed: prev.total, // Show all processed
+                                total: prev.total,
+                                skipped: data.skippedCount || prev.skipped,
+                                skipReasons: data.skipReasons || prev?.skipReasons,
+                                byType: data.byType,
+                                status: 'Complete!',
+                                errors: data.errors?.length || 0,
+                              } : null);
+                            } else if (data.type === 'error') {
+                              setCopyProgress(null);
+                              alert(`Error: ${data.error}`);
+                              return;
+                            }
+                          } catch (e) {
+                            console.error('Error parsing progress data:', e);
+                          }
+                        }
+                      }
+                    }
+
+                    // Show completion message
+                    if (finalResult) {
+                      setTimeout(() => {
+                        alert(`Successfully copied ${finalResult.copiedCount} approved legacy cases to new schema in dataset "${finalResult.targetDataset}":\n- L1: ${finalResult.byType.L1}\n- L2: ${finalResult.byType.L2}\n- L3: ${finalResult.byType.L3}${finalResult.errors?.length > 0 ? `\n\n${finalResult.errors.length} errors occurred` : ''}\n\nRefreshing...`);
+                        setCopyProgress(null);
+                        window.location.reload();
+                      }, 1000);
+                    } else {
+                      setCopyProgress(null);
                     }
                   } catch (error) {
                     console.error('Copy error:', error);
+                    setCopyProgress(null);
                     alert('Failed to copy approved legacy cases');
                   }
                 }}
                 className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+                disabled={copyProgress?.isActive}
               >
-                Copy Approved Legacy Cases to New Schema
+                {copyProgress?.isActive ? 'Copying...' : 'Copy Approved Legacy Cases to New Schema'}
               </button>
               <Link
                 href="/admin/grading"
@@ -359,6 +479,88 @@ export default function ScoresPage() {
             </div>
           </div>
         </div>
+
+        {/* Copy Progress Modal */}
+        {copyProgress?.isActive && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full mx-4">
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Copying Legacy Cases</h2>
+              
+              {/* Progress Bar */}
+              <div className="mb-4">
+                <div className="flex justify-between text-sm text-gray-600 mb-2">
+                  <span>
+                    {copyProgress.processed} / {copyProgress.total} processed
+                    {copyProgress.skipped > 0 && ` (${copyProgress.skipped} skipped)`}
+                    {copyProgress.errors > 0 && ` (${copyProgress.errors} errors)`}
+                  </span>
+                  <span>{copyProgress.total > 0 ? Math.round((copyProgress.processed / copyProgress.total) * 100) : 0}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                  <div
+                    className="bg-purple-600 h-4 rounded-full transition-all duration-300"
+                    style={{
+                      width: copyProgress.total > 0 ? `${(copyProgress.processed / copyProgress.total) * 100}%` : '0%',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Status */}
+              <div className="mb-4">
+                <p className="text-sm text-gray-700 font-medium mb-2">Status:</p>
+                <p className="text-sm text-gray-600">{copyProgress.status}</p>
+              </div>
+
+              {/* Breakdown by Type */}
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="bg-blue-50 rounded-lg p-3">
+                  <div className="text-xs text-blue-600 font-medium">L1 Cases</div>
+                  <div className="text-2xl font-bold text-blue-700">{copyProgress.byType.L1}</div>
+                </div>
+                <div className="bg-green-50 rounded-lg p-3">
+                  <div className="text-xs text-green-600 font-medium">L2 Cases</div>
+                  <div className="text-2xl font-bold text-green-700">{copyProgress.byType.L2}</div>
+                </div>
+                <div className="bg-purple-50 rounded-lg p-3">
+                  <div className="text-xs text-purple-600 font-medium">L3 Cases</div>
+                  <div className="text-2xl font-bold text-purple-700">{copyProgress.byType.L3}</div>
+                </div>
+              </div>
+
+              {/* Skip reasons */}
+              {copyProgress.skipped > 0 && copyProgress.skipReasons && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm font-medium text-yellow-800 mb-2">
+                    ⚠️ {copyProgress.skipped} case{copyProgress.skipped !== 1 ? 's' : ''} skipped:
+                  </p>
+                  <ul className="text-xs text-yellow-700 space-y-1 ml-4">
+                    {copyProgress.skipReasons.invalidPearlLevel > 0 && (
+                      <li>• {copyProgress.skipReasons.invalidPearlLevel} invalid pearl level (not L1/L2/L3)</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+
+              {/* Error indicator */}
+              {copyProgress.errors > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-red-700">
+                    ⚠️ {copyProgress.errors} error{copyProgress.errors !== 1 ? 's' : ''} occurred during copy
+                  </p>
+                </div>
+              )}
+
+              {/* Loading indicator */}
+              {copyProgress.status !== 'Complete!' && (
+                <div className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
+                  <span className="ml-2 text-sm text-gray-600">Processing...</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Filters */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">

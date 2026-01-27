@@ -2338,6 +2338,9 @@ async function runBackgroundGeneration(
     // Check if we should use batch API (for cost savings on large batches)
     const useBatchAPI = shouldUseBatchAPI(totalTasks);
     
+    // Declare batchResponses outside the if block for fallback access
+    let batchResponses: BatchResponse[] | null = null;
+    
     if (useBatchAPI) {
       console.log(`[Batch ${batchId}] Using OpenAI Batch API for ${totalTasks} samples (cost savings)`);
       
@@ -2377,15 +2380,37 @@ async function runBackgroundGeneration(
         where: { id: batchId },
         data: { currentIndex: totalTasks },
       });
+      try {
+        batchResponses = await processBatch(batchRequests, (status) => {
+          console.log(`[Batch ${batchId}] Batch API status: ${status}`);
+        });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Batch processing failed';
+        const isTokenLimitError = (error as any)?.isTokenLimitError || errorMessage.includes('token_limit_exceeded') || errorMessage.includes('Enqueued token limit');
+        
+        if (isTokenLimitError) {
+          // Token limit exceeded - fall back to synchronous processing
+          console.warn(`[Batch ${batchId}] Token limit exceeded, falling back to synchronous API calls`);
+          batchResponses = null; // Will trigger fallback below
+        } else {
+          // Other errors - mark as failed
+          console.error(`[Batch ${batchId}] Batch API error:`, errorMessage);
+          await prisma.generationBatch.update({
+            where: { id: batchId },
+            data: {
+              status: 'failed',
+              errorMessage: errorMessage,
+            },
+          });
+          throw error;
+        }
+      }
 
-      const batchResponses = await processBatch(batchRequests, (status) => {
-        console.log(`[Batch ${batchId}] Batch API status: ${status}`);
-      });
-
-      // Process batch results
-      console.log(`[Batch ${batchId}] Processing ${batchResponses.length} batch results...`);
-      
-      for (let i = 0; i < batchResponses.length; i++) {
+      // Process batch results if available
+      if (batchResponses) {
+        console.log(`[Batch ${batchId}] Processing ${batchResponses.length} batch results...`);
+        
+        for (let i = 0; i < batchResponses.length; i++) {
         const response = batchResponses[i];
         const meta = requestMetadatas[i];
 
@@ -2447,8 +2472,11 @@ async function runBackgroundGeneration(
       }
 
       console.log(`[Batch ${batchId}] Batch API processing completed: ${successCount} successful, ${errorCount} errors`);
-    } else {
-      // Use synchronous API for small batches (≤10 samples)
+    }
+    
+    // Use synchronous API if batch wasn't used or failed with token limit
+    if (!useBatchAPI || batchResponses === null) {
+      // Use synchronous API for small batches (≤10 samples) or fallback
       for (let i = 0; i < totalTasks; i++) {
       // Check if batch was cancelled
       const currentBatch = await prisma.generationBatch.findUnique({
