@@ -13,16 +13,16 @@ export async function GET() {
     // Get all completed quiz sessions for the user
     const sessions = await prisma.quizSession.findMany({
       where: {
-        userId: session.user.id,
-        completedAt: { not: null },
+        user_id: session.user.id,
+        completed_at: { not: null },
       },
       include: {
         answers: {
           include: {
             question: {
               select: {
-                trapType: true,
-                pearlLevel: true,
+                trap_type: true,
+                pearl_level: true,
               },
             },
           },
@@ -40,23 +40,23 @@ export async function GET() {
     for (const quizSession of sessions) {
       for (const answer of quizSession.answers) {
         totalQuestions++
-        if (answer.isCorrect) totalCorrect++
+        if (answer.is_correct) totalCorrect++
 
         // By trap type
-        const trapType = answer.question.trapType
+        const trapType = answer.question.trap_type
         if (!byTrapType[trapType]) {
           byTrapType[trapType] = { correct: 0, total: 0 }
         }
         byTrapType[trapType].total++
-        if (answer.isCorrect) byTrapType[trapType].correct++
+        if (answer.is_correct) byTrapType[trapType].correct++
 
         // By Pearl level
-        const level = answer.question.pearlLevel
+        const level = answer.question.pearl_level
         if (!byLevel[level]) {
           byLevel[level] = { correct: 0, total: 0 }
         }
         byLevel[level].total++
-        if (answer.isCorrect) byLevel[level].correct++
+        if (answer.is_correct) byLevel[level].correct++
       }
     }
 

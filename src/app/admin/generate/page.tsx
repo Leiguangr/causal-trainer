@@ -947,23 +947,23 @@ export default function GeneratePage() {
                     <div key={q.id} className="flex items-center gap-2 text-sm bg-gray-50 p-2 rounded">
                       <span className="font-mono text-gray-500">#{idx + 1}</span>
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                        q.groundTruth === 'YES' || q.groundTruth === 'VALID' ? 'bg-green-100 text-green-700' :
-                        q.groundTruth === 'NO' || q.groundTruth === 'INVALID' ? 'bg-red-100 text-red-700' :
-                        q.groundTruth === 'AMBIGUOUS' || q.groundTruth === 'CONDITIONAL' ? 'bg-yellow-100 text-yellow-700' :
+                        q.ground_truth === 'YES' || q.ground_truth === 'VALID' ? 'bg-green-100 text-green-700' :
+                        q.ground_truth === 'NO' || q.ground_truth === 'INVALID' ? 'bg-red-100 text-red-700' :
+                        q.ground_truth === 'AMBIGUOUS' || q.ground_truth === 'CONDITIONAL' ? 'bg-yellow-100 text-yellow-700' :
                         'bg-gray-100 text-gray-700'
                       }`}>
-                        {q.groundTruth}
+                        {q.ground_truth}
                       </span>
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                        q.pearlLevel === 'L1' ? 'bg-blue-100 text-blue-700' :
-                        q.pearlLevel === 'L2' ? 'bg-purple-100 text-purple-700' :
+                        q.pearl_level === 'L1' ? 'bg-blue-100 text-blue-700' :
+                        q.pearl_level === 'L2' ? 'bg-purple-100 text-purple-700' :
                         'bg-orange-100 text-orange-700'
                       }`}>
-                        {q.pearlLevel}
+                        {q.pearl_level}
                       </span>
-                      <span className="text-gray-700">{q.trapType || 'NONE'}</span>
-                      {q.trapSubtype && q.trapSubtype !== 'None' && (
-                        <span className="text-gray-500">/ {q.trapSubtype.replace(/_/g, ' ')}</span>
+                      <span className="text-gray-700">{q.trap_type || 'NONE'}</span>
+                      {q.trap_subtype && q.trap_subtype !== 'None' && (
+                        <span className="text-gray-500">/ {q.trap_subtype.replace(/_/g, ' ')}</span>
                       )}
                       <span className="text-gray-400 ml-auto">{q.domain}</span>
                     </div>

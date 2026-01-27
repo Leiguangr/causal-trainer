@@ -25,7 +25,7 @@ export async function GET(req: Request) {
     }
     
     if (levels.length > 0) {
-      where.pearlLevel = { in: levels }
+      where.pearl_level = { in: levels }
     }
     
     if (difficulty !== 'all') {
@@ -39,10 +39,10 @@ export async function GET(req: Request) {
         id: true,
         scenario: true,
         claim: true,
-        pearlLevel: true,
+        pearl_level: true,
         domain: true,
-        trapType: true,
-        trapSubtype: true,
+        trap_type: true,
+        trap_subtype: true,
         explanation: true,
         difficulty: true,
         variables: true,
@@ -73,10 +73,10 @@ export async function POST(req: Request) {
 
     const quizSession = await prisma.quizSession.create({
       data: {
-        userId: session.user.id,
-        totalQuestions,
-        domainsFilter: JSON.stringify(domainsFilter),
-        levelsFilter: JSON.stringify(levelsFilter),
+        user_id: session.user.id,
+        total_questions: totalQuestions,
+        domains_filter: JSON.stringify(domainsFilter),
+        levels_filter: JSON.stringify(levelsFilter),
         difficulty,
       },
     })

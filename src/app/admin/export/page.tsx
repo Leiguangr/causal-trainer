@@ -258,26 +258,26 @@ export default function ExportPage() {
                 {preview.questions.slice(0, 3).map((q: any, idx: number) => (
                   <div key={idx} className="bg-gray-50 p-4 rounded border border-gray-200">
                     <p className="font-medium text-sm text-gray-600 mb-1">
-                      Case {q.annotations?.caseId || idx + 1} • {q.annotations?.pearlLevel} • {q.annotations?.domain || 'N/A'}
+                      Case {q.annotations?.case_id || q.case_id || idx + 1} • {q.annotations?.pearl_level || q.pearl_level} • {q.annotations?.domain || q.domain || 'N/A'}
                     </p>
                     <p className="text-sm mb-2">
                       <span className="font-medium">Scenario:</span> {q.scenario?.substring(0, 200)}...
                     </p>
-                    {q.counterfactualClaim && (
+                    {q.counterfactual_claim && (
                       <p className="text-sm mb-2">
-                        <span className="font-medium">Counterfactual Claim:</span> {q.counterfactualClaim}
+                        <span className="font-medium">Counterfactual Claim:</span> {q.counterfactual_claim}
                       </p>
                     )}
-                    {q.hiddenQuestion && (
+                    {q.hidden_timestamp && (
                       <p className="text-sm mb-2">
-                        <span className="font-medium">Hidden Question:</span> {q.hiddenQuestion}
+                        <span className="font-medium">Hidden Question:</span> {typeof q.hidden_timestamp === 'string' ? q.hidden_timestamp : JSON.stringify(q.hidden_timestamp)}
                       </p>
                     )}
                     <p className="text-sm mt-2">
-                      <span className="font-medium">Trap/Family:</span> {q.annotations?.trapType || q.annotations?.family || 'NONE'} {q.annotations?.trapSubtype ? `(${q.annotations.trapSubtype})` : ''}
+                      <span className="font-medium">Trap/Family:</span> {q.annotations?.trap_type || q.trap?.type || q.annotations?.family || 'NONE'} {q.annotations?.trap_subtype || q.trap?.subtype ? `(${q.annotations?.trap_subtype || q.trap?.subtype})` : ''}
                     </p>
                     <p className="text-sm">
-                      <span className="font-medium">Ground Truth:</span> {q.groundTruth}
+                      <span className="font-medium">Ground Truth:</span> {q.ground_truth || q.label}
                     </p>
                     <p className="text-sm">
                       <span className="font-medium">Author:</span> {q.annotations?.author || 'Unknown'}

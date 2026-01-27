@@ -17,24 +17,24 @@ export async function PATCH(
       data: {
         scenario: body.scenario,
         claim: body.claim,
-        pearlLevel: body.pearlLevel,
+        pearl_level: body.pearl_level,
         domain: body.domain,
         subdomain: body.subdomain,
-        trapType: body.trapType,
-        trapSubtype: body.trapSubtype,
+        trap_type: body.trap_type,
+        trap_subtype: body.trap_subtype,
         explanation: body.explanation,
         difficulty: body.difficulty,
-        groundTruth: body.groundTruth,
+        ground_truth: body.ground_truth,
         variables: body.variables,
-        causalStructure: body.causalStructure,
-        keyInsight: body.keyInsight,
-        wiseRefusal: body.wiseRefusal,
+        causal_structure: body.causal_structure,
+        key_insight: body.key_insight,
+        wise_refusal: body.wise_refusal,
         // New metadata fields
         author: body.author,
-        hiddenTimestamp: body.hiddenTimestamp,
-        conditionalAnswers: body.conditionalAnswers,
-        reviewNotes: body.reviewNotes,
-        isVerified: body.isVerified ?? false,
+        hidden_timestamp: body.hidden_timestamp,
+        conditional_answers: body.conditional_answers,
+        review_notes: body.review_notes,
+        is_verified: body.is_verified ?? false,
       },
     });
 
@@ -55,15 +55,36 @@ export async function DELETE(
   try {
     const { id } = await params;
 
+    // First, check if the question exists
+    const question = await prisma.question.findUnique({
+      where: { id },
+    });
+
+    if (!question) {
+      return NextResponse.json(
+        { error: 'Question not found' },
+        { status: 404 }
+      );
+    }
+
     // Delete from Question table (legacy only)
     await prisma.question.delete({
       where: { id },
     });
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Delete question error:', error);
+    
+    // Handle Prisma-specific errors
+    if (error?.code === 'P2025' || error?.meta?.cause === 'Record to delete does not exist.') {
+      return NextResponse.json(
+        { error: 'Question not found' },
+        { status: 404 }
+      );
+    }
+    
     return NextResponse.json(
-      { error: 'Failed to delete question' },
+      { error: error?.message || 'Failed to delete question' },
       { status: 500 }
     );
   }

@@ -211,102 +211,126 @@ export interface QuizConfig {
   includeSubtypes: boolean;
 }
 
-// Question for Quiz (matches SCHEMA.md) - Legacy format
+// Question for Quiz (matches SCHEMA.md) - Legacy format (snake_case)
 export interface QuizQuestion {
   id: string;                    // Database ID
-  sourceCase?: string;           // Original case ID (e.g., "3.43")
+  source_case?: string;           // Original case ID (e.g., "3.43")
   scenario: string;
   claim: string;
-  pearlLevel: PearlLevel;
+  pearl_level: PearlLevel;
   domain: string;
   subdomain?: string;            // More specific domain (e.g., "Commodities")
-  trapType: string;
-  trapSubtype: string;
+  trap_type: string;
+  trap_subtype: string;
   difficulty: Difficulty;
-  groundTruth: GroundTruth;      // YES, NO, or AMBIGUOUS
+  ground_truth: GroundTruth;      // YES, NO, or AMBIGUOUS
   variables: {
     X: string;                   // Exposure/treatment variable
     Y: string;                   // Outcome variable
     Z: string[];                 // Confounders, mediators, mechanisms
   };
-  causalStructure: string;       // Brief description of causal graph
-  keyInsight: string;            // One-line takeaway
+  causal_structure: string;       // Brief description of causal graph
+  key_insight: string;            // One-line takeaway
   explanation: string;           // Ground truth reasoning
-  wiseRefusal: string;           // Complete answer with verdict
+  wise_refusal: string;           // Complete answer with verdict
 }
 
-// T3-L1 Case (new format)
-export interface L1Case {
-  id: string;
-  scenario: string;
-  claim: string;
-  groundTruth: GroundTruth;
-  evidenceClass: 'WOLF' | 'SHEEP' | 'NONE';
-  evidenceType: string | null;   // W1..W10, S1..S8, or null for AMBIGUOUS
-  whyFlawedOrValid: string;
-  domain?: string | null;
-  subdomain?: string | null;
-  difficulty: Difficulty;
-  variables?: {
-    X: string;
-    Y: string;
-    Z?: string[];
-  } | null;
-  causalStructure?: string | null;
-  dataset: string;
-  author?: string | null;
-  sourceCase?: string | null;
-  isVerified: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
+// Unified T3Case (replaces L1Case, L2Case, L3Case)
+// All cases use the same unified schema structure from Appendix B, Table 9
+export type PearlLevel = 'L1' | 'L2' | 'L3';
 
-// T3-L3 Case (new format with F1-F8 families)
+// L3 Family types
 export type L3Family = 'F1' | 'F2' | 'F3' | 'F4' | 'F5' | 'F6' | 'F7' | 'F8';
 
-// L3 Ground Truth (different from L1/L2 - uses VALID/INVALID/CONDITIONAL)
-export type L3GroundTruth = 'VALID' | 'INVALID' | 'CONDITIONAL';
+// Label values per level (Table 10)
+export type L1Label = 'YES' | 'NO' | 'AMBIGUOUS';
+export type L2Label = 'NO'; // All L2 cases must be labeled NO
+export type L3Label = 'VALID' | 'INVALID' | 'CONDITIONAL';
+export type T3Label = L1Label | L2Label | L3Label;
 
-export interface L3Case {
-  id: string;
-  caseId?: string | null;
-  domain?: string | null;
-  family: string; // F1-F8
-  difficulty: Difficulty;
-  scenario: string;
-  counterfactualClaim: string;
-  variables: {
-    X: string;
-    Y: string;
-    Z: string;
-  };
-  invariants: string[];
-  groundTruth: L3GroundTruth;
-  justification: string;
-  wiseResponse: string;
-  dataset: string;
-  author?: string | null;
-  sourceCase?: string | null;
-  isVerified: boolean;
-  createdAt: Date;
-  updatedAt: Date;
+// Variables structure - X and Y can be objects or strings, Z is always an array
+export type VariableValue = string | { name: string; role: string };
+export interface T3Variables {
+  X: VariableValue;
+  Y: VariableValue;
+  Z: string[]; // Always an array, even if empty
 }
 
-// Generated L3 case from API (for parsing)
-export interface GeneratedL3Case {
-  caseId?: string;
-  domain?: string;
-  family: string;
-  difficulty: string;
+// Trap structure
+export interface T3Trap {
+  type: string; // W1–W10/S1–S8/A for L1, T1–T17 for L2, F1–F8 for L3
+  type_name?: string;
+  subtype?: string;
+  subtype_name?: string;
+}
+
+// Unified T3Case interface matching Prisma schema (snake_case)
+export interface T3Case {
+  id: string;
+  
+  // Identity & Metadata
+  case_id?: string | null;
+  bucket?: string | null;
+  pearl_level: PearlLevel;
+  domain?: string | null;
+  subdomain?: string | null;
+  
+  // Case Content
   scenario: string;
-  counterfactualClaim: string;
-  variables: {
-    X: string;
-    Y: string;
-    Z: string;
-  };
-  invariants: string[];
-  groundTruth: L3GroundTruth;
-  justification: string;
-  wiseResponse: string;
+  claim?: string | null; // Required for L1/L2, optional for L3
+  counterfactual_claim?: string | null; // For L3
+  label: T3Label;
+  is_ambiguous: boolean;
+  
+  // Variables
+  variables?: T3Variables | null;
+  
+  // Trap Structure
+  trap_type: string;
+  trap_type_name?: string | null;
+  trap_subtype?: string | null;
+  trap_subtype_name?: string | null;
+  
+  // Reasoning Fields
+  difficulty: Difficulty;
+  causal_structure?: string | null;
+  key_insight?: string | null;
+  
+  // Ambiguity Handling
+  hidden_timestamp?: string | null;
+  conditional_answers?: string | null; // JSON string
+  
+  // Explanations
+  wise_refusal?: string | null;
+  gold_rationale?: string | null;
+  
+  // L3-Specific Fields
+  invariants?: string | null; // JSON array string (L3 only)
+  
+  // Assignment 2 Fields
+  initial_author?: string | null;
+  validator?: string | null;
+  final_score?: number | null;
+  
+  // Metadata
+  dataset: string;
+  author?: string | null;
+  source_case?: string | null;
+  generation_batch_id?: string | null;
+  is_verified: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+// Type guards for level-specific validation
+export function isL1Case(case: T3Case): case is T3Case & { pearl_level: 'L1'; label: L1Label } {
+  return case.pearl_level === 'L1';
+}
+
+export function isL2Case(case: T3Case): case is T3Case & { pearl_level: 'L2'; label: L2Label } {
+  return case.pearl_level === 'L2';
+}
+
+export function isL3Case(case: T3Case): case is T3Case & { pearl_level: 'L3'; label: L3Label } {
+  return case.pearl_level === 'L3';
 }

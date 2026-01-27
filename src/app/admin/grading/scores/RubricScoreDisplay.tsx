@@ -8,33 +8,24 @@ interface RubricScore {
   rubricVersion: string;
 }
 
-// Expected categories and their max scores by rubric level
-const EXPECTED_CATEGORIES: Record<string, Record<string, number>> = {
-  'L1-v1.0': {
-    scenarioClarity: 2,
-    causalClaimExplicitness: 1,
-    wiseRefusalQuality: 2,
-    groundTruthUnambiguity: 2,
-    difficultyCalibration: 1,
-    domainPlausibility: 1,
-    noiseDiscipline: 1,
-  },
-  'L2-v1.0': {
-    scenarioClarity: 2.0,
-    hiddenQuestionQuality: 2.0,
-    conditionalAnswerA: 1.5,
-    conditionalAnswerB: 1.5,
-    wiseRefusalQuality: 2.0,
-    difficultyCalibration: 1.0,
-  },
-  'L3-v1.0': {
-    selfContained: 2.0,
-    clarity: 2.0,
-    correctness: 2.0,
-    familyFit: 1.5,
-    novelty: 1.5,
-    realism: 1.0,
-  },
+// Unified T3 Rubric: Maximum scores for each category (applies to all Pearl levels)
+const UNIFIED_RUBRIC_MAX_SCORES: Record<string, number> = {
+  scenario_clarity: 1.0,
+  scenarioClarity: 1.0, // camelCase variant
+  hidden_question_quality: 1.0,
+  hiddenQuestionQuality: 1.0, // camelCase variant
+  conditional_answer_a: 1.5,
+  conditionalAnswerA: 1.5, // camelCase variant
+  conditional_answer_b: 1.5,
+  conditionalAnswerB: 1.5, // camelCase variant
+  wise_refusal_quality: 2.0,
+  wiseRefusalQuality: 2.0, // camelCase variant
+  difficulty_calibration: 1.0,
+  difficultyCalibration: 1.0, // camelCase variant
+  final_label: 1.0,
+  finalLabel: 1.0, // camelCase variant
+  trap_type: 1.0,
+  trapType: 1.0, // camelCase variant
 };
 
 interface RubricScoreDisplayProps {
@@ -84,9 +75,6 @@ export default function RubricScoreDisplay({ rubricScore }: RubricScoreDisplayPr
     <div className="bg-white border border-gray-200 rounded-lg p-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-gray-900">Rubric Score</h3>
-        {rubricVersion && (
-          <span className="text-xs text-gray-500 font-mono">{rubricVersion}</span>
-        )}
       </div>
 
       {/* Total Score Display */}
@@ -131,30 +119,44 @@ export default function RubricScoreDisplay({ rubricScore }: RubricScoreDisplayPr
           {Object.entries(categoryScores).map(([category, score]) => {
             const note = categoryNotes[category] || '';
             
-            // Determine max score: first try to get from expected categories based on rubric version
-            let maxCategoryScore = 2.0;
-            const expected = EXPECTED_CATEGORIES[rubricVersion];
-            if (expected && expected[category] !== undefined) {
-              maxCategoryScore = expected[category];
-            } else {
-              // Fallback: infer from category name patterns
+            // Determine max score: use unified rubric max scores
+            let maxCategoryScore = UNIFIED_RUBRIC_MAX_SCORES[category];
+            
+            // If not found, try camelCase/snake_case variants
+            if (maxCategoryScore === undefined) {
+              // Try converting snake_case to camelCase and vice versa
+              const camelCase = category.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+              const snakeCase = category.replace(/([A-Z])/g, '_$1').toLowerCase();
+              maxCategoryScore = UNIFIED_RUBRIC_MAX_SCORES[camelCase] || 
+                                 UNIFIED_RUBRIC_MAX_SCORES[snakeCase];
+            }
+            
+            // Final fallback: infer from score value (should rarely be needed)
+            if (maxCategoryScore === undefined) {
               const categoryLower = category.toLowerCase();
-              
-              if (categoryLower.includes('explicitness') || categoryLower.includes('calibration') || 
-                  categoryLower.includes('plausibility') || categoryLower.includes('discipline') || 
-                  categoryLower.includes('realism')) {
+              if (categoryLower.includes('scenario') && categoryLower.includes('clarity')) {
                 maxCategoryScore = 1.0;
-              } else if (categoryLower.includes('answer') || categoryLower.includes('fit') || 
-                         categoryLower.includes('novelty')) {
-                maxCategoryScore = 1.5;
-              } else if (score <= 1.0 && score > 0) {
+              } else if (categoryLower.includes('hidden') && categoryLower.includes('question')) {
                 maxCategoryScore = 1.0;
-              } else if (score <= 1.5 && score > 1.0) {
+              } else if (categoryLower.includes('conditional') && categoryLower.includes('answer')) {
                 maxCategoryScore = 1.5;
-              } else if (score <= 2.0) {
+              } else if (categoryLower.includes('wise') && categoryLower.includes('refusal')) {
                 maxCategoryScore = 2.0;
+              } else if (categoryLower.includes('difficulty') || categoryLower.includes('calibration') ||
+                         categoryLower.includes('final') || categoryLower.includes('label') ||
+                         categoryLower.includes('trap') && categoryLower.includes('type')) {
+                maxCategoryScore = 1.0;
               } else {
-                maxCategoryScore = Math.ceil(score);
+                // Last resort: infer from score value
+                if (score <= 1.0 && score > 0) {
+                  maxCategoryScore = 1.0;
+                } else if (score <= 1.5 && score > 1.0) {
+                  maxCategoryScore = 1.5;
+                } else if (score <= 2.0) {
+                  maxCategoryScore = 2.0;
+                } else {
+                  maxCategoryScore = Math.ceil(score);
+                }
               }
             }
 
@@ -189,36 +191,16 @@ export default function RubricScoreDisplay({ rubricScore }: RubricScoreDisplayPr
             );
           })}
         </div>
-        {/* Debug: Show if sum doesn't match total or if expected categories are missing */}
+        {/* Debug: Show if sum doesn't match total */}
         {(() => {
           const sum = Object.values(categoryScores).reduce((a, b) => a + b, 0);
           const diff = Math.abs(sum - totalScore);
-          const expected = EXPECTED_CATEGORIES[rubricVersion];
-          const missingCategories: string[] = [];
           
-          if (expected) {
-            Object.keys(expected).forEach(cat => {
-              if (!(cat in categoryScores)) {
-                missingCategories.push(cat);
-              }
-            });
-          }
-          
-          if (diff > 0.1 || missingCategories.length > 0) {
+          if (diff > 0.1) {
             return (
               <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
-                {diff > 0.1 && (
-                  <div className="mb-2">
-                    <strong>Score Mismatch:</strong> Sum of category scores ({sum.toFixed(1)}) 
-                    does not match total score ({totalScore.toFixed(1)}). Difference: {diff.toFixed(1)} points.
-                  </div>
-                )}
-                {missingCategories.length > 0 && (
-                  <div>
-                    <strong>Missing Categories:</strong> {missingCategories.map(c => formatCategoryName(c)).join(', ')} 
-                    {missingCategories.length === 1 ? ' is' : ' are'} expected for {rubricVersion} but not present in the scores.
-                  </div>
-                )}
+                <strong>Score Mismatch:</strong> Sum of category scores ({sum.toFixed(1)}) 
+                does not match total score ({totalScore.toFixed(1)}). Difference: {diff.toFixed(1)} points.
               </div>
             );
           }

@@ -32,10 +32,10 @@ interface GradingStats {
 interface EvaluationBatch {
   id: string;
   dataset: string | null;
-  totalCount: number;
-  completedCount: number;
+  total_count: number;
+  completed_count: number;
   status: string;
-  createdAt: string;
+  created_at: string;
 }
 
 export default function GradingDashboardPage() {
@@ -60,8 +60,8 @@ export default function GradingDashboardPage() {
       setIsLoading(true);
       try {
         const [statsRes, batchesRes] = await Promise.all([
-          fetch(`/api/admin/grading/stats?${query}`),
-          fetch('/api/admin/grading?page=1&pageSize=1'),
+          fetch(`/api/admin/grading/stats?${query}`, { cache: 'no-store' }),
+          fetch('/api/admin/grading?page=1&pageSize=1', { cache: 'no-store' }),
         ]);
 
         if (statsRes.ok) {
@@ -164,7 +164,7 @@ export default function GradingDashboardPage() {
               <option value="">All evaluation batches</option>
               {batches.map((b) => (
                 <option key={b.id} value={b.id}>
-                  {new Date(b.createdAt).toLocaleString()} · {b.dataset || 'All'} · {b.status}
+                  {new Date(b.created_at).toLocaleString()} · {b.dataset || 'All'} · {b.status}
                 </option>
               ))}
             </select>

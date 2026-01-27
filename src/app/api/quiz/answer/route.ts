@@ -17,13 +17,13 @@ export async function POST(req: Request) {
     const question = await prisma.question.findUnique({
       where: { id: questionId },
       select: {
-        trapType: true,
-        trapSubtype: true,
+        trap_type: true,
+        trap_subtype: true,
         explanation: true,
-        groundTruth: true,
-        causalStructure: true,
-        keyInsight: true,
-        wiseRefusal: true,
+        ground_truth: true,
+        causal_structure: true,
+        key_insight: true,
+        wise_refusal: true,
         variables: true,
       },
     })
@@ -33,20 +33,20 @@ export async function POST(req: Request) {
     }
 
     // Check if answers are correct
-    const isTypeCorrect = question.trapType === selectedType
-    const isSubtypeCorrect = !selectedSubtype || question.trapSubtype === selectedSubtype
+    const isTypeCorrect = question.trap_type === selectedType
+    const isSubtypeCorrect = !selectedSubtype || question.trap_subtype === selectedSubtype
     const isCorrect = isTypeCorrect && isSubtypeCorrect
 
     // Save the answer
     const answer = await prisma.answer.create({
       data: {
-        sessionId,
-        questionId,
-        selectedType,
-        selectedSubtype,
-        isCorrect,
-        isTypeCorrect,
-        timeTakenMs,
+        session_id: sessionId,
+        question_id: questionId,
+        selected_type: selectedType,
+        selected_subtype: selectedSubtype,
+        is_correct: isCorrect,
+        is_type_correct: isTypeCorrect,
+        time_taken_ms: timeTakenMs,
       },
     })
 
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
     if (isCorrect) {
       await prisma.quizSession.update({
         where: { id: sessionId },
-        data: { correctAnswers: { increment: 1 } },
+        data: { correct_answers: { increment: 1 } },
       })
     }
 
@@ -72,13 +72,13 @@ export async function POST(req: Request) {
       answerId: answer.id,
       isCorrect,
       isTypeCorrect,
-      correctType: question.trapType,
-      correctSubtype: question.trapSubtype,
+      correctType: question.trap_type,
+      correctSubtype: question.trap_subtype,
       explanation: question.explanation,
-      groundTruth: question.groundTruth,
-      causalStructure: question.causalStructure,
-      keyInsight: question.keyInsight,
-      wiseRefusal: question.wiseRefusal,
+      groundTruth: question.ground_truth,
+      causalStructure: question.causal_structure,
+      keyInsight: question.key_insight,
+      wiseRefusal: question.wise_refusal,
       variables,
     })
   } catch (error) {

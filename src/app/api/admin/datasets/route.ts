@@ -6,44 +6,59 @@ export const dynamic = 'force-dynamic';
 // GET: List all datasets with counts
 export async function GET() {
   try {
-    // Datasets exist across legacy Question table and new per-level case tables.
-    const [qAll, qVerified, l1All, l1Verified, l2All, l2Verified, l3All, l3Verified] = await Promise.all([
+    // Check if Prisma client and models are properly initialized
+    if (!prisma) {
+      throw new Error('Prisma client is not initialized');
+    }
+    if (!prisma.question) {
+      throw new Error('Prisma question model is not available. Please run: npx prisma generate');
+    }
+    if (!prisma.t3Case) {
+      throw new Error('Prisma t3Case model is not available. Please run: npx prisma generate');
+    }
+
+    // Datasets exist across legacy Question table and unified T3Case table.
+    // Handle case where T3Case table might not exist yet (migrations not applied)
+    const questionPromises = [
       prisma.question.groupBy({
         by: ['dataset'],
         _count: { id: true },
       }),
       prisma.question.groupBy({
         by: ['dataset'],
-        where: { isVerified: true },
+        where: { is_verified: true },
         _count: { id: true },
       }),
-      prisma.l1Case.groupBy({
+    ];
+
+    const t3CasePromises = [
+      prisma.t3Case.groupBy({
         by: ['dataset'],
         _count: { id: true },
+      }).catch((error: any) => {
+        // If T3Case table doesn't exist, return empty array
+        if (error?.message?.includes('does not exist') || error?.code === 'P2021') {
+          console.warn('T3Case table does not exist yet. Run migrations: npx prisma migrate deploy');
+          return [];
+        }
+        throw error;
       }),
-      prisma.l1Case.groupBy({
+      prisma.t3Case.groupBy({
         by: ['dataset'],
-        where: { isVerified: true },
+        where: { is_verified: true },
         _count: { id: true },
+      }).catch((error: any) => {
+        // If T3Case table doesn't exist, return empty array
+        if (error?.message?.includes('does not exist') || error?.code === 'P2021') {
+          return [];
+        }
+        throw error;
       }),
-      prisma.l2Case.groupBy({
-        by: ['dataset'],
-        _count: { id: true },
-      }),
-      prisma.l2Case.groupBy({
-        by: ['dataset'],
-        where: { isVerified: true },
-        _count: { id: true },
-      }),
-      prisma.l3Case.groupBy({
-        by: ['dataset'],
-        _count: { id: true },
-      }),
-      prisma.l3Case.groupBy({
-        by: ['dataset'],
-        where: { isVerified: true },
-        _count: { id: true },
-      }),
+    ];
+
+    const [qAll, qVerified, t3All, t3Verified] = await Promise.all([
+      ...questionPromises,
+      ...t3CasePromises,
     ]);
 
     const totals = new Map<string, number>();
@@ -59,14 +74,10 @@ export async function GET() {
     };
 
     addCounts(qAll, totals);
-    addCounts(l1All, totals);
-    addCounts(l2All, totals);
-    addCounts(l3All, totals);
+    addCounts(t3All, totals);
 
     addCounts(qVerified, verified);
-    addCounts(l1Verified, verified);
-    addCounts(l2Verified, verified);
-    addCounts(l3Verified, verified);
+    addCounts(t3Verified, verified);
 
     // Union of dataset names across all sources.
     const allNames = Array.from(
@@ -84,8 +95,15 @@ export async function GET() {
     });
   } catch (error) {
     console.error('Error fetching datasets:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return NextResponse.json(
-      { error: 'Failed to fetch datasets' },
+      { 
+        error: 'Failed to fetch datasets',
+        details: errorMessage,
+        hint: errorMessage.includes('groupBy') || errorMessage.includes('not available') 
+          ? 'Prisma client may need to be regenerated. Run: npx prisma generate'
+          : undefined
+      },
       { status: 500 }
     );
   }

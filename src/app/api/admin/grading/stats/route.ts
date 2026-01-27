@@ -28,19 +28,17 @@ export async function GET(req: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const where: any = {};
 
-    if (evaluationBatchId) where.evaluationBatchId = evaluationBatchId;
-    if (caseType === 'legacy') where.questionId = { not: null };
-    if (caseType === 'L1') where.l1CaseId = { not: null };
-    if (caseType === 'L2') where.l2CaseId = { not: null };
-    if (caseType === 'L3') where.l3CaseId = { not: null };
+    if (evaluationBatchId) where.evaluation_batch_id = evaluationBatchId;
+    if (caseType === 'legacy') where.question_id = { not: null };
+    if (caseType === 'L1') where.t3_case_id = { not: null };
+    if (caseType === 'L2') where.t3_case_id = { not: null };
+    if (caseType === 'L3') where.t3_case_id = { not: null };
 
     if (dataset) {
       where.OR = [
-        { evaluationBatch: { is: { dataset } } },
+        { evaluation_batch: { is: { dataset } } },
         { question: { is: { dataset } } },
-        { l1Case: { is: { dataset } } },
-        { l2Case: { is: { dataset } } },
-        { l3Case: { is: { dataset } } },
+        { t3_case: { is: { dataset } } },
       ];
     }
 
@@ -48,11 +46,9 @@ export async function GET(req: NextRequest) {
     const evaluations = await prisma.caseEvaluation.findMany({
       where,
       include: {
-        evaluationBatch: true,
+        evaluation_batch: true,
         question: true,
-        l1Case: true,
-        l2Case: true,
-        l3Case: true,
+        t3_case: true,
       },
     });
 
@@ -60,35 +56,35 @@ export async function GET(req: NextRequest) {
 
     // Verdict breakdown
     const verdictCounts = {
-      APPROVED: evaluations.filter(e => e.overallVerdict === 'APPROVED').length,
-      NEEDS_REVIEW: evaluations.filter(e => e.overallVerdict === 'NEEDS_REVIEW').length,
-      REJECTED: evaluations.filter(e => e.overallVerdict === 'REJECTED').length,
+      APPROVED: evaluations.filter(e => e.overall_verdict === 'APPROVED').length,
+      NEEDS_REVIEW: evaluations.filter(e => e.overall_verdict === 'NEEDS_REVIEW').length,
+      REJECTED: evaluations.filter(e => e.overall_verdict === 'REJECTED').length,
     };
 
     // Priority breakdown
     const priorityCounts = {
-      urgent: evaluations.filter(e => e.priorityLevel === 1).length,
-      normal: evaluations.filter(e => e.priorityLevel === 2).length,
-      minor: evaluations.filter(e => e.priorityLevel === 3).length,
+      urgent: evaluations.filter(e => e.priority_level === 1).length,
+      normal: evaluations.filter(e => e.priority_level === 2).length,
+      minor: evaluations.filter(e => e.priority_level === 3).length,
     };
 
     // Case type breakdown
     const caseTypeCounts = {
-      legacy: evaluations.filter(e => e.questionId).length,
-      L1: evaluations.filter(e => e.l1CaseId).length,
-      L2: evaluations.filter(e => e.l2CaseId).length,
-      L3: evaluations.filter(e => e.l3CaseId).length,
+      legacy: evaluations.filter(e => e.question_id).length,
+      L1: evaluations.filter(e => e.t3_case?.pearl_level === 'L1').length,
+      L2: evaluations.filter(e => e.t3_case?.pearl_level === 'L2').length,
+      L3: evaluations.filter(e => e.t3_case?.pearl_level === 'L3').length,
     };
 
     // Quality flags
     const qualityFlags = {
-      hasAmbiguity: evaluations.filter(e => e.hasAmbiguity).length,
-      hasLogicalIssues: evaluations.filter(e => e.hasLogicalIssues).length,
-      hasDomainErrors: evaluations.filter(e => e.hasDomainErrors).length,
+      hasAmbiguity: evaluations.filter(e => e.has_ambiguity).length,
+      hasLogicalIssues: evaluations.filter(e => e.has_logical_issues).length,
+      hasDomainErrors: evaluations.filter(e => e.has_domain_errors).length,
     };
 
     // Clarity score distribution
-    const clarityScores = evaluations.map(e => e.clarityScore);
+    const clarityScores = evaluations.map(e => e.clarity_score);
     const avgClarity = clarityScores.length > 0
       ? clarityScores.reduce((a, b) => a + b, 0) / clarityScores.length
       : 0;
@@ -103,19 +99,19 @@ export async function GET(req: NextRequest) {
     // Assessment accuracy (CORRECT vs INCORRECT vs UNCERTAIN)
     const assessments = {
       pearlLevel: {
-        CORRECT: evaluations.filter(e => e.pearlLevelAssessment === 'CORRECT').length,
-        INCORRECT: evaluations.filter(e => e.pearlLevelAssessment === 'INCORRECT').length,
-        UNCERTAIN: evaluations.filter(e => e.pearlLevelAssessment === 'UNCERTAIN').length,
+        CORRECT: evaluations.filter(e => e.pearl_level_assessment === 'CORRECT').length,
+        INCORRECT: evaluations.filter(e => e.pearl_level_assessment === 'INCORRECT').length,
+        UNCERTAIN: evaluations.filter(e => e.pearl_level_assessment === 'UNCERTAIN').length,
       },
       trapType: {
-        CORRECT: evaluations.filter(e => e.trapTypeAssessment === 'CORRECT').length,
-        INCORRECT: evaluations.filter(e => e.trapTypeAssessment === 'INCORRECT').length,
-        UNCERTAIN: evaluations.filter(e => e.trapTypeAssessment === 'UNCERTAIN').length,
+        CORRECT: evaluations.filter(e => e.trap_type_assessment === 'CORRECT').length,
+        INCORRECT: evaluations.filter(e => e.trap_type_assessment === 'INCORRECT').length,
+        UNCERTAIN: evaluations.filter(e => e.trap_type_assessment === 'UNCERTAIN').length,
       },
       groundTruth: {
-        CORRECT: evaluations.filter(e => e.groundTruthAssessment === 'CORRECT').length,
-        INCORRECT: evaluations.filter(e => e.groundTruthAssessment === 'INCORRECT').length,
-        UNCERTAIN: evaluations.filter(e => e.groundTruthAssessment === 'UNCERTAIN').length,
+        CORRECT: evaluations.filter(e => e.ground_truth_assessment === 'CORRECT').length,
+        INCORRECT: evaluations.filter(e => e.ground_truth_assessment === 'INCORRECT').length,
+        UNCERTAIN: evaluations.filter(e => e.ground_truth_assessment === 'UNCERTAIN').length,
       },
     };
 
@@ -125,8 +121,8 @@ export async function GET(req: NextRequest) {
     const rubricVersions: Record<string, number> = {};
 
     evaluations.forEach(e => {
-      if (e.rubricScore) {
-        const rubric = safeJsonParse<RubricScore>(e.rubricScore);
+      if (e.rubric_score) {
+        const rubric = safeJsonParse<RubricScore>(e.rubric_score);
         if (rubric?.totalScore !== undefined) {
           rubricScores.push(rubric.totalScore);
         }
@@ -157,11 +153,9 @@ export async function GET(req: NextRequest) {
     // Dataset breakdown
     const datasetCounts: Record<string, number> = {};
     evaluations.forEach(e => {
-      const ds = e.evaluationBatch?.dataset || 
+      const ds = e.evaluation_batch?.dataset || 
                  e.question?.dataset || 
-                 e.l1Case?.dataset || 
-                 e.l2Case?.dataset || 
-                 e.l3Case?.dataset || 
+                 e.t3_case?.dataset || 
                  'unknown';
       datasetCounts[ds] = (datasetCounts[ds] || 0) + 1;
     });
@@ -169,20 +163,20 @@ export async function GET(req: NextRequest) {
     // Time series (by day)
     const timeSeries: Record<string, number> = {};
     evaluations.forEach(e => {
-      const date = new Date(e.createdAt).toISOString().split('T')[0];
+      const date = new Date(e.created_at).toISOString().split('T')[0];
       timeSeries[date] = (timeSeries[date] || 0) + 1;
     });
 
     // Evaluation batch breakdown
     const batchCounts: Record<string, { count: number; dataset: string | null; status: string }> = {};
     evaluations.forEach(e => {
-      if (e.evaluationBatchId) {
-        const batchId = e.evaluationBatchId;
+      if (e.evaluation_batch_id) {
+        const batchId = e.evaluation_batch_id;
         if (!batchCounts[batchId]) {
           batchCounts[batchId] = {
             count: 0,
-            dataset: e.evaluationBatch?.dataset || null,
-            status: e.evaluationBatch?.status || 'unknown',
+            dataset: e.evaluation_batch?.dataset || null,
+            status: e.evaluation_batch?.status || 'unknown',
           };
         }
         batchCounts[batchId].count++;
@@ -212,6 +206,12 @@ export async function GET(req: NextRequest) {
       datasetCounts,
       timeSeries,
       batchCounts,
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
     });
   } catch (error) {
     console.error('Grading stats API error:', error);

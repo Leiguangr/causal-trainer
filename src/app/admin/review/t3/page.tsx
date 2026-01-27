@@ -6,6 +6,8 @@ import { getL1EvidenceByClass, getAllL1EvidenceTypes } from '@/lib/l1-evidence-t
 import { getAllL2TrapTypes, getL2TrapByCode } from '@/lib/l2-trap-taxonomy';
 import { getAllL3Families, getL3FamilyByCode } from '@/lib/l3-family-taxonomy';
 
+// No conversion needed - database returns snake_case directly
+
 type CaseType = 'L1' | 'L2' | 'L3' | 'all';
 
 interface L1Case {
@@ -165,6 +167,118 @@ export default function ReviewT3Page() {
     }
   };
 
+  // Transform unified T3Case schema to display interfaces (using snake_case directly)
+  function transformToDisplayCase(c: any): T3Case {
+    const pearlLevel = c.pearl_level || c._caseType || 'L1';
+    
+    if (pearlLevel === 'L1') {
+      // Extract evidence class and type from trap_type
+      const trapType = c.trap_type || '';
+      let evidenceClass = 'NONE';
+      let evidenceType: string | null = null;
+      
+      if (trapType.match(/^W[0-9]+/)) {
+        evidenceClass = 'WOLF';
+        evidenceType = trapType;
+      } else if (trapType.match(/^S[0-9]+/)) {
+        evidenceClass = 'SHEEP';
+        evidenceType = trapType;
+      } else if (trapType === 'A') {
+        evidenceClass = 'NONE';
+        evidenceType = null;
+      }
+      
+      return {
+        id: c.id,
+        _caseType: 'L1',
+        scenario: c.scenario || '',
+        claim: c.claim || '',
+        groundTruth: c.label || 'AMBIGUOUS',
+        evidenceClass,
+        evidenceType,
+        whyFlawedOrValid: c.gold_rationale || '',
+        domain: c.domain || null,
+        subdomain: c.subdomain || null,
+        difficulty: c.difficulty || 'medium',
+        variables: c.variables || null,
+        causalStructure: c.causal_structure || null,
+        dataset: c.dataset || 'default',
+        author: c.author || null,
+        sourceCase: c.source_case || null,
+        isVerified: c.is_verified || false,
+        createdAt: c.created_at ? new Date(c.created_at) : new Date(),
+        updatedAt: c.updated_at ? new Date(c.updated_at) : new Date(),
+      } as L1Case;
+    } else if (pearlLevel === 'L2') {
+      // Parse hidden_timestamp and conditional_answers
+      let hiddenQuestion = '';
+      let answerIfA = '';
+      let answerIfB = '';
+      
+      if (c.hidden_timestamp) {
+        try {
+          const parsed = typeof c.hidden_timestamp === 'string' ? JSON.parse(c.hidden_timestamp) : c.hidden_timestamp;
+          hiddenQuestion = typeof parsed === 'string' ? parsed : parsed.question || parsed || '';
+        } catch {
+          hiddenQuestion = c.hidden_timestamp || '';
+        }
+      }
+      
+      if (c.conditional_answers) {
+        try {
+          const parsed = typeof c.conditional_answers === 'string' ? JSON.parse(c.conditional_answers) : c.conditional_answers;
+          answerIfA = parsed.answer_if_condition_1 || parsed.answerIfA || parsed.answer_if_A || '';
+          answerIfB = parsed.answer_if_condition_2 || parsed.answerIfB || parsed.answer_if_B || '';
+        } catch {
+          // If not JSON, treat as string
+        }
+      }
+      
+      return {
+        id: c.id,
+        _caseType: 'L2',
+        scenario: c.scenario || '',
+        variables: c.variables || null,
+        trapType: c.trap_type || '',
+        difficulty: c.difficulty || 'medium',
+        causalStructure: c.causal_structure || null,
+        hiddenQuestion,
+        answerIfA,
+        answerIfB,
+        wiseRefusal: c.wise_refusal || '',
+        dataset: c.dataset || 'default',
+        author: c.author || null,
+        sourceCase: c.source_case || null,
+        isVerified: c.is_verified || false,
+        createdAt: c.created_at ? new Date(c.created_at) : new Date(),
+        updatedAt: c.updated_at ? new Date(c.updated_at) : new Date(),
+      } as L2Case;
+    } else {
+      // L3
+      return {
+        id: c.id,
+        _caseType: 'L3',
+        caseId: c.case_id || null,
+        domain: c.domain || null,
+        family: c.trap_type || '', // L3 family is stored in trap_type
+        difficulty: c.difficulty || 'medium',
+        scenario: c.scenario || '',
+        counterfactualClaim: c.counterfactual_claim || '',
+        variables: c.variables || '',
+        invariants: c.invariants || '',
+        groundTruth: c.label || 'CONDITIONAL',
+        justification: c.gold_rationale || '',
+        wiseResponse: c.wise_refusal || '',
+        dataset: c.dataset || 'default',
+        author: c.author || null,
+        sourceCase: c.source_case || null,
+        isVerified: c.is_verified || false,
+        createdAt: c.created_at ? new Date(c.created_at) : new Date(),
+        updatedAt: c.updated_at ? new Date(c.updated_at) : new Date(),
+      } as L3Case;
+    }
+  }
+
   const fetchCases = async () => {
     setIsLoading(true);
     try {
@@ -182,7 +296,9 @@ export default function ReviewT3Page() {
       const res = await fetch(`/api/admin/t3-cases/unverified?${params}`);
       if (res.ok) {
         const data = await res.json();
-        setCases(data.cases || []);
+        // Transform unified schema to display interfaces
+        const transformedCases = (data.cases || []).map((c: any) => transformToDisplayCase(c));
+        setCases(transformedCases);
         setTotal(data.total);
         setAvailableFilters(data.filters || { domains: [], evidenceClasses: [], trapTypes: [], families: [] });
         setCurrentIndex(0);
@@ -194,21 +310,105 @@ export default function ReviewT3Page() {
     }
   };
 
+  // No conversion needed - formData already uses snake_case compatible field names
+
+  // Transform display case back to unified T3Case schema (snake_case)
+  function transformToUnifiedSchema(displayCase: Partial<T3Case>, approve: boolean): any {
+    const caseType = displayCase._caseType;
+    
+    if (caseType === 'L1') {
+      const l1 = displayCase as Partial<L1Case>;
+      // Map evidenceClass/evidenceType back to trap_type
+      let trapType = l1.evidenceType || '';
+      if (l1.evidenceClass === 'NONE' && !trapType) {
+        trapType = 'A';
+      }
+      
+      return {
+        scenario: l1.scenario,
+        claim: l1.claim,
+        label: l1.groundTruth,
+        trap_type: trapType,
+        gold_rationale: l1.whyFlawedOrValid,
+        domain: l1.domain,
+        subdomain: l1.subdomain,
+        difficulty: l1.difficulty,
+        variables: l1.variables,
+        causal_structure: l1.causalStructure,
+        author: globalAuthor || l1.author,
+        is_verified: approve,
+      };
+    } else if (caseType === 'L2') {
+      const l2 = displayCase as Partial<L2Case>;
+      
+      // Transform hiddenQuestion to hidden_timestamp
+      let hidden_timestamp: string | null = null;
+      if (l2.hiddenQuestion) {
+        hidden_timestamp = l2.hiddenQuestion;
+      }
+      
+      // Transform answerIfA/answerIfB to conditional_answers JSON
+      let conditional_answers: string | null = null;
+      if (l2.answerIfA || l2.answerIfB) {
+        conditional_answers = JSON.stringify({
+          answer_if_condition_1: l2.answerIfA || '',
+          answer_if_condition_2: l2.answerIfB || '',
+        });
+      }
+      
+      return {
+        scenario: l2.scenario,
+        claim: l2.claim || null,
+        label: 'NO', // L2 always NO
+        is_ambiguous: true,
+        trap_type: l2.trapType,
+        hidden_timestamp,
+        conditional_answers,
+        wise_refusal: l2.wiseRefusal,
+        difficulty: l2.difficulty,
+        variables: l2.variables,
+        causal_structure: l2.causalStructure,
+        author: globalAuthor || l2.author,
+        is_verified: approve,
+      };
+    } else {
+      // L3
+      const l3 = displayCase as Partial<L3Case>;
+      
+      return {
+        scenario: l3.scenario,
+        counterfactual_claim: l3.counterfactualClaim,
+        label: l3.groundTruth,
+        is_ambiguous: l3.groundTruth === 'CONDITIONAL',
+        trap_type: l3.family, // L3 family is stored in trap_type
+        gold_rationale: l3.justification,
+        wise_refusal: l3.wiseResponse,
+        invariants: l3.invariants,
+        domain: l3.domain,
+        case_id: l3.caseId,
+        difficulty: l3.difficulty,
+        variables: l3.variables,
+        causal_structure: l3.causalStructure,
+        author: globalAuthor || l3.author,
+        is_verified: approve,
+      };
+    }
+  }
+
   const handleSave = async (approve: boolean = false) => {
     if (!formData.id) return;
-
+    
     setIsSaving(true);
     try {
-      const authorToUse = globalAuthor;
+      // Transform display case to unified schema (already in snake_case)
+      const unifiedPayload = transformToUnifiedSchema(formData, approve);
 
       const res = await fetch(`/api/admin/t3-cases/${formData.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...formData,
-          _caseType: formData._caseType,
-          author: authorToUse,
-          isVerified: approve,
+          ...unifiedPayload,
+          id: formData.id,
         }),
       });
 
@@ -1072,10 +1272,105 @@ export default function ReviewT3Page() {
 
             <div className="flex gap-3">
               <button
-                onClick={() => {
-                  const jsonData = JSON.stringify(formData, null, 2);
-                  navigator.clipboard.writeText(jsonData);
-                  alert('JSON copied to clipboard!');
+                onClick={async () => {
+                  if (!formData.id) {
+                    alert('No case selected');
+                    return;
+                  }
+                  try {
+                    // Fetch the case directly from the database to get the exact snake_case format
+                    const res = await fetch(`/api/admin/t3-cases/${formData.id}`);
+                    if (res.ok) {
+                      const data = await res.json();
+                      // Format the case data to match export format (snake_case)
+                      const caseData = data.case;
+                      
+                      // Parse JSON strings to objects for better readability
+                      let variables = caseData.variables;
+                      if (typeof variables === 'string') {
+                        try {
+                          variables = JSON.parse(variables);
+                        } catch {
+                          // Keep as string if parsing fails
+                        }
+                      }
+                      
+                      let conditional_answers = caseData.conditional_answers;
+                      if (typeof conditional_answers === 'string') {
+                        try {
+                          conditional_answers = JSON.parse(conditional_answers);
+                        } catch {
+                          // Keep as string if parsing fails
+                        }
+                      }
+                      
+                      let hidden_timestamp = caseData.hidden_timestamp;
+                      if (typeof hidden_timestamp === 'string' && hidden_timestamp.startsWith('{')) {
+                        try {
+                          hidden_timestamp = JSON.parse(hidden_timestamp);
+                        } catch {
+                          // Keep as string if parsing fails
+                        }
+                      }
+                      
+                      let invariants = caseData.invariants;
+                      if (typeof invariants === 'string') {
+                        try {
+                          invariants = JSON.parse(invariants);
+                        } catch {
+                          // Keep as string if parsing fails
+                        }
+                      }
+                      
+                      // Build export format matching the database schema (snake_case)
+                      const exportData = {
+                        id: caseData.id,
+                        case_id: caseData.case_id || null,
+                        bucket: caseData.bucket || null,
+                        pearl_level: caseData.pearl_level,
+                        domain: caseData.domain || null,
+                        subdomain: caseData.subdomain || null,
+                        scenario: caseData.scenario,
+                        claim: caseData.claim || null,
+                        counterfactual_claim: caseData.counterfactual_claim || null,
+                        label: caseData.label,
+                        is_ambiguous: caseData.is_ambiguous,
+                        variables: variables,
+                        trap: {
+                          type: caseData.trap_type,
+                          type_name: caseData.trap_type_name || null,
+                          subtype: caseData.trap_subtype || null,
+                          subtype_name: caseData.trap_subtype_name || null,
+                        },
+                        difficulty: caseData.difficulty,
+                        causal_structure: caseData.causal_structure || null,
+                        key_insight: caseData.key_insight || null,
+                        hidden_timestamp: hidden_timestamp || null,
+                        conditional_answers: conditional_answers || null,
+                        wise_refusal: caseData.wise_refusal || null,
+                        gold_rationale: caseData.gold_rationale || null,
+                        invariants: invariants || null,
+                        initial_author: caseData.initial_author || null,
+                        validator: caseData.validator || null,
+                        final_score: caseData.final_score || null,
+                        dataset: caseData.dataset,
+                        author: caseData.author || null,
+                        source_case: caseData.source_case || null,
+                        is_verified: caseData.is_verified,
+                        created_at: caseData.created_at,
+                        updated_at: caseData.updated_at,
+                      };
+                      
+                      const jsonData = JSON.stringify(exportData, null, 2);
+                      navigator.clipboard.writeText(jsonData);
+                      alert('JSON copied to clipboard! (snake_case format)');
+                    } else {
+                      alert('Failed to fetch case data');
+                    }
+                  } catch (error) {
+                    console.error('Error copying JSON:', error);
+                    alert('Error copying JSON to clipboard');
+                  }
                 }}
                 className="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700"
               >

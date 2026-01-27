@@ -15,193 +15,111 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '500');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    const cases: any[] = [];
-    let total = 0;
+    // Build unified T3Case where clause
+    const where: any = { is_verified: false };
+    if (dataset && dataset !== 'all') {
+      where.dataset = dataset;
+    }
+    if (domain && domain !== 'all') {
+      where.domain = domain;
+    }
+    if (caseType !== 'all') {
+      where.pearl_level = caseType;
+    }
+    // Map old filter names to new unified schema
+    if (evidenceClass && evidenceClass !== 'all') {
+      // For L1, evidenceClass maps to trap_type (W1-W10 for WOLF, S1-S8 for SHEEP)
+      // This is a simplified mapping - may need refinement
+      where.pearl_level = 'L1';
+    }
+    if (trapType && trapType !== 'all') {
+      where.trap_type = trapType;
+    }
+    if (family && family !== 'all') {
+      where.trap_type = family; // L3 family is stored in trap_type
+      where.pearl_level = 'L3';
+    }
+    if (groundTruth && groundTruth !== 'all') {
+      where.label = groundTruth; // Map groundTruth to label
+    }
 
     // Determine sort order
-    let orderBy: any = { createdAt: 'desc' };
+    let orderBy: any = { created_at: 'desc' };
     let useRandomSort = false;
     switch (sortBy) {
       case 'oldest':
-        orderBy = { createdAt: 'asc' };
+        orderBy = { created_at: 'asc' };
         break;
       case 'domain':
         orderBy = { domain: 'asc' };
         break;
       case 'groundTruth':
-        orderBy = { groundTruth: 'asc' };
+        orderBy = { label: 'asc' }; // Use label instead of groundTruth
         break;
       case 'random':
         useRandomSort = true;
         break;
     }
 
-    // Fetch L1Case records
-    if (caseType === 'all' || caseType === 'L1') {
-      const l1Where: any = { isVerified: false };
-      if (dataset && dataset !== 'all') {
-        l1Where.dataset = dataset;
-      }
-      if (domain && domain !== 'all') {
-        l1Where.domain = domain;
-      }
-      if (evidenceClass && evidenceClass !== 'all') {
-        l1Where.evidenceClass = evidenceClass;
-      }
-      if (groundTruth && groundTruth !== 'all') {
-        l1Where.groundTruth = groundTruth;
-      }
+    const total = await prisma.t3Case.count({ where });
 
-      const l1Count = await prisma.l1Case.count({ where: l1Where });
-      total += l1Count;
-
-      let l1Cases;
-      if (useRandomSort) {
-        const allL1 = await prisma.l1Case.findMany({ where: l1Where });
-        for (let i = allL1.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [allL1[i], allL1[j]] = [allL1[j], allL1[i]];
-        }
-        l1Cases = allL1.slice(offset, offset + Math.min(limit, 500));
-      } else {
-        const l1OrderBy: any = {};
-        if (orderBy.createdAt) l1OrderBy.createdAt = orderBy.createdAt;
-        if (orderBy.domain) l1OrderBy.domain = orderBy.domain;
-        if (orderBy.groundTruth) l1OrderBy.groundTruth = orderBy.groundTruth;
-
-        l1Cases = await prisma.l1Case.findMany({
-          where: l1Where,
-          orderBy: Object.keys(l1OrderBy).length > 0 ? l1OrderBy : { createdAt: 'desc' },
-          take: Math.min(limit, 500),
-          skip: offset,
-        });
+    let t3Cases;
+    if (useRandomSort) {
+      const allT3 = await prisma.t3Case.findMany({ where });
+      for (let i = allT3.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [allT3[i], allT3[j]] = [allT3[j], allT3[i]];
       }
-
-      cases.push(...l1Cases.map(c => ({
-        ...c,
-        _caseType: 'L1' as const,
-      })));
+      t3Cases = allT3.slice(offset, offset + Math.min(limit, 500));
+    } else {
+      t3Cases = await prisma.t3Case.findMany({
+        where,
+        orderBy,
+        take: Math.min(limit, 500),
+        skip: offset,
+      });
     }
 
-    // Fetch L2Case records
-    if (caseType === 'all' || caseType === 'L2') {
-      const l2Where: any = { isVerified: false };
-      if (dataset && dataset !== 'all') {
-        l2Where.dataset = dataset;
-      }
-      if (trapType && trapType !== 'all') {
-        l2Where.trapType = trapType;
-      }
+    // Cases are already in snake_case from database
+    const cases = t3Cases.map(c => ({
+      ...c,
+      _case_type: c.pearl_level as 'L1' | 'L2' | 'L3', // Keep _caseType for backward compatibility
+      _caseType: c.pearl_level as 'L1' | 'L2' | 'L3', // Also keep camelCase version
+    }));
 
-      const l2Count = await prisma.l2Case.count({ where: l2Where });
-      total += l2Count;
-
-      let l2Cases;
-      if (useRandomSort) {
-        const allL2 = await prisma.l2Case.findMany({ where: l2Where });
-        for (let i = allL2.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [allL2[i], allL2[j]] = [allL2[j], allL2[i]];
-        }
-        l2Cases = allL2.slice(offset, offset + Math.min(limit, 500));
-      } else {
-        const l2OrderBy: any = {};
-        if (orderBy.createdAt) l2OrderBy.createdAt = orderBy.createdAt;
-
-        l2Cases = await prisma.l2Case.findMany({
-          where: l2Where,
-          orderBy: l2OrderBy.createdAt ? l2OrderBy : { createdAt: 'desc' },
-          take: Math.min(limit, 500),
-          skip: offset,
-        });
-      }
-
-      cases.push(...l2Cases.map(c => ({
-        ...c,
-        _caseType: 'L2' as const,
-      })));
-    }
-
-    // Fetch L3Case records
-    if (caseType === 'all' || caseType === 'L3') {
-      const l3Where: any = { isVerified: false };
-      if (dataset && dataset !== 'all') {
-        l3Where.dataset = dataset;
-      }
-      if (domain && domain !== 'all') {
-        l3Where.domain = domain;
-      }
-      if (family && family !== 'all') {
-        l3Where.family = family;
-      }
-      if (groundTruth && groundTruth !== 'all') {
-        l3Where.groundTruth = groundTruth;
-      }
-
-      const l3Count = await prisma.l3Case.count({ where: l3Where });
-      total += l3Count;
-
-      let l3Cases;
-      if (useRandomSort) {
-        const allL3 = await prisma.l3Case.findMany({ where: l3Where });
-        for (let i = allL3.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [allL3[i], allL3[j]] = [allL3[j], allL3[i]];
-        }
-        l3Cases = allL3.slice(offset, offset + Math.min(limit, 500));
-      } else {
-        const l3OrderBy: any = {};
-        if (orderBy.createdAt) l3OrderBy.createdAt = orderBy.createdAt;
-        if (orderBy.domain) l3OrderBy.domain = orderBy.domain;
-        if (orderBy.groundTruth) l3OrderBy.groundTruth = orderBy.groundTruth;
-
-        l3Cases = await prisma.l3Case.findMany({
-          where: l3Where,
-          orderBy: Object.keys(l3OrderBy).length > 0 ? l3OrderBy : { createdAt: 'desc' },
-          take: Math.min(limit, 500),
-          skip: offset,
-        });
-      }
-
-      cases.push(...l3Cases.map(c => ({
-        ...c,
-        _caseType: 'L3' as const,
-      })));
-    }
-
-    // Get distinct values for filter dropdowns
-    const [l1Domains, l1EvidenceClasses, l2TrapTypes, l3Domains, l3Families] = await Promise.all([
-      prisma.l1Case.findMany({
-        where: { isVerified: false },
+    // Get distinct values for filter dropdowns from unified T3Case
+    const [domains, trapTypes, labels] = await Promise.all([
+      prisma.t3Case.findMany({
+        where: { is_verified: false },
         select: { domain: true },
         distinct: ['domain'],
       }),
-      prisma.l1Case.findMany({
-        where: { isVerified: false },
-        select: { evidenceClass: true },
-        distinct: ['evidenceClass'],
+      prisma.t3Case.findMany({
+        where: { is_verified: false },
+        select: { trap_type: true, pearl_level: true },
+        distinct: ['trap_type'],
       }),
-      prisma.l2Case.findMany({
-        where: { isVerified: false },
-        select: { trapType: true },
-        distinct: ['trapType'],
-      }),
-      prisma.l3Case.findMany({
-        where: { isVerified: false },
-        select: { domain: true },
-        distinct: ['domain'],
-      }),
-      prisma.l3Case.findMany({
-        where: { isVerified: false },
-        select: { family: true },
-        distinct: ['family'],
+      prisma.t3Case.findMany({
+        where: { is_verified: false },
+        select: { label: true },
+        distinct: ['label'],
       }),
     ]);
 
-    const allDomains = new Set([
-      ...l1Domains.map(d => d.domain).filter(Boolean),
-      ...l3Domains.map(d => d.domain).filter(Boolean),
-    ]);
+    // Separate trap types by level for backward compatibility
+    const l1TrapTypes = trapTypes.filter(t => t.pearl_level === 'L1').map(t => t.trap_type).filter(Boolean);
+    const l2TrapTypes = trapTypes.filter(t => t.pearl_level === 'L2').map(t => t.trap_type).filter(Boolean);
+    const l3Families = trapTypes.filter(t => t.pearl_level === 'L3').map(t => t.trap_type).filter(Boolean);
+
+    // Extract evidence classes from L1 trap types (W1-W10 = WOLF, S1-S8 = SHEEP)
+    const evidenceClasses = new Set<string>();
+    l1TrapTypes.forEach(tt => {
+      if (tt.match(/^W[0-9]+/)) evidenceClasses.add('WOLF');
+      else if (tt.match(/^S[0-9]+/)) evidenceClasses.add('SHEEP');
+      else if (tt === 'A') evidenceClasses.add('NONE');
+    });
+
+    const allDomains = new Set(domains.map(d => d.domain).filter(Boolean));
 
     return NextResponse.json({
       cases,
@@ -210,9 +128,9 @@ export async function GET(req: NextRequest) {
       limit,
       filters: {
         domains: Array.from(allDomains).sort(),
-        evidenceClasses: Array.from(new Set(l1EvidenceClasses.map(e => e.evidenceClass).filter(Boolean))).sort(),
-        trapTypes: Array.from(new Set(l2TrapTypes.map(t => t.trapType).filter(Boolean))).sort(),
-        families: Array.from(new Set(l3Families.map(f => f.family).filter(Boolean))).sort(),
+        evidenceClasses: Array.from(evidenceClasses).sort(),
+        trapTypes: l2TrapTypes.sort(),
+        families: l3Families.sort(),
       },
     });
   } catch (error) {

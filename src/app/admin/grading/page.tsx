@@ -91,41 +91,22 @@ function getCaseFromEvaluation(e: CaseEvaluation): AnyCase {
     return {
       kind: 'legacy',
       id: e.question.id,
-      sourceCase: e.question.sourceCase ?? null,
-      pearlLevel: e.question.pearlLevel ?? null,
-      trapType: e.question.trapType ?? null,
-      groundTruth: e.question.groundTruth ?? null,
+      sourceCase: e.question.source_case ?? null,
+      pearlLevel: e.question.pearl_level ?? null,
+      trapType: e.question.trap_type ?? null,
+      groundTruth: e.question.ground_truth ?? null,
       scenario: e.question.scenario ?? null,
       dataset: e.question.dataset ?? null,
     };
   }
-  if (e.l1Case) {
+  if (e.t3_case) {
     return {
-      kind: 'L1',
-      id: e.l1Case.id,
-      sourceCase: e.l1Case.sourceCase ?? null,
-      groundTruth: e.l1Case.groundTruth ?? null,
-      scenario: e.l1Case.scenario ?? null,
-      dataset: e.l1Case.dataset ?? null,
-    };
-  }
-  if (e.l2Case) {
-    return {
-      kind: 'L2',
-      id: e.l2Case.id,
-      sourceCase: e.l2Case.sourceCase ?? null,
-      scenario: e.l2Case.scenario ?? null,
-      dataset: e.l2Case.dataset ?? null,
-    };
-  }
-  if (e.l3Case) {
-    return {
-      kind: 'L3',
-      id: e.l3Case.id,
-      sourceCase: e.l3Case.sourceCase ?? null,
-      groundTruth: e.l3Case.groundTruth ?? null,
-      scenario: e.l3Case.scenario ?? null,
-      dataset: e.l3Case.dataset ?? null,
+      kind: e.t3_case.pearl_level as 'L1' | 'L2' | 'L3',
+      id: e.t3_case.id,
+      sourceCase: e.t3_case.source_case ?? null,
+      groundTruth: e.t3_case.label ?? null,
+      scenario: e.t3_case.scenario ?? null,
+      dataset: e.t3_case.dataset ?? null,
     };
   }
   // fallback
@@ -160,7 +141,7 @@ export default function GradingPage() {
     const run = async () => {
       setIsLoading(true);
       try {
-        const res = await fetch(`/api/admin/grading?${query}`);
+        const res = await fetch(`/api/admin/grading?${query}`, { cache: 'no-store' });
         const json = (await res.json()) as GradingResponse;
         if (!res.ok) throw new Error((json as any).error || 'Failed to load');
         setData(json);
@@ -271,7 +252,7 @@ export default function GradingPage() {
               <option value="">All evaluation batches</option>
               {batches.map((b) => (
                 <option key={b.id} value={b.id}>
-                  {new Date(b.createdAt).toLocaleString()} · {b.dataset || 'All'} · {b.completedCount}/{b.totalCount} · {b.status}
+                  {new Date(b.created_at).toLocaleString()} · {b.dataset || 'All'} · {b.completed_count}/{b.total_count} · {b.status}
                 </option>
               ))}
             </select>
@@ -310,43 +291,43 @@ export default function GradingPage() {
           <div className="space-y-4">
             {evaluations.map((e) => {
               const c = getCaseFromEvaluation(e);
-              const rubric = summarizeRubric(e.rubricScore);
+              const rubric = summarizeRubric(e.rubric_score);
               const title =
                 c.kind === 'legacy'
-                  ? `${c.sourceCase || e.questionId || 'legacy'} (${c.pearlLevel || '—'} / ${c.trapType || '—'})`
+                  ? `${c.sourceCase || e.question_id || 'legacy'} (${c.pearlLevel || '—'} / ${c.trapType || '—'})`
                   : `${c.sourceCase || (c as any).id} (${c.kind})`;
 
               const scenarioPreview = (c.scenario || '').slice(0, 220);
 
               return (
-                <div key={e.id} className={`border rounded-lg p-4 ${getVerdictColor(e.overallVerdict)}`}>
+                <div key={e.id} className={`border rounded-lg p-4 ${getVerdictColor(e.overall_verdict)}`}>
                   <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-2">
                     <div>
                       <div className="font-semibold text-sm">{title}</div>
                       <div className="text-xs text-gray-600 mt-1">
                         Batch:{' '}
                         <span className="font-mono">
-                          {e.evaluationBatchId ? e.evaluationBatchId.slice(0, 8) : '—'}
+                          {e.evaluation_batch_id ? e.evaluation_batch_id.slice(0, 8) : '—'}
                         </span>{' '}
-                        · Created {new Date(e.createdAt).toLocaleString()}
+                        · Created {new Date(e.created_at).toLocaleString()}
                       </div>
                     </div>
                     <div className="flex gap-2 items-center">
-                      <span className="px-2 py-1 rounded text-xs font-bold border">{e.overallVerdict}</span>
-                      <span className="text-xs">Priority: {getPriorityLabel(e.priorityLevel)}</span>
+                      <span className="px-2 py-1 rounded text-xs font-bold border">{e.overall_verdict}</span>
+                      <span className="text-xs">Priority: {getPriorityLabel(e.priority_level)}</span>
                     </div>
                   </div>
 
                   {scenarioPreview && <p className="text-sm text-gray-700 mt-2">{scenarioPreview}…</p>}
 
                   <div className="flex flex-wrap gap-3 mt-2 text-xs">
-                    <span>Pearl: {e.pearlLevelAssessment || '—'}</span>
-                    <span>Trap: {e.trapTypeAssessment || '—'}</span>
-                    <span>GT: {e.groundTruthAssessment || '—'}</span>
-                    <span>Clarity: {e.clarityScore}</span>
-                    {e.hasAmbiguity && <span className="text-yellow-700">Ambiguity</span>}
-                    {e.hasLogicalIssues && <span className="text-red-700">Logic</span>}
-                    {e.hasDomainErrors && <span className="text-red-700">Domain</span>}
+                    <span>Pearl: {e.pearl_level_assessment || '—'}</span>
+                    <span>Trap: {e.trap_type_assessment || '—'}</span>
+                    <span>GT: {e.ground_truth_assessment || '—'}</span>
+                    <span>Clarity: {e.clarity_score}</span>
+                    {e.has_ambiguity && <span className="text-yellow-700">Ambiguity</span>}
+                    {e.has_logical_issues && <span className="text-red-700">Logic</span>}
+                    {e.has_domain_errors && <span className="text-red-700">Domain</span>}
                     {typeof rubric.total === 'number' && (
                       <span>
                         Rubric: {rubric.total}
@@ -356,27 +337,27 @@ export default function GradingPage() {
                     )}
                   </div>
 
-                  {(e.structuralNotes || e.suggestedCorrections) && (
+                  {(e.structural_notes || e.suggested_corrections) && (
                     <details className="mt-3">
                       <summary className="text-xs cursor-pointer">Details</summary>
                       <div className="mt-2 text-sm text-gray-800 space-y-2">
-                        {e.structuralNotes && (
+                        {e.structural_notes && (
                           <div>
                             <div className="font-semibold text-xs text-gray-700">Notes</div>
-                            <div className="whitespace-pre-wrap">{e.structuralNotes}</div>
+                            <div className="whitespace-pre-wrap">{e.structural_notes}</div>
                           </div>
                         )}
-                        {e.suggestedCorrections && (
+                        {e.suggested_corrections && (
                           <div>
                             <div className="font-semibold text-xs text-gray-700">Suggested corrections</div>
-                            <div className="whitespace-pre-wrap">{e.suggestedCorrections}</div>
+                            <div className="whitespace-pre-wrap">{e.suggested_corrections}</div>
                           </div>
                         )}
-                        {e.rubricScore && (
+                        {e.rubric_score && (
                           <div>
                             <div className="font-semibold text-xs text-gray-700">Rubric JSON</div>
                             <pre className="whitespace-pre-wrap font-mono text-xs bg-white/60 border rounded p-2 overflow-x-auto">
-                              {e.rubricScore}
+                              {e.rubric_score}
                             </pre>
                           </div>
                         )}

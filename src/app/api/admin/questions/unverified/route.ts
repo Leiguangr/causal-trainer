@@ -15,41 +15,41 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '500');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    const where: any = { isVerified: false };
+    const where: any = { is_verified: false };
     if (pearlLevel && pearlLevel !== 'all') {
-      where.pearlLevel = pearlLevel;
+      where.pearl_level = pearlLevel;
     }
     if (domain && domain !== 'all') {
       where.domain = domain;
     }
     if (groundTruth && groundTruth !== 'all') {
-      where.groundTruth = groundTruth;
+      where.ground_truth = groundTruth;
     }
     if (trapType && trapType !== 'all') {
-      where.trapType = trapType;
+      where.trap_type = trapType;
     }
     if (dataset && dataset !== 'all') {
       where.dataset = dataset;
     }
 
     // Determine sort order
-    let orderBy: any = { createdAt: 'desc' };
+    let orderBy: any = { created_at: 'desc' };
     let useRandomSort = false;
     switch (sortBy) {
       case 'oldest':
-        orderBy = { createdAt: 'asc' };
+        orderBy = { created_at: 'asc' };
         break;
       case 'level-asc':
-        orderBy = { pearlLevel: 'asc' };
+        orderBy = { pearl_level: 'asc' };
         break;
       case 'level-desc':
-        orderBy = { pearlLevel: 'desc' };
+        orderBy = { pearl_level: 'desc' };
         break;
       case 'domain':
         orderBy = { domain: 'asc' };
         break;
       case 'groundTruth':
-        orderBy = { groundTruth: 'asc' };
+        orderBy = { ground_truth: 'asc' };
         break;
       case 'random':
         useRandomSort = true;
@@ -83,19 +83,19 @@ export async function GET(req: NextRequest) {
     // Get distinct values for filter dropdowns
     const [distinctDomains, distinctTrapTypes] = await Promise.all([
       prisma.question.findMany({
-        where: { isVerified: false },
+        where: { is_verified: false },
         select: { domain: true },
         distinct: ['domain'],
       }),
       prisma.question.findMany({
-        where: { isVerified: false },
-        select: { trapType: true },
-        distinct: ['trapType'],
+        where: { is_verified: false },
+        select: { trap_type: true },
+        distinct: ['trap_type'],
       }),
     ]);
 
     const allTrapTypes = new Set(
-      distinctTrapTypes.map(t => t.trapType).filter(Boolean)
+      distinctTrapTypes.map(t => t.trap_type).filter(Boolean)
     );
     
     const allDomains = new Set(

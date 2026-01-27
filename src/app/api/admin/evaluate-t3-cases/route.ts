@@ -22,12 +22,10 @@ export async function GET(req: NextRequest) {
       include: {
         evaluations: {
           include: {
-            l1Case: true,
-            l2Case: true,
-            l3Case: true,
+            t3_case: true,
             question: true,
           },
-          orderBy: { priorityLevel: 'asc' },
+          orderBy: { priority_level: 'asc' },
         },
       },
     });
@@ -36,15 +34,27 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Batch not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ batch });
+    return NextResponse.json({ batch }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
+    });
   }
 
   const batches = await prisma.evaluationBatch.findMany({
-    orderBy: { createdAt: 'desc' },
+    orderBy: { created_at: 'desc' },
     take: 20,
   });
 
-  return NextResponse.json({ batches });
+  return NextResponse.json({ batches }, {
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    },
+  });
 }
 
 // POST - Start evaluation for T3 case tables (L1Case/L2Case/L3Case)
@@ -68,45 +78,43 @@ export async function POST(req: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const baseWhere: any = {};
     if (dataset) baseWhere.dataset = dataset;
-    if (generationBatchId) baseWhere.generationBatchId = generationBatchId;
-    if (unverifiedOnly) baseWhere.isVerified = false;
+    if (generationBatchId) baseWhere.generation_batch_id = generationBatchId;
+    if (unverifiedOnly) baseWhere.is_verified = false;
 
+    // Query unified T3Case table by pearl_level
     if (caseType === 'L1' || caseType === 'all') {
-      const rows = await prisma.l1Case.findMany({ where: baseWhere, select: { id: true } });
+      const rows = await prisma.t3Case.findMany({
+        where: { ...baseWhere, pearl_level: 'L1' },
+        select: { id: true },
+      });
       idsByType.L1 = rows.map(r => r.id);
     }
     if (caseType === 'L2' || caseType === 'all') {
-      const rows = await prisma.l2Case.findMany({ where: baseWhere, select: { id: true } });
+      const rows = await prisma.t3Case.findMany({
+        where: { ...baseWhere, pearl_level: 'L2' },
+        select: { id: true },
+      });
       idsByType.L2 = rows.map(r => r.id);
     }
     if (caseType === 'L3' || caseType === 'all') {
-      const rows = await prisma.l3Case.findMany({ where: baseWhere, select: { id: true } });
+      const rows = await prisma.t3Case.findMany({
+        where: { ...baseWhere, pearl_level: 'L3' },
+        select: { id: true },
+      });
       idsByType.L3 = rows.map(r => r.id);
     }
 
     if (skipAlreadyEvaluated) {
-      if (idsByType.L1.length > 0) {
+      // Filter out cases that already have evaluations using unified t3_case_id
+      const allIds = [...idsByType.L1, ...idsByType.L2, ...idsByType.L3];
+      if (allIds.length > 0) {
         const existing = await prisma.caseEvaluation.findMany({
-          where: { l1CaseId: { in: idsByType.L1 } },
-          select: { l1CaseId: true },
+          where: { t3_case_id: { in: allIds } },
+          select: { t3_case_id: true },
         });
-        const done = new Set(existing.map(e => e.l1CaseId).filter(Boolean) as string[]);
+        const done = new Set(existing.map(e => e.t3_case_id).filter(Boolean) as string[]);
         idsByType.L1 = idsByType.L1.filter(id => !done.has(id));
-      }
-      if (idsByType.L2.length > 0) {
-        const existing = await prisma.caseEvaluation.findMany({
-          where: { l2CaseId: { in: idsByType.L2 } },
-          select: { l2CaseId: true },
-        });
-        const done = new Set(existing.map(e => e.l2CaseId).filter(Boolean) as string[]);
         idsByType.L2 = idsByType.L2.filter(id => !done.has(id));
-      }
-      if (idsByType.L3.length > 0) {
-        const existing = await prisma.caseEvaluation.findMany({
-          where: { l3CaseId: { in: idsByType.L3 } },
-          select: { l3CaseId: true },
-        });
-        const done = new Set(existing.map(e => e.l3CaseId).filter(Boolean) as string[]);
         idsByType.L3 = idsByType.L3.filter(id => !done.has(id));
       }
     }
@@ -122,14 +130,14 @@ export async function POST(req: NextRequest) {
     const evalBatch = await prisma.evaluationBatch.create({
       data: {
         dataset: dataset || null,
-        questionFilter: JSON.stringify({
+        question_filter: JSON.stringify({
           caseType,
           generationBatchId: generationBatchId || null,
           unverifiedOnly,
           skipAlreadyEvaluated,
         }),
-        totalCount,
-        completedCount: 0,
+        total_count: totalCount,
+        completed_count: 0,
         status: 'pending',
       },
     });
@@ -159,8 +167,8 @@ export async function POST(req: NextRequest) {
           where: { id: evalBatch.id },
           data: {
             status: 'completed',
-            completedAt: new Date(),
-            completedCount: completed,
+            completed_at: new Date(),
+            completed_count: completed,
           },
         });
 
@@ -177,7 +185,7 @@ export async function POST(req: NextRequest) {
           where: { id: evalBatch.id },
           data: {
             status: 'failed',
-            errorMessage: error instanceof Error ? error.message : 'Unknown error',
+            error_message: error instanceof Error ? error.message : 'Unknown error',
           },
         });
       }
@@ -185,7 +193,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      evaluationBatchId: evalBatch.id,
+      evaluation_batch_id: evalBatch.id,
+      evaluationBatchId: evalBatch.id, // Backward compatibility
       totalCount,
       byType: {
         L1: idsByType.L1.length,

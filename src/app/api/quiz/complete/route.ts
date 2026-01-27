@@ -16,15 +16,15 @@ export async function POST(req: Request) {
     // Complete the session
     const quizSession = await prisma.quizSession.update({
       where: { id: sessionId },
-      data: { completedAt: new Date() },
+      data: { completed_at: new Date() },
       include: {
         answers: {
           include: {
             question: {
               select: {
                 scenario: true,
-                trapType: true,
-                trapSubtype: true,
+                trap_type: true,
+                trap_subtype: true,
               },
             },
           },
@@ -34,8 +34,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       sessionId: quizSession.id,
-      totalQuestions: quizSession.totalQuestions,
-      correctAnswers: quizSession.correctAnswers,
+      totalQuestions: quizSession.total_questions,
+      correctAnswers: quizSession.correct_answers,
       answers: quizSession.answers,
     })
   } catch (error) {

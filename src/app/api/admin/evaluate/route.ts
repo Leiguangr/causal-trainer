@@ -19,11 +19,9 @@ export async function GET(req: NextRequest) {
         evaluations: {
           include: {
             question: true,
-            l1Case: true,
-            l2Case: true,
-            l3Case: true,
+            t3_case: true,
           },
-          orderBy: { priorityLevel: 'asc' },
+          orderBy: { priority_level: 'asc' },
         },
       },
     });
@@ -32,16 +30,28 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Batch not found' }, { status: 404 });
     }
 
-    return NextResponse.json({ batch });
+    return NextResponse.json({ batch }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
+    });
   }
 
   // List all evaluation batches
   const batches = await prisma.evaluationBatch.findMany({
-    orderBy: { createdAt: 'desc' },
+    orderBy: { created_at: 'desc' },
     take: 20,
   });
 
-  return NextResponse.json({ batches });
+  return NextResponse.json({ batches }, {
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    },
+  });
 }
 
 export interface EvaluateRequest {
@@ -67,7 +77,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (batchId) {
-      where.generationBatchId = batchId;
+      where.generation_batch_id = batchId;
     }
 
     if (questionIds && questionIds.length > 0) {
@@ -75,7 +85,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (unverifiedOnly) {
-      where.isVerified = false;
+      where.is_verified = false;
     }
 
     // Get questions to evaluate
@@ -84,19 +94,39 @@ export async function POST(req: NextRequest) {
       select: { id: true },
     });
 
+    const initialCount = questions.length;
+    let evaluatedCount = 0;
+
     // Optionally skip already evaluated
     if (skipAlreadyEvaluated && questions.length > 0) {
       const existingEvaluations = await prisma.caseEvaluation.findMany({
-        where: { questionId: { in: questions.map(q => q.id) } },
-        select: { questionId: true },
+        where: { question_id: { in: questions.map(q => q.id) } },
+        select: { question_id: true },
       });
-      const evaluatedIds = new Set(existingEvaluations.map(e => e.questionId));
+      const evaluatedIds = new Set(existingEvaluations.map(e => e.question_id).filter(Boolean));
+      evaluatedCount = evaluatedIds.size;
       questions = questions.filter(q => !evaluatedIds.has(q.id));
     }
 
     if (questions.length === 0) {
+      const errorDetails: string[] = [];
+      if (initialCount === 0) {
+        errorDetails.push('No questions found matching the specified criteria');
+        if (dataset) errorDetails.push(`Dataset: ${dataset}`);
+        if (batchId) errorDetails.push(`Generation batch: ${batchId}`);
+        if (unverifiedOnly) errorDetails.push('Unverified only: true');
+      } else if (evaluatedCount > 0) {
+        errorDetails.push(`All ${initialCount} matching questions have already been evaluated`);
+      }
+      
       return NextResponse.json({
-        error: 'No questions found matching criteria (or all already evaluated)',
+        error: errorDetails.join('. ') || 'No questions found matching criteria',
+        details: {
+          initialCount,
+          evaluatedCount,
+          remainingCount: questions.length,
+          filters: { dataset, batchId, unverifiedOnly, skipAlreadyEvaluated },
+        },
       }, { status: 400 });
     }
 
@@ -104,9 +134,9 @@ export async function POST(req: NextRequest) {
     const evalBatch = await prisma.evaluationBatch.create({
       data: {
         dataset: dataset || null,
-        questionFilter: JSON.stringify({ batchId, unverifiedOnly }),
-        totalCount: questions.length,
-        completedCount: 0,
+        question_filter: JSON.stringify({ batchId, unverifiedOnly }),
+        total_count: questions.length,
+        completed_count: 0,
         status: 'pending',
       },
     });
@@ -134,7 +164,7 @@ export async function POST(req: NextRequest) {
           where: { id: evalBatch.id },
           data: {
             status: 'completed',
-            completedAt: new Date(),
+            completed_at: new Date(),
           },
         });
       } catch (error) {
@@ -143,7 +173,7 @@ export async function POST(req: NextRequest) {
           where: { id: evalBatch.id },
           data: {
             status: 'failed',
-            errorMessage: error instanceof Error ? error.message : 'Unknown error',
+            error_message: error instanceof Error ? error.message : 'Unknown error',
           },
         });
       }
@@ -151,7 +181,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      evaluationBatchId: evalBatch.id,
+      evaluation_batch_id: evalBatch.id,
+      evaluationBatchId: evalBatch.id, // Backward compatibility
       questionsCount: questions.length,
       message: `Started evaluation of ${questions.length} legacy questions. Poll GET /api/admin/evaluate?batchId=${evalBatch.id} for status.`,
     });

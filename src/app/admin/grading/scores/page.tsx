@@ -7,11 +7,12 @@ import RubricScoreDisplay from './RubricScoreDisplay';
 type EvaluationBatch = {
   id: string;
   dataset: string | null;
-  totalCount: number;
-  completedCount: number;
+  total_count: number;
+  completed_count: number;
   status: string;
-  reportGenerated: boolean;
-  createdAt: string;
+  report_generated: boolean;
+  created_at: string;
+  completed_at: string | null;
 };
 
 type AnyCase =
@@ -88,42 +89,38 @@ type AnyCase =
 
 type CaseEvaluation = {
   id: string;
-  evaluationBatchId: string | null;
-  overallVerdict: string;
-  priorityLevel: number;
-  pearlLevelAssessment: string | null;
-  suggestedPearlLevel: string | null;
-  trapTypeAssessment: string | null;
-  suggestedTrapType: string | null;
-  trapSubtypeAssessment: string | null;
-  suggestedTrapSubtype: string | null;
-  groundTruthAssessment: string | null;
-  suggestedGroundTruth: string | null;
-  hasAmbiguity: boolean;
-  ambiguityNotes: string | null;
-  hasLogicalIssues: boolean;
-  logicalIssueNotes: string | null;
-  hasDomainErrors: boolean;
-  domainErrorNotes: string | null;
-  clarityScore: number;
-  difficultyAssessment: string | null;
-  structuralNotes: string | null;
-  causalGraphNotes: string | null;
-  variableNotes: string | null;
-  rubricScore: string | null;
-  suggestedCorrections: string | null;
-  createdAt: string;
+  evaluation_batch_id: string | null;
+  overall_verdict: string;
+  priority_level: number;
+  pearl_level_assessment: string | null;
+  suggested_pearl_level: string | null;
+  trap_type_assessment: string | null;
+  suggested_trap_type: string | null;
+  trap_subtype_assessment: string | null;
+  suggested_trap_subtype: string | null;
+  ground_truth_assessment: string | null;
+  suggested_ground_truth: string | null;
+  has_ambiguity: boolean;
+  ambiguity_notes: string | null;
+  has_logical_issues: boolean;
+  logical_issue_notes: string | null;
+  has_domain_errors: boolean;
+  domain_error_notes: string | null;
+  clarity_score: number;
+  difficulty_assessment: string | null;
+  structural_notes: string | null;
+  causal_graph_notes: string | null;
+  variable_notes: string | null;
+  rubric_score: string | null;
+  suggested_corrections: string | null;
+  created_at: string;
 
-  questionId: string | null;
-  l1CaseId: string | null;
-  l2CaseId: string | null;
-  l3CaseId: string | null;
+  question_id: string | null;
+  t3_case_id: string | null;
 
-  evaluationBatch?: EvaluationBatch | null;
+  evaluation_batch?: EvaluationBatch | null;
   question?: any;
-  l1Case?: any;
-  l2Case?: any;
-  l3Case?: any;
+  t3_case?: any;
 };
 
 type GradingResponse = {
@@ -154,79 +151,83 @@ function getCaseFromEvaluation(e: CaseEvaluation): AnyCase {
     return {
       kind: 'legacy',
       id: e.question.id,
-      sourceCase: e.question.sourceCase ?? null,
-      pearlLevel: e.question.pearlLevel ?? null,
-      trapType: e.question.trapType ?? null,
-      trapSubtype: e.question.trapSubtype ?? null,
-      groundTruth: e.question.groundTruth ?? null,
+      sourceCase: e.question.source_case ?? null,
+      pearlLevel: e.question.pearl_level ?? null,
+      trapType: e.question.trap_type ?? null,
+      trapSubtype: e.question.trap_subtype ?? null,
+      groundTruth: e.question.ground_truth ?? null,
       scenario: e.question.scenario ?? null,
       claim: e.question.claim ?? null,
       explanation: e.question.explanation ?? null,
-      wiseRefusal: e.question.wiseRefusal ?? null,
-      hiddenQuestion: e.question.hiddenQuestion ?? null,
-      answerIfA: e.question.answerIfA ?? null,
-      answerIfB: e.question.answerIfB ?? null,
+      wiseRefusal: e.question.wise_refusal ?? null,
+      hiddenQuestion: e.question.hidden_timestamp ?? null,
+      answerIfA: e.question.conditional_answers ? (JSON.parse(e.question.conditional_answers)?.answer_if_condition_1 || null) : null,
+      answerIfB: e.question.conditional_answers ? (JSON.parse(e.question.conditional_answers)?.answer_if_condition_2 || null) : null,
       variables: e.question.variables ?? null,
-      causalStructure: e.question.causalStructure ?? null,
+      causalStructure: e.question.causal_structure ?? null,
       domain: e.question.domain ?? null,
       subdomain: e.question.subdomain ?? null,
       difficulty: e.question.difficulty ?? null,
       dataset: e.question.dataset ?? null,
     };
   }
-  if (e.l1Case) {
-    return {
-      kind: 'L1',
-      id: e.l1Case.id,
-      sourceCase: e.l1Case.sourceCase ?? null,
-      groundTruth: e.l1Case.groundTruth ?? null,
-      scenario: e.l1Case.scenario ?? null,
-      claim: e.l1Case.claim ?? null,
-      whyFlawedOrValid: e.l1Case.whyFlawedOrValid ?? null,
-      evidenceClass: e.l1Case.evidenceClass ?? null,
-      evidenceType: e.l1Case.evidenceType ?? null,
-      variables: e.l1Case.variables ?? null,
-      causalStructure: e.l1Case.causalStructure ?? null,
-      domain: e.l1Case.domain ?? null,
-      subdomain: e.l1Case.subdomain ?? null,
-      difficulty: e.l1Case.difficulty ?? null,
-      dataset: e.l1Case.dataset ?? null,
+  if (e.t3_case) {
+    // Parse conditional_answers and hidden_timestamp
+    let hiddenQuestion = e.t3_case.hidden_timestamp;
+    let answerIfA = '';
+    let answerIfB = '';
+    if (e.t3_case.conditional_answers) {
+      try {
+        const parsed = JSON.parse(e.t3_case.conditional_answers);
+        answerIfA = parsed.answer_if_condition_1 || parsed.answerIfA || '';
+        answerIfB = parsed.answer_if_condition_2 || parsed.answerIfB || '';
+      } catch {
+        // ignore
+      }
+    }
+    
+    const base = {
+      kind: e.t3_case.pearl_level as 'L1' | 'L2' | 'L3',
+      id: e.t3_case.id,
+      sourceCase: e.t3_case.source_case ?? null,
+      groundTruth: e.t3_case.label ?? null,
+      scenario: e.t3_case.scenario ?? null,
+      variables: e.t3_case.variables ?? null,
+      causalStructure: e.t3_case.causal_structure ?? null,
+      domain: e.t3_case.domain ?? null,
+      subdomain: e.t3_case.subdomain ?? null,
+      difficulty: e.t3_case.difficulty ?? null,
+      dataset: e.t3_case.dataset ?? null,
+      hiddenQuestion,
+      answerIfA,
+      answerIfB,
+      wiseRefusal: e.t3_case.wise_refusal ?? null,
+      trapType: e.t3_case.trap_type ?? null,
     };
-  }
-  if (e.l2Case) {
-    return {
-      kind: 'L2',
-      id: e.l2Case.id,
-      sourceCase: e.l2Case.sourceCase ?? null,
-      scenario: e.l2Case.scenario ?? null,
-      hiddenQuestion: e.l2Case.hiddenQuestion ?? null,
-      answerIfA: e.l2Case.answerIfA ?? null,
-      answerIfB: e.l2Case.answerIfB ?? null,
-      wiseRefusal: e.l2Case.wiseRefusal ?? null,
-      trapType: e.l2Case.trapType ?? null,
-      variables: e.l2Case.variables ?? null,
-      causalStructure: e.l2Case.causalStructure ?? null,
-      difficulty: e.l2Case.difficulty ?? null,
-      dataset: e.l2Case.dataset ?? null,
-    };
-  }
-  if (e.l3Case) {
-    return {
-      kind: 'L3',
-      id: e.l3Case.id,
-      sourceCase: e.l3Case.sourceCase ?? null,
-      groundTruth: e.l3Case.groundTruth ?? null,
-      scenario: e.l3Case.scenario ?? null,
-      counterfactualClaim: e.l3Case.counterfactualClaim ?? null,
-      justification: e.l3Case.justification ?? null,
-      wiseResponse: e.l3Case.wiseResponse ?? null,
-      family: e.l3Case.family ?? null,
-      domain: e.l3Case.domain ?? null,
-      variables: e.l3Case.variables ?? null,
-      invariants: e.l3Case.invariants ?? null,
-      difficulty: e.l3Case.difficulty ?? null,
-      dataset: e.l3Case.dataset ?? null,
-    };
+    
+    if (e.t3_case.pearl_level === 'L1') {
+      return {
+        ...base,
+        claim: e.t3_case.claim ?? null,
+        whyFlawedOrValid: e.t3_case.gold_rationale ?? null,
+        evidenceClass: null, // Not in unified schema
+        evidenceType: e.t3_case.trap_subtype ?? null,
+      };
+    } else if (e.t3_case.pearl_level === 'L2') {
+      return {
+        ...base,
+        claim: e.t3_case.claim ?? null,
+      };
+    } else {
+      return {
+        ...base,
+        counterfactualClaim: e.t3_case.counterfactual_claim ?? null,
+        justification: e.t3_case.gold_rationale ?? null,
+        wiseResponse: e.t3_case.wise_refusal ?? null,
+        family: e.t3_case.trap_type ?? null, // L3 uses trap_type for family
+        invariants: e.t3_case.invariants ?? null,
+      };
+    }
   }
   // fallback
   return { kind: 'legacy', id: e.id, sourceCase: null };
@@ -260,7 +261,7 @@ export default function ScoresPage() {
     const run = async () => {
       setIsLoading(true);
       try {
-        const res = await fetch(`/api/admin/grading?${query}`);
+        const res = await fetch(`/api/admin/grading?${query}`, { cache: 'no-store' });
         const json = (await res.json()) as GradingResponse;
         if (!res.ok) throw new Error((json as any).error || 'Failed to load');
         setData(json);
@@ -423,8 +424,8 @@ export default function ScoresPage() {
               <option value="">All evaluation batches</option>
               {batches.map((b) => (
                 <option key={b.id} value={b.id}>
-                  {new Date(b.createdAt).toLocaleString()} · {b.dataset || 'All'} ·{' '}
-                  {b.completedCount}/{b.totalCount} · {b.status}
+                  {new Date(b.created_at).toLocaleString()} · {b.dataset || 'All'} ·{' '}
+                  {b.completed_count}/{b.total_count} · {b.status}
                 </option>
               ))}
             </select>
@@ -453,13 +454,13 @@ export default function ScoresPage() {
             const c = getCaseFromEvaluation(e);
             const title =
               c.kind === 'legacy'
-                ? `${c.sourceCase || e.questionId || 'legacy'} (${c.pearlLevel || '—'} / ${c.trapType || '—'})`
+                ? `${c.sourceCase || e.question_id || 'legacy'} (${c.pearlLevel || '—'} / ${c.trapType || '—'})`
                 : `${c.sourceCase || c.id} (${c.kind})`;
 
             return (
               <div
                 key={e.id}
-                className={`bg-white border-2 rounded-lg p-6 ${getVerdictColor(e.overallVerdict)}`}
+                className={`bg-white border-2 rounded-lg p-6 ${getVerdictColor(e.overall_verdict)}`}
               >
                 {/* Header */}
                 <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
@@ -467,14 +468,14 @@ export default function ScoresPage() {
                     <div className="flex items-center gap-3 mb-2">
                       <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
                       <span className="px-2 py-1 rounded text-xs font-bold border bg-white/80">
-                        {e.overallVerdict}
+                        {e.overall_verdict}
                       </span>
                       <span
                         className={`px-2 py-1 rounded text-xs font-medium ${getPriorityColor(
-                          e.priorityLevel
+                          e.priority_level
                         )}`}
                       >
-                        {getPriorityLabel(e.priorityLevel)} Priority
+                        {getPriorityLabel(e.priority_level)} Priority
                       </span>
                     </div>
                     <div className="text-xs text-gray-600 space-x-3">
@@ -483,11 +484,11 @@ export default function ScoresPage() {
                       <span>
                         Batch:{' '}
                         <span className="font-mono">
-                          {e.evaluationBatchId ? e.evaluationBatchId.slice(0, 8) : '—'}
+                          {e.evaluation_batch_id ? e.evaluation_batch_id.slice(0, 8) : '—'}
                         </span>
                       </span>
                       <span>·</span>
-                      <span>Created {new Date(e.createdAt).toLocaleString()}</span>
+                      <span>Created {new Date(e.created_at).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
@@ -729,7 +730,7 @@ export default function ScoresPage() {
 
                 {/* Rubric Score Section - Prominently Displayed */}
                 <div className="mb-6">
-                  <RubricScoreDisplay rubricScore={e.rubricScore} />
+                  <RubricScoreDisplay rubricScore={e.rubric_score} />
                 </div>
 
                 {/* Assessment Fields */}
@@ -740,10 +741,10 @@ export default function ScoresPage() {
                       <div className="flex justify-between">
                         <span className="text-gray-600">Pearl Level:</span>
                         <span className="font-medium">
-                          {e.pearlLevelAssessment || '—'}
-                          {e.suggestedPearlLevel && (
+                          {e.pearl_level_assessment || '—'}
+                          {e.suggested_pearl_level && (
                             <span className="text-gray-500 ml-1">
-                              (suggested: {e.suggestedPearlLevel})
+                              (suggested: {e.suggested_pearl_level})
                             </span>
                           )}
                         </span>
@@ -751,22 +752,22 @@ export default function ScoresPage() {
                       <div className="flex justify-between">
                         <span className="text-gray-600">Trap Type:</span>
                         <span className="font-medium">
-                          {e.trapTypeAssessment || '—'}
-                          {e.suggestedTrapType && (
+                          {e.trap_type_assessment || '—'}
+                          {e.suggested_trap_type && (
                             <span className="text-gray-500 ml-1">
-                              (suggested: {e.suggestedTrapType})
+                              (suggested: {e.suggested_trap_type})
                             </span>
                           )}
                         </span>
                       </div>
-                      {e.trapSubtypeAssessment && (
+                      {e.trap_subtype_assessment && (
                         <div className="flex justify-between">
                           <span className="text-gray-600">Trap Subtype:</span>
                           <span className="font-medium">
-                            {e.trapSubtypeAssessment}
-                            {e.suggestedTrapSubtype && (
+                            {e.trap_subtype_assessment}
+                            {e.suggested_trap_subtype && (
                               <span className="text-gray-500 ml-1">
-                                (suggested: {e.suggestedTrapSubtype})
+                                (suggested: {e.suggested_trap_subtype})
                               </span>
                             )}
                           </span>
@@ -775,21 +776,21 @@ export default function ScoresPage() {
                       <div className="flex justify-between">
                         <span className="text-gray-600">Ground Truth:</span>
                         <span className="font-medium">
-                          {e.groundTruthAssessment || '—'}
-                          {e.suggestedGroundTruth && (
+                          {e.ground_truth_assessment || '—'}
+                          {e.suggested_ground_truth && (
                             <span className="text-gray-500 ml-1">
-                              (suggested: {e.suggestedGroundTruth})
+                              (suggested: {e.suggested_ground_truth})
                             </span>
                           )}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Clarity Score:</span>
-                        <span className="font-medium">{e.clarityScore} / 5</span>
+                        <span className="font-medium">{e.clarity_score} / 5</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-600">Difficulty:</span>
-                        <span className="font-medium">{e.difficultyAssessment || '—'}</span>
+                        <span className="font-medium">{e.difficulty_assessment || '—'}</span>
                       </div>
                     </div>
                   </div>
@@ -798,47 +799,47 @@ export default function ScoresPage() {
                   <div className="bg-gray-50 rounded-lg p-4">
                     <h3 className="text-sm font-semibold text-gray-700 mb-3">Quality Flags</h3>
                     <div className="space-y-3">
-                      {e.hasAmbiguity && (
+                      {e.has_ambiguity && (
                         <div>
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-yellow-700 font-medium text-sm">⚠ Ambiguity</span>
                           </div>
-                          {e.ambiguityNotes && (
+                          {e.ambiguity_notes && (
                             <p className="text-xs text-gray-600 whitespace-pre-wrap">
-                              {e.ambiguityNotes}
+                              {e.ambiguity_notes}
                             </p>
                           )}
                         </div>
                       )}
-                      {e.hasLogicalIssues && (
+                      {e.has_logical_issues && (
                         <div>
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-red-700 font-medium text-sm">
                               ⚠ Logical Issues
                             </span>
                           </div>
-                          {e.logicalIssueNotes && (
+                          {e.logical_issue_notes && (
                             <p className="text-xs text-gray-600 whitespace-pre-wrap">
-                              {e.logicalIssueNotes}
+                              {e.logical_issue_notes}
                             </p>
                           )}
                         </div>
                       )}
-                      {e.hasDomainErrors && (
+                      {e.has_domain_errors && (
                         <div>
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-red-700 font-medium text-sm">
                               ⚠ Domain Errors
                             </span>
                           </div>
-                          {e.domainErrorNotes && (
+                          {e.domain_error_notes && (
                             <p className="text-xs text-gray-600 whitespace-pre-wrap">
-                              {e.domainErrorNotes}
+                              {e.domain_error_notes}
                             </p>
                           )}
                         </div>
                       )}
-                      {!e.hasAmbiguity && !e.hasLogicalIssues && !e.hasDomainErrors && (
+                      {!e.has_ambiguity && !e.has_logical_issues && !e.has_domain_errors && (
                         <p className="text-xs text-gray-500">No quality issues flagged</p>
                       )}
                     </div>
@@ -846,52 +847,52 @@ export default function ScoresPage() {
                 </div>
 
                 {/* Detailed Notes - Expandable */}
-                {(e.structuralNotes ||
-                  e.causalGraphNotes ||
-                  e.variableNotes ||
-                  e.suggestedCorrections) && (
+                {(e.structural_notes ||
+                  e.causal_graph_notes ||
+                  e.variable_notes ||
+                  e.suggested_corrections) && (
                   <details className="mt-4">
                     <summary className="text-sm font-semibold text-gray-700 cursor-pointer hover:text-gray-900">
                       Detailed Analysis & Notes
                     </summary>
                     <div className="mt-3 space-y-4 pl-4 border-l-2 border-gray-200">
-                      {e.structuralNotes && (
+                      {e.structural_notes && (
                         <div>
                           <h4 className="text-xs font-semibold text-gray-700 mb-1">
                             Structural Notes
                           </h4>
                           <p className="text-sm text-gray-800 whitespace-pre-wrap">
-                            {e.structuralNotes}
+                            {e.structural_notes}
                           </p>
                         </div>
                       )}
-                      {e.causalGraphNotes && (
+                      {e.causal_graph_notes && (
                         <div>
                           <h4 className="text-xs font-semibold text-gray-700 mb-1">
                             Causal Graph Notes
                           </h4>
                           <p className="text-sm text-gray-800 whitespace-pre-wrap">
-                            {e.causalGraphNotes}
+                            {e.causal_graph_notes}
                           </p>
                         </div>
                       )}
-                      {e.variableNotes && (
+                      {e.variable_notes && (
                         <div>
                           <h4 className="text-xs font-semibold text-gray-700 mb-1">
                             Variable Notes
                           </h4>
                           <p className="text-sm text-gray-800 whitespace-pre-wrap">
-                            {e.variableNotes}
+                            {e.variable_notes}
                           </p>
                         </div>
                       )}
-                      {e.suggestedCorrections && (
+                      {e.suggested_corrections && (
                         <div>
                           <h4 className="text-xs font-semibold text-gray-700 mb-1">
                             Suggested Corrections
                           </h4>
                           <div className="text-sm text-gray-800 whitespace-pre-wrap bg-yellow-50 border border-yellow-200 rounded p-3">
-                            {e.suggestedCorrections}
+                            {e.suggested_corrections}
                           </div>
                         </div>
                       )}

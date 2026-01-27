@@ -51,6 +51,12 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     fetchStats();
+    // Refresh stats periodically to catch new imports
+    const interval = setInterval(() => {
+      fetchStats();
+    }, 5000); // Refresh every 5 seconds
+    
+    return () => clearInterval(interval);
   }, []);
 
   const fetchStats = async () => {

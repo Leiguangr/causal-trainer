@@ -6,8 +6,8 @@ import type { PearlLevel } from '@/types';
 // This function works with both legacy Question evaluations and T3 case evaluations
 export async function generateReport(evaluationBatchId: string): Promise<string> {
   const evaluations = await prisma.caseEvaluation.findMany({
-    where: { evaluationBatchId },
-    include: { question: true, l1Case: true, l2Case: true, l3Case: true },
+    where: { evaluation_batch_id: evaluationBatchId },
+    include: { question: true, t3_case: true },
   });
 
   if (evaluations.length === 0) {
@@ -17,9 +17,9 @@ export async function generateReport(evaluationBatchId: string): Promise<string>
   // Parse rubric scores (T3 StoredRubricScore format)
   const rubricScores: Array<RubricScore | (Pick<RubricScore, 'totalScore' | 'categoryScores' | 'categoryNotes'> & { acceptanceThreshold?: RubricScore['acceptanceThreshold'] })> = [];
   evaluations.forEach(e => {
-    if (e.rubricScore) {
+    if (e.rubric_score) {
       try {
-        const parsed = JSON.parse(e.rubricScore) as Partial<RubricScore> & {
+        const parsed = JSON.parse(e.rubric_score) as Partial<RubricScore> & {
           categoryScores?: Record<string, number>;
           categoryNotes?: Record<string, string>;
           totalScore?: number;
@@ -44,56 +44,52 @@ export async function generateReport(evaluationBatchId: string): Promise<string>
   });
 
   const getCaseType = (e: (typeof evaluations)[number]): PearlLevel | 'UNKNOWN' => {
-    if (e.question?.pearlLevel === 'L1' || e.question?.pearlLevel === 'L2' || e.question?.pearlLevel === 'L3') {
-      return e.question.pearlLevel as PearlLevel;
+    if (e.question?.pearl_level === 'L1' || e.question?.pearl_level === 'L2' || e.question?.pearl_level === 'L3') {
+      return e.question.pearl_level as PearlLevel;
     }
-    if (e.l1Case) return 'L1';
-    if (e.l2Case) return 'L2';
-    if (e.l3Case) return 'L3';
+    if (e.t3_case?.pearl_level === 'L1' || e.t3_case?.pearl_level === 'L2' || e.t3_case?.pearl_level === 'L3') {
+      return e.t3_case.pearl_level as PearlLevel;
+    }
     return 'UNKNOWN';
   };
 
   const getGroundTruth = (e: (typeof evaluations)[number]): string => {
     return (
-      e.question?.groundTruth ??
-      e.l1Case?.groundTruth ??
-      e.l2Case?.trapType /* L2 has no groundTruth; keep something informative */ ??
-      e.l3Case?.groundTruth ??
+      e.question?.ground_truth ??
+      e.t3_case?.label ??
       'UNKNOWN'
     );
   };
 
   const getTrapType = (e: (typeof evaluations)[number]): string => {
-    return e.question?.trapType ?? e.l2Case?.trapType ?? 'N/A';
+    return e.question?.trap_type ?? e.t3_case?.trap_type ?? 'N/A';
   };
 
   const getSourceCase = (e: (typeof evaluations)[number]): string => {
     return (
-      e.question?.sourceCase ??
-      e.l1Case?.sourceCase ??
-      e.l2Case?.sourceCase ??
-      e.l3Case?.sourceCase ??
+      e.question?.source_case ??
+      e.t3_case?.source_case ??
       e.id.slice(0, 8)
     );
   };
 
   const getScenario = (e: (typeof evaluations)[number]): string => {
-    return e.question?.scenario ?? e.l1Case?.scenario ?? e.l2Case?.scenario ?? e.l3Case?.scenario ?? '';
+    return e.question?.scenario ?? e.t3_case?.scenario ?? '';
   };
 
   // Aggregate statistics
   const stats = {
     total: evaluations.length,
-    approved: evaluations.filter(e => e.overallVerdict === 'APPROVED').length,
-    needsReview: evaluations.filter(e => e.overallVerdict === 'NEEDS_REVIEW').length,
-    rejected: evaluations.filter(e => e.overallVerdict === 'REJECTED').length,
-    pearlLevelMismatches: evaluations.filter(e => e.pearlLevelAssessment === 'INCORRECT').length,
-    trapTypeMismatches: evaluations.filter(e => e.trapTypeAssessment === 'INCORRECT').length,
-    groundTruthMismatches: evaluations.filter(e => e.groundTruthAssessment === 'INCORRECT').length,
-    ambiguousCases: evaluations.filter(e => e.hasAmbiguity).length,
-    logicalIssues: evaluations.filter(e => e.hasLogicalIssues).length,
-    domainErrors: evaluations.filter(e => e.hasDomainErrors).length,
-    avgClarity: evaluations.reduce((sum, e) => sum + e.clarityScore, 0) / evaluations.length,
+    approved: evaluations.filter(e => e.overall_verdict === 'APPROVED').length,
+    needsReview: evaluations.filter(e => e.overall_verdict === 'NEEDS_REVIEW').length,
+    rejected: evaluations.filter(e => e.overall_verdict === 'REJECTED').length,
+    pearlLevelMismatches: evaluations.filter(e => e.pearl_level_assessment === 'INCORRECT').length,
+    trapTypeMismatches: evaluations.filter(e => e.trap_type_assessment === 'INCORRECT').length,
+    groundTruthMismatches: evaluations.filter(e => e.ground_truth_assessment === 'INCORRECT').length,
+    ambiguousCases: evaluations.filter(e => e.has_ambiguity).length,
+    logicalIssues: evaluations.filter(e => e.has_logical_issues).length,
+    domainErrors: evaluations.filter(e => e.has_domain_errors).length,
+    avgClarity: evaluations.reduce((sum, e) => sum + e.clarity_score, 0) / evaluations.length,
     rubricScored: rubricScores.length,
     avgRubricScore: rubricScores.length > 0
       ? rubricScores.reduce((sum, s) => sum + s.totalScore, 0) / rubricScores.length
@@ -128,7 +124,7 @@ export async function generateReport(evaluationBatchId: string): Promise<string>
   const tagCounts: Record<string, number> = {};
   evaluations.forEach(e => {
     try {
-      const tags = JSON.parse(e.reportTags || '[]') as string[];
+      const tags = JSON.parse(e.report_tags || '[]') as string[];
       tags.forEach(tag => {
         tagCounts[tag] = (tagCounts[tag] || 0) + 1;
       });
@@ -313,19 +309,19 @@ ${Object.entries(tagCounts).sort((a, b) => b[1] - a[1]).map(([tag, count]) => `-
 ### Priority 1 (Urgent)
 `;
 
-  const urgent = evaluations.filter(e => e.priorityLevel === 1);
+  const urgent = evaluations.filter(e => e.priority_level === 1);
   if (urgent.length === 0) {
     report += '_No urgent issues found._\n\n';
   } else {
     urgent.forEach(e => {
       report += `#### Case: ${getSourceCase(e)}\n`;
       report += `- **Scenario**: ${getScenario(e).slice(0, 100)}...\n`;
-      report += `- **Issues**: ${e.suggestedCorrections || e.structuralNotes}\n\n`;
+      report += `- **Issues**: ${e.suggested_corrections || e.structural_notes}\n\n`;
     });
   }
 
   report += `### Priority 2 (Normal Review)\n`;
-  const normal = evaluations.filter(e => e.priorityLevel === 2 && e.overallVerdict !== 'APPROVED');
+  const normal = evaluations.filter(e => e.priority_level === 2 && e.overall_verdict !== 'APPROVED');
   report += `_${normal.length} cases need standard review._\n\n`;
 
   report += `---
@@ -378,8 +374,8 @@ _Report generated by Evaluation Agent_
   await prisma.evaluationBatch.update({
     where: { id: evaluationBatchId },
     data: {
-      reportGenerated: true,
-      reportContent: report,
+      report_generated: true,
+      report_content: report,
     },
   });
 

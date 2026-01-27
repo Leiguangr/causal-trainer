@@ -24,33 +24,22 @@ export async function POST(req: NextRequest) {
     if (caseType === 'legacy') {
       originalCase = await prisma.question.findUnique({ where: { id: caseId } });
       if (originalCase) {
-        pearlLevel = originalCase.pearlLevel;
+        pearlLevel = originalCase.pearl_level;
         domain = originalCase.domain || null;
         dataset = originalCase.dataset || 'default';
-        trapType = originalCase.trapType || null;
+        trapType = originalCase.trap_type || null;
       }
-    } else if (caseType === 'L1') {
-      originalCase = await prisma.l1Case.findUnique({ where: { id: caseId } });
+    } else {
+      // T3Case unified schema
+      originalCase = await prisma.t3Case.findUnique({ where: { id: caseId } });
       if (originalCase) {
-        pearlLevel = 'L1';
+        pearlLevel = originalCase.pearl_level;
         domain = originalCase.domain || null;
         dataset = originalCase.dataset || 'default';
-      }
-    } else if (caseType === 'L2') {
-      originalCase = await prisma.l2Case.findUnique({ where: { id: caseId } });
-      if (originalCase) {
-        pearlLevel = 'L2';
-        domain = originalCase.domain || null;
-        dataset = originalCase.dataset || 'default';
-        trapType = originalCase.trapType || null;
-      }
-    } else if (caseType === 'L3') {
-      originalCase = await prisma.l3Case.findUnique({ where: { id: caseId } });
-      if (originalCase) {
-        pearlLevel = 'L3';
-        domain = originalCase.domain || null;
-        dataset = originalCase.dataset || 'default';
-        family = originalCase.family || null;
+        trapType = originalCase.trap_type || null;
+        if (originalCase.pearl_level === 'L3') {
+          family = originalCase.trap_type; // L3 uses trap_type to store family
+        }
       }
     }
 
@@ -62,20 +51,8 @@ export async function POST(req: NextRequest) {
     if (caseType === 'legacy') {
       await prisma.question.delete({ where: { id: caseId } });
     } else {
-      // Try each T3 table
-      try {
-        await prisma.l1Case.delete({ where: { id: caseId } });
-      } catch {
-        try {
-          await prisma.l2Case.delete({ where: { id: caseId } });
-        } catch {
-          try {
-            await prisma.l3Case.delete({ where: { id: caseId } });
-          } catch {
-            return NextResponse.json({ error: 'Failed to delete original case' }, { status: 500 });
-          }
-        }
-      }
+      // T3Case unified schema
+      await prisma.t3Case.delete({ where: { id: caseId } });
     }
 
     // Return parameters that can be used for regeneration

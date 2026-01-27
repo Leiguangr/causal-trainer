@@ -14,21 +14,19 @@ export async function GET(req: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const where: any = {};
 
-    if (evaluationBatchId) where.evaluationBatchId = evaluationBatchId;
-    if (overallVerdict) where.overallVerdict = overallVerdict;
+    if (evaluationBatchId) where.evaluation_batch_id = evaluationBatchId;
+    if (overallVerdict) where.overall_verdict = overallVerdict;
 
-    if (caseType === 'legacy') where.questionId = { not: null };
-    if (caseType === 'L1') where.l1CaseId = { not: null };
-    if (caseType === 'L2') where.l2CaseId = { not: null };
-    if (caseType === 'L3') where.l3CaseId = { not: null };
+    if (caseType === 'legacy') where.question_id = { not: null };
+    if (caseType === 'L1') where.t3_case_id = { not: null };
+    if (caseType === 'L2') where.t3_case_id = { not: null };
+    if (caseType === 'L3') where.t3_case_id = { not: null };
 
     if (dataset) {
       where.OR = [
-        { evaluationBatch: { is: { dataset } } },
+        { evaluation_batch: { is: { dataset } } },
         { question: { is: { dataset } } },
-        { l1Case: { is: { dataset } } },
-        { l2Case: { is: { dataset } } },
-        { l3Case: { is: { dataset } } },
+        { t3_case: { is: { dataset } } },
       ];
     }
 
@@ -36,25 +34,23 @@ export async function GET(req: NextRequest) {
     const evaluations = await prisma.caseEvaluation.findMany({
       where,
       include: {
-        evaluationBatch: true,
+        evaluation_batch: true,
         question: true,
-        l1Case: true,
-        l2Case: true,
-        l3Case: true,
+        t3_case: true,
       },
-      orderBy: [{ priorityLevel: 'asc' }, { createdAt: 'desc' }],
+      orderBy: [{ priority_level: 'asc' }, { created_at: 'desc' }],
     });
 
     // Transform to export format
     const exportData = evaluations.map((e) => {
-      const caseData = e.question || e.l1Case || e.l2Case || e.l3Case;
-      const caseType_ = e.question ? 'legacy' : e.l1Case ? 'L1' : e.l2Case ? 'L2' : 'L3';
+      const caseData = e.question || e.t3_case;
+      const caseType_ = e.question ? 'legacy' : (e.t3_case?.pearl_level || 'UNKNOWN');
 
       // Parse rubric score
       let rubricScore = null;
       try {
-        if (e.rubricScore) {
-          rubricScore = JSON.parse(e.rubricScore);
+        if (e.rubric_score) {
+          rubricScore = JSON.parse(e.rubric_score);
         }
       } catch {
         // Ignore parse errors
@@ -64,29 +60,29 @@ export async function GET(req: NextRequest) {
         evaluationId: e.id,
         caseId: caseData?.id || '',
         caseType: caseType_,
-        overallVerdict: e.overallVerdict,
-        priorityLevel: e.priorityLevel,
-        clarityScore: e.clarityScore,
-        difficultyAssessment: e.difficultyAssessment,
+        overallVerdict: e.overall_verdict,
+        priorityLevel: e.priority_level,
+        clarityScore: e.clarity_score,
+        difficultyAssessment: e.difficulty_assessment,
         rubricScore: rubricScore,
-        pearlLevelAssessment: e.pearlLevelAssessment,
-        suggestedPearlLevel: e.suggestedPearlLevel,
-        trapTypeAssessment: e.trapTypeAssessment,
-        suggestedTrapType: e.suggestedTrapType,
-        groundTruthAssessment: e.groundTruthAssessment,
-        suggestedGroundTruth: e.suggestedGroundTruth,
-        hasAmbiguity: e.hasAmbiguity,
-        ambiguityNotes: e.ambiguityNotes,
-        hasLogicalIssues: e.hasLogicalIssues,
-        logicalIssueNotes: e.logicalIssueNotes,
-        hasDomainErrors: e.hasDomainErrors,
-        domainErrorNotes: e.domainErrorNotes,
-        structuralNotes: e.structuralNotes,
-        causalGraphNotes: e.causalGraphNotes,
-        variableNotes: e.variableNotes,
-        suggestedCorrections: e.suggestedCorrections,
-        evaluationBatchId: e.evaluationBatchId,
-        createdAt: e.createdAt.toISOString(),
+        pearlLevelAssessment: e.pearl_level_assessment,
+        suggestedPearlLevel: e.suggested_pearl_level,
+        trapTypeAssessment: e.trap_type_assessment,
+        suggestedTrapType: e.suggested_trap_type,
+        groundTruthAssessment: e.ground_truth_assessment,
+        suggestedGroundTruth: e.suggested_ground_truth,
+        hasAmbiguity: e.has_ambiguity,
+        ambiguityNotes: e.ambiguity_notes,
+        hasLogicalIssues: e.has_logical_issues,
+        logicalIssueNotes: e.logical_issue_notes,
+        hasDomainErrors: e.has_domain_errors,
+        domainErrorNotes: e.domain_error_notes,
+        structuralNotes: e.structural_notes,
+        causalGraphNotes: e.causal_graph_notes,
+        variableNotes: e.variable_notes,
+        suggestedCorrections: e.suggested_corrections,
+        evaluationBatchId: e.evaluation_batch_id,
+        createdAt: e.created_at.toISOString(),
       };
 
       // Add case-specific data
@@ -96,73 +92,77 @@ export async function GET(req: NextRequest) {
           caseData: {
             scenario: e.question.scenario,
             claim: e.question.claim,
-            pearlLevel: e.question.pearlLevel,
-            trapType: e.question.trapType,
-            trapSubtype: e.question.trapSubtype,
-            groundTruth: e.question.groundTruth,
+            pearlLevel: e.question.pearl_level,
+            trapType: e.question.trap_type,
+            trapSubtype: e.question.trap_subtype,
+            groundTruth: e.question.ground_truth,
             explanation: e.question.explanation,
-            wiseRefusal: e.question.wiseRefusal,
-            hiddenQuestion: e.question.hiddenQuestion,
-            answerIfA: e.question.answerIfA,
-            answerIfB: e.question.answerIfB,
+            wiseRefusal: e.question.wise_refusal,
+            hiddenQuestion: e.question.hidden_timestamp,
+            answerIfA: e.question.conditional_answers ? (JSON.parse(e.question.conditional_answers)?.answer_if_condition_1 || '') : '',
+            answerIfB: e.question.conditional_answers ? (JSON.parse(e.question.conditional_answers)?.answer_if_condition_2 || '') : '',
             variables: e.question.variables,
-            causalStructure: e.question.causalStructure,
+            causalStructure: e.question.causal_structure,
             domain: e.question.domain,
             subdomain: e.question.subdomain,
             difficulty: e.question.difficulty,
             dataset: e.question.dataset,
           },
         };
-      } else if (e.l1Case) {
-        return {
-          ...base,
-          caseData: {
-            scenario: e.l1Case.scenario,
-            claim: e.l1Case.claim,
-            groundTruth: e.l1Case.groundTruth,
-            evidenceClass: e.l1Case.evidenceClass,
-            evidenceType: e.l1Case.evidenceType,
-            whyFlawedOrValid: e.l1Case.whyFlawedOrValid,
-            variables: e.l1Case.variables,
-            causalStructure: e.l1Case.causalStructure,
-            domain: e.l1Case.domain,
-            subdomain: e.l1Case.subdomain,
-            difficulty: e.l1Case.difficulty,
-            dataset: e.l1Case.dataset,
-          },
+      } else if (e.t3_case) {
+        // Parse conditional_answers and hidden_timestamp for export
+        let hiddenQuestion = e.t3_case.hidden_timestamp;
+        let answerIfA = '';
+        let answerIfB = '';
+        if (e.t3_case.conditional_answers) {
+          try {
+            const parsed = JSON.parse(e.t3_case.conditional_answers);
+            answerIfA = parsed.answer_if_condition_1 || parsed.answerIfA || '';
+            answerIfB = parsed.answer_if_condition_2 || parsed.answerIfB || '';
+          } catch {
+            // ignore
+          }
+        }
+        
+        const t3Data: any = {
+          scenario: e.t3_case.scenario,
+          pearlLevel: e.t3_case.pearl_level,
+          label: e.t3_case.label,
+          trapType: e.t3_case.trap_type,
+          trapSubtype: e.t3_case.trap_subtype || null,
+          variables: e.t3_case.variables,
+          causalStructure: e.t3_case.causal_structure,
+          keyInsight: e.t3_case.key_insight,
+          hiddenQuestion,
+          answerIfA,
+          answerIfB,
+          wiseRefusal: e.t3_case.wise_refusal,
+          goldRationale: e.t3_case.gold_rationale,
+          domain: e.t3_case.domain,
+          subdomain: e.t3_case.subdomain,
+          difficulty: e.t3_case.difficulty,
+          dataset: e.t3_case.dataset,
         };
-      } else if (e.l2Case) {
+        
+        // Add level-specific fields
+        if (e.t3_case.pearl_level === 'L1') {
+          t3Data.claim = e.t3_case.claim;
+          t3Data.groundTruth = e.t3_case.label; // L1 uses YES/NO/AMBIGUOUS
+        } else if (e.t3_case.pearl_level === 'L2') {
+          t3Data.claim = e.t3_case.claim;
+          t3Data.groundTruth = 'NO'; // All L2 are NO
+        } else if (e.t3_case.pearl_level === 'L3') {
+          t3Data.counterfactualClaim = e.t3_case.counterfactual_claim;
+          t3Data.groundTruth = e.t3_case.label; // L3 uses VALID/INVALID/CONDITIONAL
+          t3Data.family = e.t3_case.trap_type; // L3 uses trap_type for family
+          t3Data.justification = e.t3_case.gold_rationale;
+          t3Data.wiseResponse = e.t3_case.wise_refusal;
+          t3Data.invariants = e.t3_case.invariants;
+        }
+        
         return {
           ...base,
-          caseData: {
-            scenario: e.l2Case.scenario,
-            trapType: e.l2Case.trapType,
-            hiddenQuestion: e.l2Case.hiddenQuestion,
-            answerIfA: e.l2Case.answerIfA,
-            answerIfB: e.l2Case.answerIfB,
-            wiseRefusal: e.l2Case.wiseRefusal,
-            variables: e.l2Case.variables,
-            causalStructure: e.l2Case.causalStructure,
-            difficulty: e.l2Case.difficulty,
-            dataset: e.l2Case.dataset,
-          },
-        };
-      } else if (e.l3Case) {
-        return {
-          ...base,
-          caseData: {
-            scenario: e.l3Case.scenario,
-            counterfactualClaim: e.l3Case.counterfactualClaim,
-            groundTruth: e.l3Case.groundTruth,
-            family: e.l3Case.family,
-            justification: e.l3Case.justification,
-            wiseResponse: e.l3Case.wiseResponse,
-            variables: e.l3Case.variables,
-            invariants: e.l3Case.invariants,
-            domain: e.l3Case.domain,
-            difficulty: e.l3Case.difficulty,
-            dataset: e.l3Case.dataset,
-          },
+          caseData: t3Data,
         };
       }
 

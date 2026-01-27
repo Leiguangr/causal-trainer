@@ -7,7 +7,7 @@ export async function GET() {
     // Count questions by Pearl level (total and verified).
     // Sources:
     // - Legacy: Question table (L1/L2/L3)
-    // - New: L1Case/L2Case/L3Case tables
+    // - New: Unified T3Case table
     const [
       legacyL1,
       legacyL2,
@@ -15,30 +15,46 @@ export async function GET() {
       legacyL1Verified,
       legacyL2Verified,
       legacyL3Verified,
-      l1Count,
-      l2Count,
-      l3Count,
-      l1Verified,
-      l2Verified,
-      l3Verified,
     ] = await Promise.all([
-      prisma.question.count({ where: { pearlLevel: 'L1' } }),
-      prisma.question.count({ where: { pearlLevel: 'L2' } }),
-      prisma.question.count({ where: { pearlLevel: 'L3' } }),
-      prisma.question.count({ where: { pearlLevel: 'L1', isVerified: true } }),
-      prisma.question.count({ where: { pearlLevel: 'L2', isVerified: true } }),
-      prisma.question.count({ where: { pearlLevel: 'L3', isVerified: true } }),
-      prisma.l1Case.count(),
-      prisma.l2Case.count(),
-      prisma.l3Case.count(),
-      prisma.l1Case.count({ where: { isVerified: true } }),
-      prisma.l2Case.count({ where: { isVerified: true } }),
-      prisma.l3Case.count({ where: { isVerified: true } }),
+      prisma.question.count({ where: { pearl_level: 'L1' } }),
+      prisma.question.count({ where: { pearl_level: 'L2' } }),
+      prisma.question.count({ where: { pearl_level: 'L3' } }),
+      prisma.question.count({ where: { pearl_level: 'L1', is_verified: true } }),
+      prisma.question.count({ where: { pearl_level: 'L2', is_verified: true } }),
+      prisma.question.count({ where: { pearl_level: 'L3', is_verified: true } }),
     ]);
+
+    // Handle T3Case queries - table might not exist if migrations haven't been applied
+    let t3L1Count = 0;
+    let t3L2Count = 0;
+    let t3L3Count = 0;
+    let t3L1Verified = 0;
+    let t3L2Verified = 0;
+    let t3L3Verified = 0;
+
+    try {
+      const t3Counts = await Promise.all([
+        prisma.t3Case.count({ where: { pearl_level: 'L1' } }).catch(() => 0),
+        prisma.t3Case.count({ where: { pearl_level: 'L2' } }).catch(() => 0),
+        prisma.t3Case.count({ where: { pearl_level: 'L3' } }).catch(() => 0),
+        prisma.t3Case.count({ where: { pearl_level: 'L1', is_verified: true } }).catch(() => 0),
+        prisma.t3Case.count({ where: { pearl_level: 'L2', is_verified: true } }).catch(() => 0),
+        prisma.t3Case.count({ where: { pearl_level: 'L3', is_verified: true } }).catch(() => 0),
+      ]);
+      [t3L1Count, t3L2Count, t3L3Count, t3L1Verified, t3L2Verified, t3L3Verified] = t3Counts;
+    } catch (error: any) {
+      // If T3Case table doesn't exist, log warning and continue with 0 counts
+      if (error?.message?.includes('does not exist') || error?.code === 'P2021') {
+        console.warn('T3Case table does not exist yet. Run migrations: npx prisma migrate deploy');
+      } else {
+        // Re-throw if it's a different error
+        throw error;
+      }
+    }
 
     // Get trap type distribution
     const allQuestions = await prisma.question.findMany({
-      select: { pearlLevel: true, trapType: true, trapSubtype: true },
+      select: { pearl_level: true, trap_type: true, trap_subtype: true },
     });
 
     // Build trap type counts by level
@@ -62,12 +78,12 @@ export async function GET() {
 
     // Count existing questions
     allQuestions.forEach(q => {
-      if (q.pearlLevel && trapDistribution[q.pearlLevel]) {
-        const level = trapDistribution[q.pearlLevel];
-        if (q.trapType && level[q.trapType]) {
-          level[q.trapType].count++;
-          if (q.trapSubtype && level[q.trapType].subtypes[q.trapSubtype] !== undefined) {
-            level[q.trapType].subtypes[q.trapSubtype]++;
+      if (q.pearl_level && trapDistribution[q.pearl_level]) {
+        const level = trapDistribution[q.pearl_level];
+        if (q.trap_type && level[q.trap_type]) {
+          level[q.trap_type].count++;
+          if (q.trap_subtype && level[q.trap_type].subtypes[q.trap_subtype] !== undefined) {
+            level[q.trap_type].subtypes[q.trap_subtype]++;
           }
         }
       }
@@ -75,14 +91,14 @@ export async function GET() {
 
     // Calculate coverage stats
     const totalTrapTypes = CHEATSHEET_TAXONOMY.length;
-    const coveredTrapTypes = new Set(allQuestions.map(q => q.trapType).filter(Boolean)).size;
+    const coveredTrapTypes = new Set(allQuestions.map(q => q.trap_type).filter(Boolean)).size;
     const totalSubtypes = CHEATSHEET_TAXONOMY.reduce((sum, t) => sum + t.subtypes.length, 0);
-    const coveredSubtypes = new Set(allQuestions.map(q => q.trapSubtype).filter(Boolean)).size;
+    const coveredSubtypes = new Set(allQuestions.map(q => q.trap_subtype).filter(Boolean)).size;
 
     return NextResponse.json({
-      L1: { current: legacyL1 + l1Count, verified: legacyL1Verified + l1Verified, target: 50 },
-      L2: { current: legacyL2 + l2Count, verified: legacyL2Verified + l2Verified, target: 297 },
-      L3: { current: legacyL3 + l3Count, verified: legacyL3Verified + l3Verified, target: 103 },
+      L1: { current: legacyL1 + t3L1Count, verified: legacyL1Verified + t3L1Verified, target: 50 },
+      L2: { current: legacyL2 + t3L2Count, verified: legacyL2Verified + t3L2Verified, target: 297 },
+      L3: { current: legacyL3 + t3L3Count, verified: legacyL3Verified + t3L3Verified, target: 103 },
       trapDistribution,
       coverage: {
         trapTypes: { covered: coveredTrapTypes, total: totalTrapTypes },

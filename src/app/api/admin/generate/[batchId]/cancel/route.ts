@@ -29,8 +29,8 @@ export async function POST(
       where: { id: batchId },
       data: {
         status: 'cancelled',
-        completedAt: new Date(),
-        errorMessage: 'Cancelled by user',
+        completed_at: new Date(),
+        error_message: 'Cancelled by user',
       },
     });
 

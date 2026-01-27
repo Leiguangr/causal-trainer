@@ -20,6 +20,7 @@ import {
   type L3Family,
 } from '@/lib/l3-family-taxonomy';
 import { PearlLevel } from '@/types';
+import { processBatch, shouldUseBatchAPI, type BatchRequest, type BatchResponse } from '@/lib/openai-batch';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -208,14 +209,14 @@ interface L1EvidenceSelection {
 async function selectNextTrap(targetLevel?: PearlLevel): Promise<TrapSelection> {
   // Get current distribution of trap types and subtypes
   const existingQuestions = await prisma.question.findMany({
-    select: { pearlLevel: true, trapType: true, trapSubtype: true },
+    select: { pearl_level: true, trap_type: true, trap_subtype: true },
   });
 
   // Count by level
   const levelCounts: Record<string, number> = { L1: 0, L2: 0, L3: 0 };
   existingQuestions.forEach(q => {
-    if (q.pearlLevel && levelCounts[q.pearlLevel] !== undefined) {
-      levelCounts[q.pearlLevel]++;
+    if (q.pearl_level && levelCounts[q.pearl_level] !== undefined) {
+      levelCounts[q.pearl_level]++;
     }
   });
   const totalCount = existingQuestions.length || 1;
@@ -241,10 +242,10 @@ async function selectNextTrap(targetLevel?: PearlLevel): Promise<TrapSelection> 
   const trapTypeCounts: Record<string, number> = {};
   validTrapTypes.forEach(t => { trapTypeCounts[t.type] = 0; });
   existingQuestions
-    .filter(q => q.pearlLevel === selectedLevel)
+    .filter(q => q.pearl_level === selectedLevel)
     .forEach(q => {
-      if (q.trapType && trapTypeCounts[q.trapType] !== undefined) {
-        trapTypeCounts[q.trapType]++;
+      if (q.trap_type && trapTypeCounts[q.trap_type] !== undefined) {
+        trapTypeCounts[q.trap_type]++;
       }
     });
 
@@ -275,10 +276,10 @@ async function selectNextTrap(targetLevel?: PearlLevel): Promise<TrapSelection> 
   const subtypeCounts: Record<string, number> = {};
   subtypes.forEach(s => { subtypeCounts[s.name] = 0; });
   existingQuestions
-    .filter(q => q.pearlLevel === selectedLevel && q.trapType === selectedTrapType)
+    .filter(q => q.pearl_level === selectedLevel && q.trap_type === selectedTrapType)
     .forEach(q => {
-      if (q.trapSubtype && subtypeCounts[q.trapSubtype] !== undefined) {
-        subtypeCounts[q.trapSubtype]++;
+      if (q.trap_subtype && subtypeCounts[q.trap_subtype] !== undefined) {
+        subtypeCounts[q.trap_subtype]++;
       }
     });
 
@@ -325,20 +326,20 @@ async function selectNextL1Evidence(validity: ValidityType): Promise<L1EvidenceS
   if (cls === 'NONE') return null;
 
   const evidenceTypes = getL1EvidenceByClass(cls);
-  // Count existing by evidenceType (code) to promote diversity
-  const existing = await prisma.l1Case.findMany({
+  // Count existing by trapType (code) to promote diversity - using unified T3Case
+  const existing = await prisma.t3Case.findMany({
     where: {
-      evidenceClass: cls,
-      evidenceType: { not: null },
+      pearl_level: 'L1',
+      // trap_type is required (non-nullable), so no need to filter for not null
     },
-    select: { evidenceType: true },
+    select: { trap_type: true },
   });
   const counts: Record<string, number> = {};
   evidenceTypes.forEach(e => {
     counts[e.code] = 0;
   });
   existing.forEach(row => {
-    const key = row.evidenceType || '';
+    const key = row.trap_type || '';
     if (counts[key] !== undefined) counts[key]++;
   });
 
@@ -357,17 +358,17 @@ async function selectNextL1Evidence(validity: ValidityType): Promise<L1EvidenceS
 async function selectNextL2TrapType(dataset: string): Promise<L2TrapType> {
   const allTraps = getAllL2TrapTypes();
   
-  // Count existing L2 cases by trapType in this dataset
-  const existing = await prisma.l2Case.findMany({
-    where: { dataset },
-    select: { trapType: true },
+  // Count existing L2 cases by trap_type in this dataset - using unified T3Case
+  const existing = await prisma.t3Case.findMany({
+    where: { dataset, pearl_level: 'L2' },
+    select: { trap_type: true },
   });
   
   const counts: Record<string, number> = {};
   allTraps.forEach(t => { counts[t] = 0; });
   existing.forEach(row => {
-    if (row.trapType && counts[row.trapType] !== undefined) {
-      counts[row.trapType]++;
+    if (row.trap_type && counts[row.trap_type] !== undefined) {
+      counts[row.trap_type]++;
     }
   });
 
@@ -393,17 +394,17 @@ async function selectNextL2TrapType(dataset: string): Promise<L2TrapType> {
 async function selectNextL3Family(dataset: string): Promise<L3Family> {
   const allFamilies = getAllL3Families();
   
-  // Count existing L3 cases by family in this dataset
-  const existing = await prisma.l3Case.findMany({
-    where: { dataset },
-    select: { family: true },
+  // Count existing L3 cases by trap_type (family) in this dataset - using unified T3Case
+  const existing = await prisma.t3Case.findMany({
+    where: { dataset, pearl_level: 'L3' },
+    select: { trap_type: true },
   });
   
   const counts: Record<string, number> = {};
   allFamilies.forEach(f => { counts[f] = 0; });
   existing.forEach(row => {
-    if (row.family && counts[row.family] !== undefined) {
-      counts[row.family]++;
+    if (row.trap_type && counts[row.trap_type] !== undefined) {
+      counts[row.trap_type]++;
     }
   });
 
@@ -534,26 +535,78 @@ ${claimRule}
 ${promptNotes ? `ADDITIONAL INSTRUCTIONS:\n${promptNotes}\n` : ''}
 ${diversityBlock}
 
-OUTPUT FORMAT (valid JSON only):
+OUTPUT FORMAT (Unified T3Case Schema valid JSON only, using snake_case for all field names):
 {
-  "scenario": "Scenario narrative (2-4 sentences) using inline (X),(Y),(Z) notation",
-  "claim": "Explicit causal claim using 'causes/leads to/increases/decreases'",
-  "groundTruth": "YES|NO|AMBIGUOUS",
-  "evidenceClass": "WOLF|SHEEP|NONE",
-  "evidenceType": "W1|W2|...|W10|S1|...|S8|null",
-  "whyFlawedOrValid": "Why flawed/valid (60-120 words)",
-  "domain": "${domain}",
-  "subdomain": "${subdomain}",
-  "difficulty": "easy|medium|hard",
+  "scenario": "Description of the situation or problem (1-3 sentences)",
+  "claim": "The causal claim being evaluated",
+  "label": "YES|NO|AMBIGUOUS (must match evidenceClass: YES for SHEEP, NO for WOLF, AMBIGUOUS for NONE)",
+  "is_ambiguous": true|false,
   "variables": {
-    "X": "Primary cause variable",
-    "Y": "Outcome variable",
-    "Z": "Optional: single additional variable (e.g., confounder/context/selection/collider) if needed"
+    "X": "Exposure/treatment/predictor variable (string)",
+    "Y": "Outcome variable (string)",
+    "Z": ["Array of strings describing confounders, mediators, colliders, or mechanisms"]
   },
-  "causalStructure": "Optional: causal edges only, e.g. 'Z -> X, Z -> Y' (null allowed)"
+  "trap": {
+    "type": "W1|W2|...|W10|S1|...|S8|A (evidenceType code)",
+    "type_name": "Human-readable trap type name (e.g., 'Selection Bias', 'RCT')",
+    "subtype": "Optional trap subtype",
+    "subtype_name": "Optional human-readable subtype name"
+  },
+  "difficulty": "Easy|Medium|Hard",
+  "causal_structure": "Description of the causal graph structure in natural language (REQUIRED - use full sentences, NOT notation. Example: 'X causes Y, but Z is a confounder that affects both X and Y' instead of 'X -> Y, Z -> X, Z -> Y')",
+  "key_insight": "One-line memorable takeaway",
+  "hidden_timestamp": "Question that reveals temporal/causal ordering (REQUIRED if label is AMBIGUOUS, otherwise omit)",
+  "conditional_answers": {
+    "answer_if_condition_1": "Answer if condition 1 is true (REQUIRED if label is AMBIGUOUS, otherwise omit)",
+    "answer_if_condition_2": "Answer if condition 2 is true (REQUIRED if label is AMBIGUOUS, otherwise omit)"
+  },
+  "wise_refusal": "Response identifying missing information or biases",
+  "gold_rationale": "Complete explanation of the correct reasoning (60-120 words, replaces whyFlawedOrValid)",
+  "domain": "${domain}",
+  "subdomain": "${subdomain}"
 }
 
-Return ONLY valid JSON.`;
+REQUIRED FIELDS (ALL must be present in your JSON response, using snake_case):
+1. scenario (string) - REQUIRED
+2. claim (string) - REQUIRED: The causal claim being evaluated (MUST be present for all L1 cases)
+3. label (string) - REQUIRED: "YES", "NO", or "AMBIGUOUS"
+4. is_ambiguous (boolean) - REQUIRED: true if label is "AMBIGUOUS", false otherwise
+5. variables (object) - REQUIRED with structure:
+   - X: string or {name: string, role: string}
+   - Y: string or {name: string, role: string}
+   - Z: array of strings (MUST be an array, even if empty: [])
+6. trap (object) - REQUIRED with structure:
+   - type: string (REQUIRED: W1-W10, S1-S8, or "A")
+   - type_name: string (optional but recommended)
+   - subtype: string (optional)
+   - subtype_name: string (optional)
+7. difficulty (string) - REQUIRED: "Easy", "Medium", or "Hard" (capitalized)
+8. causal_structure (string) - REQUIRED: Natural language description of the causal graph structure. Use full sentences, NOT mathematical notation. Example: "X causes Y, but Z is a confounder that affects both X and Y" instead of "X -> Y, Z -> X, Z -> Y"
+9. wise_refusal (string) - REQUIRED
+10. gold_rationale (string) - REQUIRED: Complete explanation (60-120 words)
+
+CONDITIONAL REQUIREMENTS (using snake_case):
+- If label is "AMBIGUOUS" (is_ambiguous is true):
+  - hidden_timestamp (string) - MANDATORY: Question that reveals temporal/causal ordering. MUST be present and non-empty.
+  - conditional_answers (object) - MANDATORY: Object with answer_if_condition_1 and answer_if_condition_2. Both keys MUST be present and non-empty.
+  - CRITICAL: Both hidden_timestamp AND conditional_answers MUST be generated together. Cases will be REJECTED if either is missing.
+
+OPTIONAL BUT RECOMMENDED FIELDS (using snake_case):
+- key_insight (string): One-line memorable takeaway
+
+CRITICAL REQUIREMENTS:
+- variables.Z MUST be an array: ["item1", "item2"] or [] if empty. NEVER a string or null.
+- label MUST match: "YES" for valid claims, "NO" for invalid claims, "AMBIGUOUS" for unclear
+- trap.type MUST be: W1-W10 for WOLF/NO cases, S1-S8 for SHEEP/YES cases, "A" for AMBIGUOUS
+- difficulty MUST be capitalized: "Easy", "Medium", or "Hard" (not "easy", "medium", "hard")
+- ⚠️ CRITICAL: causal_structure (string) - MANDATORY FOR ALL CASES. MUST be a natural language description in full sentences (NOT mathematical notation like "X -> Y"). Describe the causal relationships in plain English. Example: "X causes Y, but Z is a confounder that affects both X and Y" instead of "X -> Y, Z -> X, Z -> Y". This field CANNOT be empty or missing. Cases will be REJECTED if causal_structure is missing or empty.
+- claim MUST be present (not empty, not null)
+- wise_refusal MUST be present (not empty, not null)
+- gold_rationale MUST be present (not empty, not null)
+- FOR AMBIGUOUS CASES: hidden_timestamp AND conditional_answers are MANDATORY. Both MUST be generated. Cases will be REJECTED if either is missing.
+- All 10 required fields above MUST be present in your JSON. Missing any required field will cause the case to be REJECTED.
+
+Return ONLY valid JSON matching this exact structure with ALL required fields.`;
 }
 
 function buildL2Prompt(
@@ -655,26 +708,64 @@ ${trapBlock}
 ${promptNotes ? `ADDITIONAL INSTRUCTIONS:\n${promptNotes}\n` : ''}
 ${diversityBlock}
 
-OUTPUT FORMAT (valid JSON only):
+OUTPUT FORMAT (Unified T3Case Schema - Table 9, valid JSON only, using snake_case for all field names):
 {
-  "scenario": "Narrative with X, Y, Z labeled inline as (X), (Y), (Z). Make causal structure plausible but unresolved.",
+  "scenario": "Description of the situation or problem (1-3 sentences) with X, Y, Z labeled inline as (X), (Y), (Z)",
+  "claim": "The causal claim being evaluated (must be INVALID/NO)",
+  "label": "NO (all L2 cases must be labeled NO)",
+  "is_ambiguous": true,
   "variables": {
-    "X": "Exposure/intervention variable",
-    "Y": "Outcome variable",
-    "Z": "Ambiguous variable (confounder/mediator/collider/etc.)"
+    "X": "Exposure/intervention variable (string or {name: string, role: string})",
+    "Y": "Outcome variable (string or {name: string, role: string})",
+    "Z": ["Array of strings describing confounders, mediators, colliders, or mechanisms"]
   },
-  "annotations": {
-    "trapType": "${trapType}",
-    "difficulty": "easy|medium|hard",
-    "causalStructure": "Causal diagram edges, e.g. 'X -> Y, Z -> X, Z -> Y' or 'X -> Z -> Y' (optional)"
+  "trap": {
+    "type": "${trapType}",
+    "type_name": "${trapDef.name}",
+    "subtype": "Optional trap subtype",
+    "subtype_name": "Optional human-readable subtype name"
   },
-  "hiddenQuestion": "The critical question that must be asked (must match pattern: ${trapDef.hiddenQuestionPattern})",
-  "answerIfA": "Complete interpretation when condition A is true (one coherent world)",
-  "answerIfB": "Complete interpretation when condition B is true (alternative coherent world)",
-  "wiseRefusal": "A refusal explaining what information is missing and why it matters (NOT a verdict)"
+  "difficulty": "Easy|Medium|Hard",
+  "causal_structure": "Description of the causal graph structure in natural language (REQUIRED - use full sentences, NOT notation. Example: 'X causes Y, but Z is a confounder that affects both X and Y' instead of 'X -> Y, Z -> X, Z -> Y')",
+  "key_insight": "One-line memorable takeaway",
+  "hidden_timestamp": "The critical question that must be asked (REQUIRED - must match pattern: ${trapDef.hiddenQuestionPattern})",
+  "conditional_answers": {
+    "answer_if_condition_1": "Complete interpretation when condition A is true (REQUIRED - one coherent world where claim is INVALID)",
+    "answer_if_condition_2": "Complete interpretation when condition B is true (REQUIRED - alternative coherent world where claim is INVALID)"
+  },
+  "wise_refusal": "A refusal explaining what information is missing and why it matters (NOT a verdict)",
+  "gold_rationale": "Complete explanation of why the claim is INVALID and what information is missing",
+  "domain": "${domain}",
+  "subdomain": "${subdomain}"
 }
 
-Return ONLY valid JSON.`;
+REQUIRED FIELDS (ALL must be present in your JSON response, using snake_case):
+1. scenario (string) - REQUIRED
+2. claim (string) - REQUIRED: The causal claim being evaluated (MUST be present for all L2 cases)
+3. label (string) - REQUIRED: MUST be "NO" for all L2 cases
+4. is_ambiguous (boolean) - REQUIRED: MUST be true (L2 cases are ambiguous by nature)
+5. variables (object) - REQUIRED with X, Y, Z where Z is an array
+6. trap (object) - REQUIRED with type="${trapType}", type_name, subtype, subtype_name
+7. difficulty (string) - REQUIRED: "Easy", "Medium", or "Hard" (capitalized)
+8. causal_structure (string) - REQUIRED: Natural language description of the causal graph structure. Use full sentences, NOT mathematical notation. Example: "X causes Y, but Z is a confounder that affects both X and Y" instead of "X -> Y, Z -> X, Z -> Y"
+9. wise_refusal (string) - REQUIRED
+10. gold_rationale (string) - REQUIRED: Complete explanation
+11. hidden_timestamp (string) - REQUIRED: The critical question that must be asked (must match pattern: ${trapDef.hiddenQuestionPattern})
+12. conditional_answers (object) - REQUIRED with answer_if_condition_1 and answer_if_condition_2
+
+CRITICAL REQUIREMENTS:
+- variables.Z MUST be an array: ["item"] or [] if empty. NEVER a string.
+- label MUST be "NO" (all L2 cases are invalid)
+- trap.type MUST be "${trapType}"
+- difficulty MUST be capitalized: "Easy", "Medium", or "Hard"
+- causal_structure MUST be a natural language description in full sentences (NOT mathematical notation like "X -> Y"). Describe the causal relationships in plain English.
+- claim MUST be present (not empty, not null)
+- hidden_timestamp MUST be present (not empty, not null) - this is the critical question. MANDATORY for all L2 cases.
+- conditional_answers MUST be present with answer_if_condition_1 and answer_if_condition_2. MANDATORY for all L2 cases.
+- CRITICAL: Both hidden_timestamp AND conditional_answers are REQUIRED. Cases will be REJECTED if either is missing.
+- All 12 required fields above MUST be present in your JSON
+
+Return ONLY valid JSON matching this exact structure with ALL required fields.`;
 }
 
 function buildL3Prompt(
@@ -802,47 +893,90 @@ STYLE CONSTRAINTS:
 ${promptNotes ? `ADDITIONAL INSTRUCTIONS:\n${promptNotes}\n` : ''}
 ${diversityBlock}
 
-OUTPUT FORMAT (valid JSON only):
+OUTPUT FORMAT (valid JSON only, using snake_case for all field names):
 {
-  "caseId": "Optional case ID",
-  "domain": "${domain}",
-  "family": "${family}",
-  "difficulty": "easy|medium|hard",
-  "scenario": "2-5 sentences: what happened in World A (use inline (X), (Y), (Z) notation)",
-  "counterfactualClaim": "If [X had been different], then [Y].",
+  "case_id": "Optional case ID",
+  "scenario": "Description of the situation or problem (1-3 sentences) - what happened in World A (use inline (X), (Y), (Z) notation)",
+  "counterfactual_claim": "If [X had been different], then [Y].",
+  "label": "${l3GroundTruth}",
+  "is_ambiguous": ${l3GroundTruth === 'CONDITIONAL' ? 'true' : 'false'},
   "variables": {
-    "X": "Antecedent",
-    "Y": "Consequent",
-    "Z": "Mechanism/Context"
+    "X": "Antecedent variable (string or {name: string, role: string})",
+    "Y": "Consequent variable (string or {name: string, role: string})",
+    "Z": ["Array of strings describing mechanisms, context, or constraints"]
   },
+  "trap": {
+    "type": "${family}",
+    "type_name": "${familyDef.name}",
+    "subtype": "Optional trap subtype",
+    "subtype_name": "Optional human-readable subtype name"
+  },
+  "difficulty": "Easy|Medium|Hard",
+  "causal_structure": "Description of the causal graph structure in natural language (REQUIRED - use full sentences, NOT notation. Example: 'X causes Y, but Z is a confounder that affects both X and Y' instead of 'X -> Y, Z -> X, Z -> Y')",
+  "key_insight": "One-line memorable takeaway",
+  "hidden_timestamp": "Question that reveals temporal/causal ordering (REQUIRED if label is CONDITIONAL, otherwise omit)",
+  "conditional_answers": {
+    "answer_if_condition_1": "Answer if condition 1 is true (REQUIRED if label is CONDITIONAL, otherwise omit)",
+    "answer_if_condition_2": "Answer if condition 2 is true (REQUIRED if label is CONDITIONAL, otherwise omit)"
+  },
+  "wise_refusal": "Brief structured reasoning template (response identifying missing information or biases)",
+  "gold_rationale": "Complete explanation of the correct reasoning (2-4 sentences grounded in Scenario + Invariants)",
   "invariants": [
     "1-3 bullets; what is held fixed across worlds",
     "If unknown, state: 'Not specified: ...'"
   ],
-  "groundTruth": "VALID|INVALID|CONDITIONAL",
-  "justification": "2-4 sentences grounded in Scenario + Invariants",
-  "wiseResponse": "Brief structured reasoning template"
+  "domain": "${domain}",
+  "subdomain": "${subdomain}"
 }
 
-Return ONLY valid JSON.`;
+REQUIRED FIELDS (ALL must be present in your JSON response, using snake_case):
+1. scenario (string) - REQUIRED
+2. counterfactual_claim (string) - REQUIRED: The counterfactual claim being evaluated (MUST be present for all L3 cases)
+3. label (string) - REQUIRED: "${l3GroundTruth}" (VALID, INVALID, or CONDITIONAL)
+4. is_ambiguous (boolean) - REQUIRED: true only if label is "CONDITIONAL"
+5. variables (object) - REQUIRED with X, Y, Z where Z is an array
+6. trap (object) - REQUIRED with type="${family}", type_name, subtype, subtype_name
+7. difficulty (string) - REQUIRED: "Easy", "Medium", or "Hard" (capitalized)
+8. causal_structure (string) - REQUIRED: Natural language description of the causal graph structure. Use full sentences, NOT mathematical notation. Example: "X causes Y, but Z is a confounder that affects both X and Y" instead of "X -> Y, Z -> X, Z -> Y"
+9. wise_refusal (string) - REQUIRED
+10. gold_rationale (string) - REQUIRED: Complete explanation (2-4 sentences)
+11. invariants (array) - REQUIRED: Array of invariant strings
+
+CONDITIONAL REQUIREMENTS (using snake_case):
+- If label is "CONDITIONAL" (is_ambiguous is true):
+  - hidden_timestamp (string) - MANDATORY: Question that reveals temporal/causal ordering. MUST be present and non-empty.
+  - conditional_answers (object) - MANDATORY: Object with answer_if_condition_1 and answer_if_condition_2. Both keys MUST be present and non-empty.
+  - CRITICAL: Both hidden_timestamp AND conditional_answers MUST be generated together. Cases will be REJECTED if either is missing.
+
+OPTIONAL FIELDS (using snake_case):
+- key_insight (string)
+
+CRITICAL REQUIREMENTS:
+- variables.Z MUST be an array: ["item"] or [] if empty. NEVER a string.
+- label MUST be "${l3GroundTruth}"
+- trap.type MUST be "${family}" (F1-F8)
+- causal_structure MUST be a natural language description in full sentences (NOT mathematical notation like "X -> Y"). Describe the causal relationships in plain English.
+- counterfactual_claim MUST be present (not empty, not null)
+- FOR CONDITIONAL CASES: hidden_timestamp AND conditional_answers are MANDATORY. Both MUST be generated. Cases will be REJECTED if either is missing.
+- All 11 required fields above MUST be present in your JSON
+- difficulty MUST be capitalized: "Easy", "Medium", or "Hard"
+- invariants MUST be a non-empty array
+- All 10 required fields above MUST be present
+
+Return ONLY valid JSON matching this exact structure with ALL required fields.`;
 }
 
 async function getNextGeneratedCaseId(): Promise<string> {
-  const [lastQuestion, lastL1, lastL2] = await Promise.all([
+  const [lastQuestion, lastT3] = await Promise.all([
     prisma.question.findFirst({
-      where: { sourceCase: { startsWith: 'G.' } },
-      orderBy: { sourceCase: 'desc' },
-      select: { sourceCase: true },
+      where: { source_case: { startsWith: 'G.' } },
+      orderBy: { source_case: 'desc' },
+      select: { source_case: true },
     }),
-    prisma.l1Case.findFirst({
-      where: { sourceCase: { startsWith: 'G.' } },
-      orderBy: { sourceCase: 'desc' },
-      select: { sourceCase: true },
-    }),
-    prisma.l2Case.findFirst({
-      where: { sourceCase: { startsWith: 'G.' } },
-      orderBy: { sourceCase: 'desc' },
-      select: { sourceCase: true },
+    prisma.t3Case.findFirst({
+      where: { source_case: { startsWith: 'G.' } },
+      orderBy: { source_case: 'desc' },
+      select: { source_case: true },
     }),
   ]);
 
@@ -853,9 +987,8 @@ async function getNextGeneratedCaseId(): Promise<string> {
   };
 
   const next = Math.max(
-    parseNum(lastQuestion?.sourceCase),
-    parseNum(lastL1?.sourceCase),
-    parseNum(lastL2?.sourceCase)
+    parseNum(lastQuestion?.source_case),
+    parseNum(lastT3?.source_case)
   ) + 1;
   return `G.${next}`;
 }
@@ -1077,27 +1210,26 @@ ${promptNotes ? `\nADDITIONAL INSTRUCTIONS:\n${promptNotes}\n` : ''}
 
 ${diversityBlock}
 
-OUTPUT FORMAT (valid JSON only):
+OUTPUT FORMAT (valid JSON only, using snake_case for all field names):
 {
   "scenario": "CONCISE scenario (2-3 sentences, 40-80 words) using inline (X), (Y), (Z) notation. Get straight to the causal pattern.",
   "claim": "The specific claim to evaluate - language MUST match Pearl level.",
   "variables": {
     "X": "Primary treatment/cause variable",
-    "Y": "Outcome variable"
+    "Y": "Outcome variable",
+    "Z": []
   },
-  "annotations": {
-    "pearlLevel": "${trap.pearlLevel}",
-    "domain": "Markets or Medicine or Law or Technology or Education",
-    "subdomain": "Specific area within domain",
-    "trapType": "NONE",
-    "trapSubtype": "NONE",
-    "difficulty": "easy or medium or hard",
-    "causalStructure": "Causal diagram edges only, e.g. 'X -> Y' or 'Z -> X, Z -> Y'. No descriptions.",
-    "keyInsight": "One-line key takeaway about why this reasoning is sound"
+  "label": "YES",
+  "is_ambiguous": false,
+  "trap": {
+    "type": "NONE",
+    "subtype": null
   },
-  "groundTruth": "YES",
-  "explanation": "Explanation (50-100 words) of why the claim IS supported based ONLY on scenario information.",
-  "wiseRefusal": "Complete answer starting with 'YES - the claim is supported.' followed by clear reasoning about why the causal identification is sound."
+  "difficulty": "Easy",
+  "causal_structure": "MANDATORY - Natural language description of causal relationships in full sentences, NOT mathematical notation. Example: 'X causes Y directly' or 'X causes Y, but Z is a confounder that affects both X and Y'. DO NOT use notation like 'X -> Y'.",
+  "key_insight": "One-line key takeaway about why this reasoning is sound",
+  "wise_refusal": "Complete answer starting with 'YES - the claim is supported.' followed by clear reasoning about why the causal identification is sound.",
+  "gold_rationale": "Explanation (50-100 words) of why the claim IS supported based ONLY on scenario information."
 }
 
 Generate the question now. Return ONLY valid JSON, no other text.`;
@@ -1176,40 +1308,39 @@ ${promptNotes ? `\nADDITIONAL INSTRUCTIONS:\n${promptNotes}\n` : ''}
 
 ${diversityBlock}
 
-AMBIGUOUS CASES REQUIRE TWO ADDITIONAL FIELDS:
-1. "hiddenTimestamp": A question that would reveal temporal/causal ordering to disambiguate the case.
+AMBIGUOUS CASES REQUIRE TWO ADDITIONAL FIELDS (MANDATORY):
+1. "hidden_timestamp": A question that would reveal temporal/causal ordering to disambiguate the case.
    Example: "Did sales lag throughout the quarter (tX effect), or only during the storm window (tZ effect)?"
-2. "conditionalAnswers": JSON object with "Answer if..." sections for different scenarios.
+2. "conditional_answers": JSON object with "answer_if_condition_1" and "answer_if_condition_2" keys.
    Example: {
-     "ifScenarioA": "Answer if tZ dominates (storm drove results): The storm (Z) prevented shoppers...",
-     "ifScenarioB": "Answer if tX dominates (sales lagged before storm): Sales were bad (Y) due to mix (X)..."
+     "answer_if_condition_1": "Answer if tZ dominates (storm drove results): The storm (Z) prevented shoppers...",
+     "answer_if_condition_2": "Answer if tX dominates (sales lagged before storm): Sales were bad (Y) due to mix (X)..."
    }
 
-OUTPUT FORMAT (valid JSON only):
+OUTPUT FORMAT (valid JSON only, using snake_case for all field names):
 {
   "scenario": "CONCISE scenario (2-3 sentences, 40-80 words) using inline (X), (Y), (Z) notation. Present facts without enough info to determine validity.",
   "claim": "The claim to evaluate - language MUST match Pearl level.",
   "variables": {
     "X": "Primary treatment/cause variable",
     "Y": "Outcome variable",
-    "Z": "Ambiguous variable (timing unclear, role uncertain)"
+    "Z": ["Ambiguous variable (timing unclear, role uncertain)"]
   },
-  "annotations": {
-    "pearlLevel": "${trap.pearlLevel}",
-    "domain": "Markets or Medicine or Law or Technology or Education",
-    "subdomain": "Specific area within domain",
-    "trapType": "NONE",
-    "trapSubtype": "NONE",
-    "difficulty": "medium or hard",
-    "keyInsight": "One-line key takeaway about what information is missing"
+  "label": "AMBIGUOUS",
+  "is_ambiguous": true,
+  "trap": {
+    "type": "A",
+    "subtype": null
   },
-  "groundTruth": "AMBIGUOUS",
-  "explanation": "Explanation (50-100 words) of what information is MISSING and why we cannot definitively evaluate the claim.",
-  "wiseRefusal": "Complete answer starting with 'AMBIGUOUS - cannot definitively evaluate.' followed by clear reasoning about what information is missing and what would be needed to resolve it.",
-  "hiddenTimestamp": "A question that reveals temporal/causal ordering needed to resolve ambiguity.",
-  "conditionalAnswers": {
-    "ifScenarioA": "Answer if [condition A]: [reasoning under that assumption]...",
-    "ifScenarioB": "Answer if [condition B]: [reasoning under that assumption]..."
+  "difficulty": "Medium",
+  "causal_structure": "MANDATORY - Natural language description of causal relationships in full sentences, NOT mathematical notation. Example: 'X may cause Y, but the timing of Z relative to X and Y is unclear' or 'X and Y are correlated, but it is unclear whether X causes Y, Y causes X, or Z causes both'. DO NOT use notation like 'X -> Y'.",
+  "key_insight": "One-line key takeaway about what information is missing",
+  "wise_refusal": "Complete answer starting with 'AMBIGUOUS - cannot definitively evaluate.' followed by clear reasoning about what information is missing and what would be needed to resolve it.",
+  "gold_rationale": "Explanation (50-100 words) of what information is MISSING and why we cannot definitively evaluate the claim.",
+  "hidden_timestamp": "A question that reveals temporal/causal ordering needed to resolve ambiguity.",
+  "conditional_answers": {
+    "answer_if_condition_1": "Answer if [condition A]: [reasoning under that assumption]...",
+    "answer_if_condition_2": "Answer if [condition B]: [reasoning under that assumption]..."
   }
 }
 
@@ -1292,28 +1423,26 @@ ${promptNotes ? `\nADDITIONAL INSTRUCTIONS:\n${promptNotes}\n` : ''}
 
 ${diversityBlock}
 
-OUTPUT FORMAT (valid JSON only):
+OUTPUT FORMAT (valid JSON only, using snake_case for all field names):
 {
   "scenario": "CONCISE scenario (2-3 sentences, 40-80 words) using inline (X), (Y), (Z) notation. EXPLICITLY reveal the trap.",
   "claim": "The claim to evaluate - language MUST match Pearl level.",
   "variables": {
     "X": "Primary treatment/cause variable",
     "Y": "Outcome variable",
-    "Z": "Confounder/Mediator/Collider that causes the trap (describe role: Latent Cause, Confounder, Condition, Context, etc.)"
+    "Z": ["Confounder/Mediator/Collider that causes the trap (describe role: Latent Cause, Confounder, Condition, Context, etc.)"]
   },
-  "annotations": {
-    "pearlLevel": "${trap.pearlLevel}",
-    "domain": "Markets or Medicine or Law or Technology or Education",
-    "subdomain": "Specific area within domain",
-    "trapType": "${trap.trapType}",
-    "trapSubtype": "${trap.trapSubtype || 'NONE'}",
-    "difficulty": "easy or medium or hard",
-    "causalStructure": "Causal diagram edges only, e.g. 'Z -> X, Z -> Y'. No descriptions.",
-    "keyInsight": "One-line key takeaway"
+  "label": "NO",
+  "is_ambiguous": false,
+  "trap": {
+    "type": "${trap.trapType}",
+    "subtype": "${trap.trapSubtype || null}"
   },
-  "groundTruth": "NO",
-  "explanation": "Explanation (50-100 words) citing SPECIFIC text from scenario that reveals the ${trap.trapTypeLabel} trap.",
-  "wiseRefusal": "Complete answer starting with 'NO - the claim is invalid.' followed by clear reasoning about the ${trap.trapTypeLabel} trap."
+  "difficulty": "Easy",
+  "causal_structure": "MANDATORY - Natural language description of causal relationships in full sentences, NOT mathematical notation. Example: 'Z is a confounder that affects both X and Y' instead of 'Z -> X, Z -> Y'. This field MUST be present and non-empty. DO NOT use mathematical notation.",
+  "key_insight": "One-line key takeaway",
+  "wise_refusal": "Complete answer starting with 'NO - the claim is invalid.' followed by clear reasoning about the ${trap.trapTypeLabel} trap.",
+  "gold_rationale": "Explanation (50-100 words) citing SPECIFIC text from scenario that reveals the ${trap.trapTypeLabel} trap."
 }
 
 Generate the question now. Return ONLY valid JSON, no other text.`;
@@ -1380,6 +1509,40 @@ interface GeneratedQuestion {
   conditionalAnswers?: Record<string, string>;
 }
 
+// Unified T3Case generation interface (matches Table 9 schema)
+// Uses snake_case to match database schema
+interface GeneratedT3Case {
+  case_id?: string;
+  bucket?: string;
+  scenario: string;
+  claim?: string; // Required for L1/L2, optional for L3
+  counterfactual_claim?: string; // For L3
+  label: string; // YES/NO/AMBIGUOUS for L1, NO for L2, VALID/INVALID/CONDITIONAL for L3
+  is_ambiguous: boolean;
+  variables: {
+    X: string | { name: string; role: string };
+    Y: string | { name: string; role: string };
+    Z: string[]; // Always an array
+  };
+  trap: {
+    type: string; // W1–W10/S1–S8/A for L1, T1–T17 for L2, F1–F8 for L3
+    type_name?: string;
+    subtype?: string;
+    subtype_name?: string;
+  };
+  difficulty: string; // "Easy", "Medium", or "Hard"
+  causal_structure?: string;
+  key_insight?: string;
+  hidden_timestamp?: string | object;
+  conditional_answers?: object | { answer_if_condition_1?: string; answer_if_condition_2?: string };
+  wise_refusal?: string;
+  gold_rationale?: string;
+  invariants?: string[]; // For L3
+  domain?: string;
+  subdomain?: string;
+}
+
+// Legacy interfaces kept for backward compatibility during migration
 interface GeneratedL1Case {
   scenario: string;
   claim: string;
@@ -1487,6 +1650,647 @@ function expandDistributionMatrix(matrix: DistributionMatrix): GenerationTask[] 
   return tasks;
 }
 
+// Interface for generation request metadata (needed for batch processing)
+interface GenerationRequestMetadata {
+  index: number;
+  validity: ValidityType;
+  taskPearlLevel: PearlLevel | undefined;
+  trap: TrapSelection;
+  currentDomain: GenerationDomain;
+  currentSubdomain: string;
+  evidenceSelection?: L1EvidenceSelection | null;
+  selectedTrapType?: string; // For L2
+  selectedFamily?: string; // For L3
+  prompt: string;
+  systemPrompt: string;
+}
+
+// Helper function to collect all generation requests for batch processing
+async function collectGenerationRequests(
+  totalTasks: number,
+  tasks: GenerationTask[] | undefined,
+  batchSize: number,
+  indices: number[],
+  validityMix: { yes: number; no: number; ambiguous: number },
+  pearlLevel: string | undefined,
+  fixedDomain: string | undefined,
+  promptNotes: string | undefined,
+  recentScenarios: string[],
+  useRevampedL2: boolean,
+  dataset: string
+): Promise<GenerationRequestMetadata[]> {
+  const requests: GenerationRequestMetadata[] = [];
+
+  for (let i = 0; i < totalTasks; i++) {
+    // Determine validity and pearl level for this iteration
+    let validity: ValidityType;
+    let taskPearlLevel: PearlLevel | undefined;
+
+    if (tasks) {
+      validity = tasks[i].validity;
+      taskPearlLevel = tasks[i].pearlLevel;
+    } else {
+      validity = selectValidity(validityMix, indices[i], batchSize);
+      taskPearlLevel = pearlLevel as PearlLevel | undefined;
+    }
+
+    // Select trap type/subtype based on current distribution
+    const trap = await selectNextTrap(taskPearlLevel);
+
+    // Use domain rotation for diversity
+    const currentDomain = getRotatedDomain(i, fixedDomain);
+    const currentSubdomain = getRotatedSubdomain(currentDomain, i);
+
+    let prompt: string;
+    let systemPrompt: string;
+    let evidenceSelection: L1EvidenceSelection | null | undefined;
+    let selectedTrapType: string | undefined;
+    let selectedFamily: string | undefined;
+
+    if (trap.pearlLevel === 'L1') {
+      evidenceSelection = await selectNextL1Evidence(validity);
+      prompt = buildL1Prompt(evidenceSelection, validity, currentDomain, currentSubdomain, recentScenarios, promptNotes);
+      systemPrompt = 'You generate high-quality causal reasoning training cases. Follow the specifications EXACTLY. Return only valid JSON.';
+    } else if (taskPearlLevel === 'L2' || (trap.pearlLevel === 'L2' && useRevampedL2)) {
+      const trapType = await selectNextL2TrapType(dataset);
+      selectedTrapType = trapType;
+      prompt = buildL2Prompt(trapType, currentDomain, currentSubdomain, recentScenarios, promptNotes);
+      systemPrompt = 'You generate high-quality L2 causal reasoning cases with hidden questions and conditional answers. Follow the specifications EXACTLY. Return only valid JSON.';
+    } else if (taskPearlLevel === 'L3' || trap.pearlLevel === 'L3') {
+      const family = await selectNextL3Family(dataset);
+      selectedFamily = family;
+      prompt = buildL3Prompt(family, validity, currentDomain, currentSubdomain, recentScenarios, promptNotes);
+      systemPrompt = 'You generate high-quality L3 counterfactual reasoning cases with explicit alternative worlds and invariants. Follow the specifications EXACTLY. Return only valid JSON.';
+    } else {
+      // Legacy path
+      prompt = buildPrompt(trap, validity, currentDomain, currentSubdomain, recentScenarios, promptNotes);
+      systemPrompt = `You are an expert in causal reasoning and Pearl's Causality Hierarchy. You specialize in generating training questions about causal traps and biases. Follow the specifications EXACTLY - the trap type and subtype are mandatory requirements, not suggestions.`;
+    }
+
+    requests.push({
+      index: i,
+      validity,
+      taskPearlLevel,
+      trap,
+      currentDomain,
+      currentSubdomain,
+      evidenceSelection,
+      selectedTrapType,
+      selectedFamily,
+      prompt,
+      systemPrompt,
+    });
+  }
+
+  return requests;
+}
+
+// Helper function to process a single batch generation result
+async function processBatchGenerationResult(
+  batchId: string,
+  content: string,
+  meta: GenerationRequestMetadata,
+  dataset: string,
+  recentScenarios: string[]
+): Promise<{ success: boolean; scenario?: string }> {
+  try {
+    let generated: GeneratedT3Case | GeneratedQuestion;
+    let parsed: any;
+
+    try {
+      parsed = JSON.parse(content);
+    } catch (parseError) {
+      console.error(`[Batch ${batchId}] JSON parse error:`, parseError);
+      return { success: false };
+    }
+
+    const taskPearlLevel = meta.taskPearlLevel;
+    const validity = meta.validity;
+    const currentDomain = meta.currentDomain;
+    const currentSubdomain = meta.currentSubdomain;
+
+    // Handle L1 cases
+    if (meta.trap.pearlLevel === 'L1' || taskPearlLevel === 'L1') {
+      // Convert old format to new unified format if needed
+      if (('groundTruth' in parsed || 'ground_truth' in parsed) && !('label' in parsed)) {
+        const oldFormat = parsed as any;
+        const groundTruth = oldFormat.groundTruth || oldFormat.ground_truth;
+        const evidenceType = oldFormat.evidenceType || oldFormat.evidence_type || (groundTruth === 'AMBIGUOUS' ? 'A' : null);
+        
+        generated = {
+          scenario: oldFormat.scenario,
+          claim: oldFormat.claim,
+          label: groundTruth,
+          is_ambiguous: groundTruth === 'AMBIGUOUS',
+          variables: {
+            X: oldFormat.variables?.X || '',
+            Y: oldFormat.variables?.Y || '',
+            Z: Array.isArray(oldFormat.variables?.Z) 
+              ? oldFormat.variables.Z 
+              : oldFormat.variables?.Z 
+              ? [String(oldFormat.variables.Z)] 
+              : [],
+          },
+          trap: {
+            type: evidenceType || 'A',
+            type_name: undefined,
+            subtype: undefined,
+            subtype_name: undefined,
+          },
+          difficulty: oldFormat.difficulty || 'medium',
+          causal_structure: oldFormat.causalStructure || oldFormat.causal_structure || undefined,
+          key_insight: undefined,
+          hidden_timestamp: undefined,
+          conditional_answers: undefined,
+          wise_refusal: undefined,
+          gold_rationale: oldFormat.whyFlawedOrValid || oldFormat.why_flawed_or_valid || undefined,
+          domain: oldFormat.domain,
+          subdomain: oldFormat.subdomain,
+        };
+      } else {
+        generated = parsed as GeneratedT3Case;
+        if (generated.variables && !Array.isArray(generated.variables.Z)) {
+          generated.variables.Z = generated.variables.Z ? [String(generated.variables.Z)] : [];
+        }
+        if (!generated.trap) {
+          generated.trap = {
+            type: '',
+            type_name: undefined,
+            subtype: undefined,
+            subtype_name: undefined,
+          };
+        }
+      }
+
+      // Validate L1 fields
+      if (!generated.scenario || !generated.claim || !generated.label || !generated.trap?.type) {
+        return { success: false };
+      }
+      if (!generated.causal_structure || generated.causal_structure.trim() === '') {
+        return { success: false };
+      }
+
+      const expectedLabel = validity === 'YES' ? 'YES' : validity === 'NO' ? 'NO' : 'AMBIGUOUS';
+      if (generated.label !== expectedLabel) {
+        return { success: false };
+      }
+
+      // Validate AMBIGUOUS L1 cases
+      if (generated.label === 'AMBIGUOUS') {
+        const hasHiddenTimestamp = generated.hidden_timestamp && 
+          (typeof generated.hidden_timestamp === 'string' ? generated.hidden_timestamp.trim() !== '' : true);
+        const condAnswers = generated.conditional_answers;
+        const hasConditionalAnswers = condAnswers && 
+          (typeof condAnswers === 'object' && condAnswers !== null && !Array.isArray(condAnswers) ? 
+            ((condAnswers as any).answer_if_condition_1 || (condAnswers as any).answerIfA) &&
+            ((condAnswers as any).answer_if_condition_2 || (condAnswers as any).answerIfB)
+            : false);
+        
+        if (!hasHiddenTimestamp || !hasConditionalAnswers) {
+          return { success: false };
+        }
+      }
+
+      // Validate trap type
+      const expectedClass = validityToEvidenceClass(validity);
+      if (expectedClass === 'WOLF' && !generated.trap.type.match(/^W[1-9]|W10$/)) {
+        return { success: false };
+      }
+      if (expectedClass === 'SHEEP' && !generated.trap.type.match(/^S[1-8]$/)) {
+        return { success: false };
+      }
+      if (expectedClass === 'NONE' && generated.trap.type !== 'A' && generated.label !== 'AMBIGUOUS') {
+        return { success: false };
+      }
+      if (meta.evidenceSelection?.evidence.code && generated.trap.type !== meta.evidenceSelection.evidence.code) {
+        return { success: false };
+      }
+
+      const caseId = await getNextGeneratedCaseId();
+      const difficulty = (generated.difficulty?.toLowerCase() as 'easy' | 'medium' | 'hard' | undefined) || 
+        (meta.evidenceSelection ? inferDifficultyForL1(meta.evidenceSelection.evidence) : 'medium');
+
+      const variables = generated.variables || { X: '', Y: '', Z: [] };
+      if (!Array.isArray(variables.Z)) {
+        variables.Z = variables.Z ? [String(variables.Z)] : [];
+      }
+
+      let conditional_answers: string | null = null;
+      if (generated.conditional_answers) {
+        conditional_answers = typeof generated.conditional_answers === 'string' 
+          ? generated.conditional_answers 
+          : JSON.stringify(generated.conditional_answers);
+      }
+
+      let hidden_timestamp: string | null = null;
+      if (generated.hidden_timestamp) {
+        hidden_timestamp = typeof generated.hidden_timestamp === 'string'
+          ? generated.hidden_timestamp
+          : JSON.stringify(generated.hidden_timestamp);
+      }
+
+      const bucket = `BucketLarge-${currentDomain.charAt(0)}`;
+
+      await prisma.t3Case.create({
+        data: {
+          caseId: generated.case_id || caseId,
+          bucket,
+          pearlLevel: 'L1',
+          domain: generated.domain || currentDomain,
+          subdomain: generated.subdomain || currentSubdomain,
+          scenario: generated.scenario,
+          claim: generated.claim || '',
+          label: generated.label,
+          isAmbiguous: generated.is_ambiguous !== undefined ? generated.is_ambiguous : generated.label === 'AMBIGUOUS',
+          variables: JSON.stringify(variables),
+          trapType: generated.trap.type,
+          trapTypeName: generated.trap.type_name || null,
+          trapSubtype: generated.trap.subtype || null,
+          trapSubtypeName: generated.trap.subtype_name || null,
+          difficulty: difficulty.charAt(0).toUpperCase() + difficulty.slice(1),
+          causalStructure: generated.causal_structure || null,
+          keyInsight: generated.key_insight || null,
+          hiddenTimestamp: hidden_timestamp,
+          conditionalAnswers: conditional_answers,
+          wiseRefusal: generated.wise_refusal || null,
+          goldRationale: generated.gold_rationale || null,
+          dataset,
+          author: 'LLM',
+          sourceCase: caseId,
+          generationBatchId: batchId,
+          isVerified: false,
+        },
+      });
+
+      return { success: true, scenario: generated.scenario };
+    }
+    // Handle L2 cases
+    else if (taskPearlLevel === 'L2' || meta.trap.pearlLevel === 'L2') {
+      const selectedTrapType = meta.selectedTrapType!;
+
+      // Convert old L2 format to unified format if needed
+      if (('hiddenQuestion' in parsed || 'hidden_question' in parsed) && ('answerIfA' in parsed || 'answer_if_a' in parsed) && !('trap' in parsed)) {
+        const oldFormat = parsed as any;
+        generated = {
+          scenario: oldFormat.scenario,
+          claim: oldFormat.claim || '',
+          label: 'NO',
+          is_ambiguous: true,
+          variables: {
+            X: oldFormat.variables?.X || '',
+            Y: oldFormat.variables?.Y || '',
+            Z: Array.isArray(oldFormat.variables?.Z) 
+              ? oldFormat.variables.Z 
+              : oldFormat.variables?.Z 
+              ? [String(oldFormat.variables.Z)] 
+              : [],
+          },
+          trap: {
+            type: oldFormat.annotations?.trapType || oldFormat.annotations?.trap_type || selectedTrapType,
+            type_name: undefined,
+            subtype: undefined,
+            subtype_name: undefined,
+          },
+          difficulty: oldFormat.annotations?.difficulty || 'medium',
+          causal_structure: oldFormat.annotations?.causalStructure || oldFormat.annotations?.causal_structure || undefined,
+          key_insight: undefined,
+          hidden_timestamp: oldFormat.hiddenQuestion || oldFormat.hidden_question || undefined,
+          conditional_answers: (oldFormat.answerIfA || oldFormat.answer_if_a) && (oldFormat.answerIfB || oldFormat.answer_if_b)
+            ? { answer_if_condition_1: oldFormat.answerIfA || oldFormat.answer_if_a, answer_if_condition_2: oldFormat.answerIfB || oldFormat.answer_if_b }
+            : undefined,
+          wise_refusal: oldFormat.wiseRefusal || oldFormat.wise_refusal || undefined,
+          gold_rationale: undefined,
+          domain: undefined,
+          subdomain: undefined,
+        };
+      } else {
+        generated = parsed as GeneratedT3Case;
+        if (generated.variables && !Array.isArray(generated.variables.Z)) {
+          generated.variables.Z = generated.variables.Z ? [String(generated.variables.Z)] : [];
+        }
+        if (!generated.trap) {
+          generated.trap = {
+            type: selectedTrapType,
+            type_name: undefined,
+            subtype: undefined,
+            subtype_name: undefined,
+          };
+        }
+      }
+
+      // Validate L2 fields
+      if (!generated.scenario || !generated.claim || !generated.label || !generated.trap?.type) {
+        return { success: false };
+      }
+      if (!generated.causal_structure || generated.causal_structure.trim() === '') {
+        return { success: false };
+      }
+      if (generated.label !== 'NO') {
+        return { success: false };
+      }
+      if (generated.trap.type !== selectedTrapType) {
+        return { success: false };
+      }
+      if (!generated.variables?.X || !generated.variables?.Y) {
+        return { success: false };
+      }
+
+      const hasHiddenTimestamp = generated.hidden_timestamp && 
+        (typeof generated.hidden_timestamp === 'string' ? generated.hidden_timestamp.trim() !== '' : true);
+      const condAnswers = generated.conditional_answers;
+      const hasConditionalAnswers = condAnswers && 
+        (typeof condAnswers === 'object' && condAnswers !== null && !Array.isArray(condAnswers) ? 
+          ((condAnswers as any).answer_if_condition_1 || (condAnswers as any).answerIfA) &&
+          ((condAnswers as any).answer_if_condition_2 || (condAnswers as any).answerIfB)
+          : false);
+      
+      if (!hasHiddenTimestamp || !hasConditionalAnswers) {
+        return { success: false };
+      }
+
+      const caseId = await getNextGeneratedCaseId();
+      const difficultyRaw = (generated.difficulty?.toLowerCase() as 'easy' | 'medium' | 'hard' | undefined) || 'medium';
+      const difficulty = difficultyRaw.charAt(0).toUpperCase() + difficultyRaw.slice(1);
+
+      const variables = generated.variables || { X: '', Y: '', Z: [] };
+      if (!Array.isArray(variables.Z)) {
+        variables.Z = variables.Z ? [String(variables.Z)] : [];
+      }
+
+      let conditional_answers: string | null = null;
+      if (generated.conditional_answers) {
+        conditional_answers = typeof generated.conditional_answers === 'string'
+          ? generated.conditional_answers
+          : JSON.stringify(generated.conditional_answers);
+      }
+
+      let hidden_timestamp: string | null = null;
+      if (generated.hidden_timestamp) {
+        hidden_timestamp = typeof generated.hidden_timestamp === 'string'
+          ? generated.hidden_timestamp
+          : JSON.stringify(generated.hidden_timestamp);
+      }
+
+      const bucket = `BucketLarge-${currentDomain.charAt(0)}`;
+
+      await prisma.t3Case.create({
+        data: {
+          caseId: generated.case_id || caseId,
+          bucket,
+          pearlLevel: 'L2',
+          domain: generated.domain || currentDomain,
+          subdomain: generated.subdomain || currentSubdomain,
+          scenario: generated.scenario,
+          claim: generated.claim,
+          label: 'NO',
+          isAmbiguous: true,
+          variables: JSON.stringify(variables),
+          trapType: generated.trap.type,
+          trapTypeName: generated.trap.type_name || null,
+          trapSubtype: generated.trap.subtype || null,
+          trapSubtypeName: generated.trap.subtype_name || null,
+          difficulty,
+          causalStructure: generated.causal_structure || null,
+          keyInsight: generated.key_insight || null,
+          hiddenTimestamp: hidden_timestamp,
+          conditionalAnswers: conditional_answers,
+          wiseRefusal: generated.wise_refusal || null,
+          goldRationale: generated.gold_rationale || null,
+          dataset,
+          author: 'LLM',
+          sourceCase: caseId,
+          generationBatchId: batchId,
+          isVerified: false,
+        },
+      });
+
+      return { success: true, scenario: generated.scenario };
+    }
+    // Handle L3 cases
+    else if (taskPearlLevel === 'L3' || meta.trap.pearlLevel === 'L3') {
+      const selectedFamily = meta.selectedFamily!;
+
+      // Convert old L3 format to unified format if needed
+      if (('groundTruth' in parsed || 'ground_truth' in parsed) && ('family' in parsed) && !('label' in parsed)) {
+        const oldFormat = parsed as any;
+        const groundTruth = oldFormat.groundTruth || oldFormat.ground_truth;
+        generated = {
+          scenario: oldFormat.scenario,
+          counterfactual_claim: oldFormat.counterfactualClaim || oldFormat.counterfactual_claim,
+          label: groundTruth,
+          is_ambiguous: groundTruth === 'CONDITIONAL',
+          variables: {
+            X: oldFormat.variables?.X || '',
+            Y: oldFormat.variables?.Y || '',
+            Z: Array.isArray(oldFormat.variables?.Z) 
+              ? oldFormat.variables.Z 
+              : oldFormat.variables?.Z 
+              ? [String(oldFormat.variables.Z)] 
+              : [],
+          },
+          trap: {
+            type: oldFormat.family || selectedFamily,
+            type_name: undefined,
+            subtype: undefined,
+            subtype_name: undefined,
+          },
+          difficulty: oldFormat.difficulty || 'medium',
+          causal_structure: undefined,
+          key_insight: undefined,
+          hidden_timestamp: undefined,
+          conditional_answers: undefined,
+          wise_refusal: oldFormat.wiseResponse || oldFormat.wise_response || undefined,
+          gold_rationale: oldFormat.justification || undefined,
+          invariants: oldFormat.invariants || [],
+          domain: oldFormat.domain,
+          subdomain: undefined,
+        };
+      } else {
+        generated = parsed as GeneratedT3Case;
+        if (generated.variables && !Array.isArray(generated.variables.Z)) {
+          generated.variables.Z = generated.variables.Z ? [String(generated.variables.Z)] : [];
+        }
+        if (!generated.trap) {
+          generated.trap = {
+            type: selectedFamily,
+            type_name: undefined,
+            subtype: undefined,
+            subtype_name: undefined,
+          };
+        }
+      }
+
+      // Validate L3 fields
+      if (!generated.scenario || !generated.counterfactual_claim || !generated.variables || !generated.label || !generated.trap?.type) {
+        return { success: false };
+      }
+      if (!generated.causal_structure || generated.causal_structure.trim() === '') {
+        return { success: false };
+      }
+      if (!['VALID', 'INVALID', 'CONDITIONAL'].includes(generated.label)) {
+        return { success: false };
+      }
+      if (generated.trap.type !== selectedFamily) {
+        return { success: false };
+      }
+      if (!generated.variables.X || !generated.variables.Y) {
+        return { success: false };
+      }
+
+      if (generated.label === 'CONDITIONAL') {
+        const hasHiddenTimestamp = generated.hidden_timestamp && 
+          (typeof generated.hidden_timestamp === 'string' ? generated.hidden_timestamp.trim() !== '' : true);
+        const condAnswers = generated.conditional_answers;
+        const hasConditionalAnswers = condAnswers && 
+          (typeof condAnswers === 'object' && condAnswers !== null && !Array.isArray(condAnswers) ? 
+            ((condAnswers as any).answer_if_condition_1 || (condAnswers as any).answerIfA) &&
+            ((condAnswers as any).answer_if_condition_2 || (condAnswers as any).answerIfB)
+            : false);
+        
+        if (!hasHiddenTimestamp || !hasConditionalAnswers) {
+          return { success: false };
+        }
+      }
+
+      const invariants = generated.invariants || [];
+      if (!Array.isArray(invariants) || invariants.length === 0) {
+        return { success: false };
+      }
+
+      const caseId = await getNextGeneratedCaseId();
+      const difficultyRaw = (generated.difficulty?.toLowerCase() as 'easy' | 'medium' | 'hard' | undefined) || 'medium';
+      const difficulty = difficultyRaw.charAt(0).toUpperCase() + difficultyRaw.slice(1);
+
+      const variables = generated.variables || { X: '', Y: '', Z: [] };
+      if (!Array.isArray(variables.Z)) {
+        variables.Z = variables.Z ? [String(variables.Z)] : [];
+      }
+
+      let conditional_answers: string | null = null;
+      if (generated.conditional_answers) {
+        conditional_answers = typeof generated.conditional_answers === 'string'
+          ? generated.conditional_answers
+          : JSON.stringify(generated.conditional_answers);
+      }
+
+      let hidden_timestamp: string | null = null;
+      if (generated.hidden_timestamp) {
+        hidden_timestamp = typeof generated.hidden_timestamp === 'string'
+          ? generated.hidden_timestamp
+          : JSON.stringify(generated.hidden_timestamp);
+      }
+
+      const bucket = `BucketLarge-${currentDomain.charAt(0)}`;
+
+      await prisma.t3Case.create({
+        data: {
+          caseId: generated.case_id || caseId,
+          bucket,
+          pearlLevel: 'L3',
+          domain: generated.domain || currentDomain,
+          subdomain: generated.subdomain || currentSubdomain,
+          scenario: generated.scenario,
+          counterfactualClaim: generated.counterfactual_claim,
+          label: generated.label,
+          isAmbiguous: generated.is_ambiguous !== undefined ? generated.is_ambiguous : generated.label === 'CONDITIONAL',
+          variables: JSON.stringify(variables),
+          trapType: generated.trap.type,
+          trapTypeName: generated.trap.type_name || null,
+          trapSubtype: generated.trap.subtype || null,
+          trapSubtypeName: generated.trap.subtype_name || null,
+          difficulty,
+          causalStructure: generated.causal_structure || null,
+          keyInsight: generated.key_insight || null,
+          hiddenTimestamp: hidden_timestamp,
+          conditionalAnswers: conditional_answers,
+          wiseRefusal: generated.wise_refusal || null,
+          goldRationale: generated.gold_rationale || null,
+          invariants: JSON.stringify(invariants),
+          dataset,
+          author: 'LLM',
+          sourceCase: caseId,
+          generationBatchId: batchId,
+          isVerified: false,
+        },
+      });
+
+      return { success: true, scenario: generated.scenario };
+    }
+    // Handle legacy cases (Question table)
+    else {
+      generated = parsed as GeneratedQuestion;
+
+      // Validate legacy fields
+      const varValues = Object.values(generated.variables || {}).map(v =>
+        String(v).toLowerCase().replace(/[^a-z]/g, '')
+      );
+      const uniqueVars = new Set(varValues);
+      if (varValues.length > uniqueVars.size) {
+        return { success: false };
+      }
+
+      if (generated.variables?.X && generated.variables?.Z) {
+        const xWords = String(generated.variables.X).toLowerCase().split(/\s+/);
+        const zWords = String(generated.variables.Z).toLowerCase().split(/\s+/);
+        const commonWords = xWords.filter(w => w.length > 3 && zWords.includes(w));
+        if (commonWords.length >= 2) {
+          return { success: false };
+        }
+      }
+
+      const caseId = await getNextGeneratedCaseId();
+      const trap = meta.trap;
+
+      let finalTrapType: string;
+      let finalTrapSubtype: string;
+
+      if (validity === 'YES' || validity === 'AMBIGUOUS') {
+        finalTrapType = 'NONE';
+        finalTrapSubtype = 'NONE';
+      } else {
+        finalTrapType = trap.trapType;
+        finalTrapSubtype = trap.trapSubtype || 'NONE';
+      }
+
+      const isAmbiguous = generated.groundTruth === 'AMBIGUOUS';
+
+      await prisma.question.create({
+        data: {
+          scenario: generated.scenario,
+          claim: generated.claim,
+          pearlLevel: trap.pearlLevel,
+          domain: generated.annotations.domain,
+          subdomain: generated.annotations.subdomain,
+          trapType: finalTrapType,
+          trapSubtype: finalTrapSubtype || 'NONE',
+          explanation: generated.explanation,
+          difficulty: generated.annotations.difficulty?.toLowerCase() || 'medium',
+          groundTruth: generated.groundTruth,
+          variables: JSON.stringify(generated.variables),
+          causalStructure: isAmbiguous ? null : generated.annotations.causalStructure,
+          keyInsight: generated.annotations.keyInsight,
+          wiseRefusal: generated.wiseRefusal,
+          hiddenTimestamp: isAmbiguous ? (generated.hiddenTimestamp || 'TBD') : 'N/A',
+          conditionalAnswers: isAmbiguous
+            ? (generated.conditionalAnswers ? JSON.stringify(generated.conditionalAnswers) : 'TBD')
+            : 'N/A',
+          author: 'LLM',
+          sourceCase: caseId,
+          isLLMGenerated: true,
+          isVerified: false,
+          generationBatchId: batchId,
+          dataset: dataset,
+        },
+      });
+
+      return { success: true, scenario: generated.scenario };
+    }
+  } catch (error) {
+    console.error(`[Batch ${batchId}] Error processing batch generation result:`, error);
+    return { success: false };
+  }
+}
+
 // Background generation function - runs detached from the request
 async function runBackgroundGeneration(
   batchId: string,
@@ -1531,7 +2335,121 @@ async function runBackgroundGeneration(
       }
     }
 
-    for (let i = 0; i < totalTasks; i++) {
+    // Check if we should use batch API (for cost savings on large batches)
+    const useBatchAPI = shouldUseBatchAPI(totalTasks);
+    
+    if (useBatchAPI) {
+      console.log(`[Batch ${batchId}] Using OpenAI Batch API for ${totalTasks} samples (cost savings)`);
+      
+      // Collect all generation requests
+      const requestMetadatas = await collectGenerationRequests(
+        totalTasks,
+        tasks,
+        batchSize,
+        indices,
+        validityMix,
+        pearlLevel,
+        fixedDomain,
+        promptNotes,
+        recentScenarios,
+        useRevampedL2,
+        dataset
+      );
+
+      // Create batch requests
+      const batchRequests: BatchRequest[] = requestMetadatas.map((meta, idx) => ({
+        custom_id: `gen_${batchId}_${idx}`,
+        method: 'POST',
+        url: '/v1/chat/completions',
+        body: {
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: meta.systemPrompt },
+            { role: 'user', content: meta.prompt },
+          ],
+          temperature: 0.85,
+          response_format: { type: 'json_object' },
+        },
+      }));
+
+      // Process batch
+      await prisma.generationBatch.update({
+        where: { id: batchId },
+        data: { currentIndex: totalTasks },
+      });
+
+      const batchResponses = await processBatch(batchRequests, (status) => {
+        console.log(`[Batch ${batchId}] Batch API status: ${status}`);
+      });
+
+      // Process batch results
+      console.log(`[Batch ${batchId}] Processing ${batchResponses.length} batch results...`);
+      
+      for (let i = 0; i < batchResponses.length; i++) {
+        const response = batchResponses[i];
+        const meta = requestMetadatas[i];
+
+        // Check if batch was cancelled
+        const currentBatch = await prisma.generationBatch.findUnique({
+          where: { id: batchId },
+          select: { status: true },
+        });
+        if (currentBatch?.status === 'cancelled') {
+          console.log(`[Batch ${batchId}] Cancelled by user during batch processing`);
+          break;
+        }
+
+        // Update progress
+        await prisma.generationBatch.update({
+          where: { id: batchId },
+          data: { currentIndex: i + 1 },
+        });
+
+        if (response.error) {
+          console.error(`[Batch ${batchId}] Batch API error for request ${i}:`, response.error);
+          errorCount++;
+          continue;
+        }
+
+        const content = response.response?.body?.choices?.[0]?.message?.content;
+        if (!content) {
+          errorCount++;
+          continue;
+        }
+
+        try {
+          // Process result based on metadata type
+          const result = await processBatchGenerationResult(
+            batchId,
+            content,
+            meta,
+            dataset,
+            recentScenarios
+          );
+
+          if (result.success) {
+            successCount++;
+            await prisma.generationBatch.update({
+              where: { id: batchId },
+              data: { generatedCount: successCount },
+            });
+            if (result.scenario) {
+              recentScenarios.unshift(result.scenario);
+              if (recentScenarios.length > 20) recentScenarios.pop();
+            }
+          } else {
+            errorCount++;
+          }
+        } catch (error) {
+          console.error(`[Batch ${batchId}] Error processing batch result ${i + 1}:`, error);
+          errorCount++;
+        }
+      }
+
+      console.log(`[Batch ${batchId}] Batch API processing completed: ${successCount} successful, ${errorCount} errors`);
+    } else {
+      // Use synchronous API for small batches (≤10 samples)
+      for (let i = 0; i < totalTasks; i++) {
       // Check if batch was cancelled
       const currentBatch = await prisma.generationBatch.findUnique({
         where: { id: batchId },
@@ -1598,84 +2516,216 @@ async function runBackgroundGeneration(
             continue;
           }
 
-          const generated: GeneratedL1Case = JSON.parse(content);
+          let generated: GeneratedT3Case;
+          try {
+            // Parse JSON (already in snake_case format from LLM)
+            const parsed = JSON.parse(content);
+            
+            // Convert old format to new unified format if needed
+            if (('groundTruth' in parsed || 'ground_truth' in parsed) && !('label' in parsed)) {
+              // Old L1 format - convert to unified format
+              const oldFormat = parsed as any;
+              const groundTruth = oldFormat.groundTruth || oldFormat.ground_truth;
+              const evidenceType = oldFormat.evidenceType || oldFormat.evidence_type || (groundTruth === 'AMBIGUOUS' ? 'A' : null);
+              
+              generated = {
+                scenario: oldFormat.scenario,
+                claim: oldFormat.claim,
+                label: groundTruth,
+                is_ambiguous: groundTruth === 'AMBIGUOUS',
+                variables: {
+                  X: oldFormat.variables?.X || '',
+                  Y: oldFormat.variables?.Y || '',
+                  Z: Array.isArray(oldFormat.variables?.Z) 
+                    ? oldFormat.variables.Z 
+                    : oldFormat.variables?.Z 
+                    ? [String(oldFormat.variables.Z)] 
+                    : [],
+                },
+                trap: {
+                  type: evidenceType || 'A',
+                  type_name: undefined,
+                  subtype: undefined,
+                  subtype_name: undefined,
+                },
+                difficulty: oldFormat.difficulty || 'medium',
+                causal_structure: oldFormat.causalStructure || oldFormat.causal_structure || undefined,
+                key_insight: undefined,
+                hidden_timestamp: undefined,
+                conditional_answers: undefined,
+                wise_refusal: undefined,
+                gold_rationale: oldFormat.whyFlawedOrValid || oldFormat.why_flawed_or_valid || undefined,
+                domain: oldFormat.domain,
+                subdomain: oldFormat.subdomain,
+              };
+              console.log(`[Batch ${batchId}] Converted old format to unified format`);
+            } else {
+              // Already in unified format (snake_case) - ensure all required fields are present
+              generated = parsed as GeneratedT3Case;
+              
+              // Ensure variables.Z is an array
+              if (generated.variables && !Array.isArray(generated.variables.Z)) {
+                generated.variables.Z = generated.variables.Z 
+                  ? [String(generated.variables.Z)] 
+                  : [];
+              }
+              
+              // Ensure trap object exists
+              if (!generated.trap) {
+                generated.trap = {
+                  type: '',
+                  type_name: undefined,
+                  subtype: undefined,
+                  subtype_name: undefined,
+                };
+              }
+            }
+          } catch (parseError) {
+            console.error(`[Batch ${batchId}] JSON parse error:`, parseError);
+            errorCount++;
+            continue;
+          }
 
-          // Enforce mapping: validity → evidence class → groundTruth
+          // Validate required fields for unified schema
+          if (!generated.scenario || !generated.claim || !generated.label || !generated.trap?.type) {
+            console.log(`[Batch ${batchId}] Skipping: missing required unified schema fields:`, {
+              hasScenario: !!generated.scenario,
+              hasClaim: !!generated.claim,
+              hasLabel: !!generated.label,
+              hasTrapType: !!generated.trap?.type,
+            });
+            errorCount++;
+            continue;
+          }
+
+          // Validate causal_structure is present (required for all cases)
+          if (!generated.causal_structure || generated.causal_structure.trim() === '') {
+            console.log(`[Batch ${batchId}] Skipping: missing or empty causal_structure (required for all cases)`);
+            errorCount++;
+            continue;
+          }
+
+          // Validate claim is present (required for all cases)
+          if (!generated.claim || generated.claim.trim() === '') {
+            console.log(`[Batch ${batchId}] Skipping: missing or empty claim (required for all cases)`);
+            errorCount++;
+            continue;
+          }
+
+          // Validate label matches expected validity
+          const expectedLabel = validity === 'YES' ? 'YES' : validity === 'NO' ? 'NO' : 'AMBIGUOUS';
+          if (generated.label !== expectedLabel) {
+            console.log(`[Batch ${batchId}] Skipping: label mismatch expected=${expectedLabel} got=${generated.label}`);
+            errorCount++;
+            continue;
+          }
+
+          // Validate hidden_timestamp and conditional_answers are both present for AMBIGUOUS L1 cases
+          if (generated.label === 'AMBIGUOUS') {
+            const hasHiddenTimestamp = generated.hidden_timestamp && 
+              (typeof generated.hidden_timestamp === 'string' ? generated.hidden_timestamp.trim() !== '' : true);
+            const condAnswers = generated.conditional_answers;
+            const hasConditionalAnswers = condAnswers && 
+              (typeof condAnswers === 'object' && condAnswers !== null && !Array.isArray(condAnswers) ? 
+                ((condAnswers as any).answer_if_condition_1 || (condAnswers as any).answerIfA) &&
+                ((condAnswers as any).answer_if_condition_2 || (condAnswers as any).answerIfB)
+                : false);
+            
+            if (!hasHiddenTimestamp || !hasConditionalAnswers) {
+              console.log(`[Batch ${batchId}] Skipping: AMBIGUOUS L1 case must have both hidden_timestamp and conditional_answers`);
+              errorCount++;
+              continue;
+            }
+          }
+
+          // Validate trap type for L1
           const expectedClass = validityToEvidenceClass(validity);
-          if (generated.evidenceClass !== expectedClass) {
+          if (expectedClass === 'WOLF' && !generated.trap.type.match(/^W[1-9]|W10$/)) {
+            console.log(`[Batch ${batchId}] Skipping: WOLF case must have trap type W1-W10, got ${generated.trap.type}`);
+            errorCount++;
+            continue;
+          }
+          if (expectedClass === 'SHEEP' && !generated.trap.type.match(/^S[1-8]$/)) {
+            console.log(`[Batch ${batchId}] Skipping: SHEEP case must have trap type S1-S8, got ${generated.trap.type}`);
+            errorCount++;
+            continue;
+          }
+          if (expectedClass === 'NONE' && generated.trap.type !== 'A' && generated.label !== 'AMBIGUOUS') {
+            console.log(`[Batch ${batchId}] Skipping: AMBIGUOUS case must have trap type A, got ${generated.trap.type}`);
+            errorCount++;
+            continue;
+          }
+
+          // Validate evidence type if specified
+          if (evidenceSelection?.evidence.code && generated.trap.type !== evidenceSelection.evidence.code) {
             console.log(
-              `[Batch ${batchId}] Skipping: evidenceClass mismatch expected=${expectedClass} got=${generated.evidenceClass}`
+              `[Batch ${batchId}] Skipping: trap type mismatch expected=${evidenceSelection.evidence.code} got=${generated.trap.type}`
             );
             errorCount++;
             continue;
           }
-          if (expectedClass === 'WOLF' && generated.groundTruth !== 'NO') {
-            console.log(`[Batch ${batchId}] Skipping: WOLF must be NO (got ${generated.groundTruth})`);
-            errorCount++;
-            continue;
-          }
-          if (expectedClass === 'SHEEP' && generated.groundTruth !== 'YES') {
-            console.log(`[Batch ${batchId}] Skipping: SHEEP must be YES (got ${generated.groundTruth})`);
-            errorCount++;
-            continue;
-          }
-          if (expectedClass === 'NONE') {
-            if (generated.groundTruth !== 'AMBIGUOUS' || generated.evidenceType !== null) {
-              console.log(`[Batch ${batchId}] Skipping: AMBIGUOUS must have evidenceType=null`);
-              errorCount++;
-              continue;
-            }
-          } else {
-            if (!generated.evidenceType || typeof generated.evidenceType !== 'string') {
-              console.log(`[Batch ${batchId}] Skipping: non-ambiguous must include evidenceType`);
-              errorCount++;
-              continue;
-            }
-            const allowed = evidenceSelection?.evidence.code;
-            if (allowed && generated.evidenceType !== allowed) {
-              console.log(
-                `[Batch ${batchId}] Skipping: evidenceType mismatch expected=${allowed} got=${generated.evidenceType}`
-              );
-              errorCount++;
-              continue;
-            }
-          }
 
           const caseId = await getNextGeneratedCaseId();
-          const difficulty =
-            (generated.difficulty?.toLowerCase() as 'easy' | 'medium' | 'hard' | undefined) ||
+          const difficulty = (generated.difficulty?.toLowerCase() as 'easy' | 'medium' | 'hard' | undefined) || 
             (evidenceSelection ? inferDifficultyForL1(evidenceSelection.evidence) : 'medium');
 
-          // Enforce: variables.Z should be a single (optional) variable, not an array.
-          // Some older prompt shapes encouraged Z: string[]; normalize to a single string.
-          let variablesToStore: Record<string, unknown> | null = generated.variables || null;
-          if (variablesToStore && Object.prototype.hasOwnProperty.call(variablesToStore, 'Z')) {
-            const zVal = (variablesToStore as any).Z;
-            if (Array.isArray(zVal)) {
-              const normalized = zVal.map(v => String(v)).filter(Boolean).join('; ');
-              (variablesToStore as any).Z = normalized || undefined;
-            }
+          // Ensure variables.Z is always an array (unified schema requirement)
+          const variables = generated.variables || { X: '', Y: '', Z: [] };
+          if (!Array.isArray(variables.Z)) {
+            variables.Z = variables.Z ? [String(variables.Z)] : [];
           }
 
-          await prisma.l1Case.create({
-            data: {
-              scenario: generated.scenario,
-              claim: generated.claim,
-              groundTruth: generated.groundTruth,
-              evidenceClass: generated.evidenceClass,
-              evidenceType: generated.evidenceType,
-              whyFlawedOrValid: generated.whyFlawedOrValid,
-              domain: generated.domain || currentDomain,
-              subdomain: generated.subdomain || currentSubdomain,
-              difficulty,
-              variables: variablesToStore ? JSON.stringify(variablesToStore) : null,
-              causalStructure: generated.causalStructure ?? null,
-              dataset,
-              author: 'LLM',
-              sourceCase: caseId,
-              generationBatchId: batchId,
-              isVerified: false,
-            },
+          // Prepare conditional answers
+          let conditional_answers: string | null = null;
+          if (generated.conditional_answers) {
+            conditional_answers = typeof generated.conditional_answers === 'string' 
+              ? generated.conditional_answers 
+              : JSON.stringify(generated.conditional_answers);
+          }
+
+          // Prepare hidden timestamp
+          let hidden_timestamp: string | null = null;
+          if (generated.hidden_timestamp) {
+            hidden_timestamp = typeof generated.hidden_timestamp === 'string'
+              ? generated.hidden_timestamp
+              : JSON.stringify(generated.hidden_timestamp);
+          }
+
+          // Generate bucket identifier (Table 9 format)
+          const bucket = `BucketLarge-${currentDomain.charAt(0)}`;
+
+          // Ensure all required fields from Table 9 are present
+          const t3CaseData = {
+            case_id: generated.case_id || caseId,
+            bucket,
+            pearl_level: 'L1' as const,
+            domain: generated.domain || currentDomain,
+            subdomain: generated.subdomain || currentSubdomain,
+            scenario: generated.scenario,
+            claim: generated.claim || '', // Required for L1
+            label: generated.label,
+            is_ambiguous: generated.is_ambiguous !== undefined ? generated.is_ambiguous : generated.label === 'AMBIGUOUS',
+            variables: JSON.stringify(variables),
+            trap_type: generated.trap.type,
+            trap_type_name: generated.trap.type_name || null,
+            trap_subtype: generated.trap.subtype || null,
+            trap_subtype_name: generated.trap.subtype_name || null,
+            difficulty: difficulty.charAt(0).toUpperCase() + difficulty.slice(1), // "Easy", "Medium", "Hard"
+            causal_structure: generated.causal_structure || null,
+            key_insight: generated.key_insight || null,
+            hidden_timestamp,
+            conditional_answers,
+            wise_refusal: generated.wise_refusal || null,
+            gold_rationale: generated.gold_rationale || null,
+            dataset,
+            author: 'LLM',
+            source_case: caseId,
+            generation_batch_id: batchId,
+            is_verified: false,
+          };
+
+          await prisma.t3Case.create({
+            data: t3CaseData,
           });
 
           successCount++;
@@ -1720,18 +2770,103 @@ async function runBackgroundGeneration(
             continue;
           }
 
-          const generated: GeneratedL2Case = JSON.parse(content);
+          let generated: GeneratedT3Case;
+            try {
+            const parsed = JSON.parse(content);
+            
+            // Parse JSON (already in snake_case format from LLM)
+            // Convert old L2 format to unified format if needed
+            if (('hiddenQuestion' in parsed || 'hidden_question' in parsed) && ('answerIfA' in parsed || 'answer_if_a' in parsed) && !('trap' in parsed)) {
+              const oldFormat = parsed as any;
+              generated = {
+                scenario: oldFormat.scenario,
+                claim: oldFormat.claim || '',
+                label: 'NO',
+                is_ambiguous: true,
+                variables: {
+                  X: oldFormat.variables?.X || '',
+                  Y: oldFormat.variables?.Y || '',
+                  Z: Array.isArray(oldFormat.variables?.Z) 
+                    ? oldFormat.variables.Z 
+                    : oldFormat.variables?.Z 
+                    ? [String(oldFormat.variables.Z)] 
+                    : [],
+                },
+                trap: {
+                  type: oldFormat.annotations?.trapType || oldFormat.annotations?.trap_type || selectedTrapType,
+                  type_name: undefined,
+                  subtype: undefined,
+                  subtype_name: undefined,
+                },
+                difficulty: oldFormat.annotations?.difficulty || 'medium',
+                causal_structure: oldFormat.annotations?.causalStructure || oldFormat.annotations?.causal_structure || undefined,
+                key_insight: undefined,
+                hidden_timestamp: oldFormat.hiddenQuestion || oldFormat.hidden_question || undefined,
+                conditional_answers: (oldFormat.answerIfA || oldFormat.answer_if_a) && (oldFormat.answerIfB || oldFormat.answer_if_b)
+                  ? { answer_if_condition_1: oldFormat.answerIfA || oldFormat.answer_if_a, answer_if_condition_2: oldFormat.answerIfB || oldFormat.answer_if_b }
+                  : undefined,
+                wise_refusal: oldFormat.wiseRefusal || oldFormat.wise_refusal || undefined,
+                gold_rationale: undefined,
+                domain: undefined,
+                subdomain: undefined,
+              };
+              console.log(`[Batch ${batchId}] Converted old L2 format to unified format`);
+            } else {
+              // Already in unified format (snake_case)
+              generated = parsed as GeneratedT3Case;
+              // Ensure variables.Z is an array
+              if (generated.variables && !Array.isArray(generated.variables.Z)) {
+                generated.variables.Z = generated.variables.Z 
+                  ? [String(generated.variables.Z)] 
+                  : [];
+              }
+              // Ensure trap object exists
+              if (!generated.trap) {
+                generated.trap = {
+                  type: selectedTrapType,
+                  type_name: undefined,
+                  subtype: undefined,
+                  subtype_name: undefined,
+                };
+              }
+            }
+          } catch (parseError) {
+            console.error(`[Batch ${batchId}] JSON parse error:`, parseError);
+            errorCount++;
+            continue;
+          }
 
-          // Validate required fields
-          if (!generated.scenario || !generated.hiddenQuestion || !generated.answerIfA || !generated.answerIfB || !generated.wiseRefusal) {
-            console.log(`[Batch ${batchId}] Skipping: missing required L2 fields`);
+          // Validate required fields for unified schema
+          if (!generated.scenario || !generated.claim || !generated.label || !generated.trap?.type) {
+            console.log(`[Batch ${batchId}] Skipping: missing required unified schema fields`);
+            errorCount++;
+            continue;
+          }
+
+          // Validate causal_structure is present (required for all cases)
+          if (!generated.causal_structure || generated.causal_structure.trim() === '') {
+            console.log(`[Batch ${batchId}] Skipping: missing or empty causal_structure (required for all cases)`);
+            errorCount++;
+            continue;
+          }
+
+          // Validate claim is present (required for all cases)
+          if (!generated.claim || generated.claim.trim() === '') {
+            console.log(`[Batch ${batchId}] Skipping: missing or empty claim (required for all cases)`);
+            errorCount++;
+            continue;
+          }
+
+          // Validate label is NO for L2
+          if (generated.label !== 'NO') {
+            console.log(`[Batch ${batchId}] Skipping: L2 case must have label=NO, got ${generated.label}`);
             errorCount++;
             continue;
           }
 
           // Validate trap type matches
-          if (generated.annotations.trapType !== selectedTrapType) {
-            console.log(`[Batch ${batchId}] Skipping: trapType mismatch expected=${selectedTrapType} got=${generated.annotations.trapType}`);
+          if (generated.trap.type !== selectedTrapType) {
+            console.log(`[Batch ${batchId}] Skipping: trap type mismatch expected=${selectedTrapType} got=${generated.trap.type}`);
             errorCount++;
             continue;
           }
@@ -1743,25 +2878,79 @@ async function runBackgroundGeneration(
             continue;
           }
 
-          const caseId = await getNextGeneratedCaseId();
-          const difficulty = (generated.annotations.difficulty?.toLowerCase() as 'easy' | 'medium' | 'hard' | undefined) || 'medium';
+          // Validate hidden_timestamp and conditional_answers are both present for L2
+          const hasHiddenTimestamp = generated.hidden_timestamp && 
+            (typeof generated.hidden_timestamp === 'string' ? generated.hidden_timestamp.trim() !== '' : true);
+          const condAnswers = generated.conditional_answers;
+          const hasConditionalAnswers = condAnswers && 
+            (typeof condAnswers === 'object' && condAnswers !== null && !Array.isArray(condAnswers) ? 
+              ((condAnswers as any).answer_if_condition_1 || (condAnswers as any).answerIfA) &&
+              ((condAnswers as any).answer_if_condition_2 || (condAnswers as any).answerIfB)
+              : false);
+          
+          if (!hasHiddenTimestamp || !hasConditionalAnswers) {
+            console.log(`[Batch ${batchId}] Skipping: L2 case must have both hidden_timestamp and conditional_answers`);
+            errorCount++;
+            continue;
+          }
 
-          await prisma.l2Case.create({
+          const caseId = await getNextGeneratedCaseId();
+          const difficultyRaw = (generated.difficulty?.toLowerCase() as 'easy' | 'medium' | 'hard' | undefined) || 'medium';
+          const difficulty = difficultyRaw.charAt(0).toUpperCase() + difficultyRaw.slice(1); // "Easy", "Medium", "Hard"
+
+          // Ensure variables.Z is always an array
+          const variables = generated.variables || { X: '', Y: '', Z: [] };
+          if (!Array.isArray(variables.Z)) {
+            variables.Z = variables.Z ? [String(variables.Z)] : [];
+          }
+
+          // Prepare conditional answers from unified format
+          let conditional_answers: string | null = null;
+          if (generated.conditional_answers) {
+            conditional_answers = typeof generated.conditional_answers === 'string'
+              ? generated.conditional_answers
+              : JSON.stringify(generated.conditional_answers);
+          }
+
+          // Prepare hidden timestamp
+          let hidden_timestamp: string | null = null;
+          if (generated.hidden_timestamp) {
+            hidden_timestamp = typeof generated.hidden_timestamp === 'string'
+              ? generated.hidden_timestamp
+              : JSON.stringify(generated.hidden_timestamp);
+          }
+
+          // Generate bucket identifier
+          const bucket = `BucketLarge-${currentDomain.charAt(0)}`;
+
+          await prisma.t3Case.create({
             data: {
+              case_id: generated.case_id || caseId,
+              bucket,
+              pearl_level: 'L2',
+              domain: generated.domain || currentDomain,
+              subdomain: generated.subdomain || currentSubdomain,
               scenario: generated.scenario,
-              variables: JSON.stringify(generated.variables),
-              trapType: selectedTrapType,
+              claim: generated.claim,
+              label: 'NO',
+              is_ambiguous: true, // L2 cases are ambiguous by nature
+              variables: JSON.stringify(variables),
+              trap_type: generated.trap.type,
+              trap_type_name: generated.trap.type_name || null,
+              trap_subtype: generated.trap.subtype || null,
+              trap_subtype_name: generated.trap.subtype_name || null,
               difficulty,
-              causalStructure: generated.annotations.causalStructure || null,
-              hiddenQuestion: generated.hiddenQuestion,
-              answerIfA: generated.answerIfA,
-              answerIfB: generated.answerIfB,
-              wiseRefusal: generated.wiseRefusal,
+              causal_structure: generated.causal_structure || null,
+              key_insight: generated.key_insight || null,
+              hidden_timestamp,
+              conditional_answers,
+              wise_refusal: generated.wise_refusal || null,
+              gold_rationale: generated.gold_rationale || null,
               dataset,
               author: 'LLM',
-              sourceCase: caseId,
-              generationBatchId: batchId,
-              isVerified: false,
+              source_case: caseId,
+              generation_batch_id: batchId,
+              is_verified: false,
             },
           });
 
@@ -1807,72 +2996,204 @@ async function runBackgroundGeneration(
             continue;
           }
 
-          const generated: GeneratedL3Case = JSON.parse(content);
-
-          // Validate required fields
-          if (
-            !generated.scenario ||
-            !generated.counterfactualClaim ||
-            !generated.variables ||
-            !generated.invariants ||
-            !generated.groundTruth ||
-            !generated.justification ||
-            !generated.wiseResponse
-          ) {
-            console.log(`[Batch ${batchId}] Skipping: missing required L3 fields`);
+          let generated: GeneratedT3Case;
+          try {
+            const parsed = JSON.parse(content);
+            
+            // Parse JSON (already in snake_case format from LLM)
+            // Convert old L3 format to unified format if needed
+            if (('groundTruth' in parsed || 'ground_truth' in parsed) && ('family' in parsed) && !('label' in parsed)) {
+              const oldFormat = parsed as any;
+              const groundTruth = oldFormat.groundTruth || oldFormat.ground_truth;
+              generated = {
+                scenario: oldFormat.scenario,
+                counterfactual_claim: oldFormat.counterfactualClaim || oldFormat.counterfactual_claim,
+                label: groundTruth,
+                is_ambiguous: groundTruth === 'CONDITIONAL',
+                variables: {
+                  X: oldFormat.variables?.X || '',
+                  Y: oldFormat.variables?.Y || '',
+                  Z: Array.isArray(oldFormat.variables?.Z) 
+                    ? oldFormat.variables.Z 
+                    : oldFormat.variables?.Z 
+                    ? [String(oldFormat.variables.Z)] 
+                    : [],
+                },
+                trap: {
+                  type: oldFormat.family || selectedFamily,
+                  type_name: undefined,
+                  subtype: undefined,
+                  subtype_name: undefined,
+                },
+                difficulty: oldFormat.difficulty || 'medium',
+                causal_structure: undefined,
+                key_insight: undefined,
+                hidden_timestamp: undefined,
+                conditional_answers: undefined,
+                wise_refusal: oldFormat.wiseResponse || oldFormat.wise_response || undefined,
+                gold_rationale: oldFormat.justification || undefined,
+                invariants: oldFormat.invariants || [],
+                domain: oldFormat.domain,
+                subdomain: undefined,
+              };
+              console.log(`[Batch ${batchId}] Converted old L3 format to unified format`);
+            } else {
+              // Already in unified format (snake_case)
+              generated = parsed as GeneratedT3Case;
+              // Ensure variables.Z is an array
+              if (generated.variables && !Array.isArray(generated.variables.Z)) {
+                generated.variables.Z = generated.variables.Z 
+                  ? [String(generated.variables.Z)] 
+                  : [];
+              }
+              // Ensure trap object exists
+              if (!generated.trap) {
+                generated.trap = {
+                  type: selectedFamily,
+                  type_name: undefined,
+                  subtype: undefined,
+                  subtype_name: undefined,
+                };
+              }
+            }
+          } catch (parseError) {
+            console.error(`[Batch ${batchId}] JSON parse error:`, parseError);
             errorCount++;
             continue;
           }
 
-          // Validate family matches
-          if (generated.family !== selectedFamily) {
-            console.log(`[Batch ${batchId}] Skipping: family mismatch expected=${selectedFamily} got=${generated.family}`);
+          // Validate required fields for unified schema
+          if (
+            !generated.scenario ||
+            !generated.counterfactual_claim ||
+            !generated.variables ||
+            !generated.label ||
+            !generated.trap?.type
+          ) {
+            console.log(`[Batch ${batchId}] Skipping: missing required unified schema fields`);
+            errorCount++;
+            continue;
+          }
+
+          // Validate causal_structure is present (required for all cases)
+          if (!generated.causal_structure || generated.causal_structure.trim() === '') {
+            console.log(`[Batch ${batchId}] Skipping: missing or empty causal_structure (required for all cases)`);
+            errorCount++;
+            continue;
+          }
+
+          // Validate counterfactual_claim is present (required for all L3 cases)
+          if (!generated.counterfactual_claim || generated.counterfactual_claim.trim() === '') {
+            console.log(`[Batch ${batchId}] Skipping: missing or empty counterfactual_claim (required for all L3 cases)`);
+            errorCount++;
+            continue;
+          }
+
+          // Validate label is valid L3 label
+          if (!['VALID', 'INVALID', 'CONDITIONAL'].includes(generated.label)) {
+            console.log(`[Batch ${batchId}] Skipping: invalid label=${generated.label}, must be VALID/INVALID/CONDITIONAL`);
+            errorCount++;
+            continue;
+          }
+
+          // Validate hidden_timestamp and conditional_answers are both present for CONDITIONAL L3 cases
+          if (generated.label === 'CONDITIONAL') {
+            const hasHiddenTimestamp = generated.hidden_timestamp && 
+              (typeof generated.hidden_timestamp === 'string' ? generated.hidden_timestamp.trim() !== '' : true);
+            const condAnswers = generated.conditional_answers;
+            const hasConditionalAnswers = condAnswers && 
+              (typeof condAnswers === 'object' && condAnswers !== null && !Array.isArray(condAnswers) ? 
+                ((condAnswers as any).answer_if_condition_1 || (condAnswers as any).answerIfA) &&
+                ((condAnswers as any).answer_if_condition_2 || (condAnswers as any).answerIfB)
+                : false);
+            
+            if (!hasHiddenTimestamp || !hasConditionalAnswers) {
+              console.log(`[Batch ${batchId}] Skipping: CONDITIONAL L3 case must have both hidden_timestamp and conditional_answers`);
+              errorCount++;
+              continue;
+            }
+          }
+
+          // Validate trap type matches family
+          if (generated.trap.type !== selectedFamily) {
+            console.log(`[Batch ${batchId}] Skipping: trap type mismatch expected=${selectedFamily} got=${generated.trap.type}`);
             errorCount++;
             continue;
           }
 
           // Validate variables
-          if (!generated.variables.X || !generated.variables.Y || !generated.variables.Z) {
-            console.log(`[Batch ${batchId}] Skipping: missing X, Y, or Z variables`);
+          if (!generated.variables.X || !generated.variables.Y) {
+            console.log(`[Batch ${batchId}] Skipping: missing X or Y variables`);
             errorCount++;
             continue;
           }
 
-          // Validate invariants is an array
-          if (!Array.isArray(generated.invariants) || generated.invariants.length === 0) {
+          // Ensure variables.Z is always an array
+          const variables = generated.variables || { X: '', Y: '', Z: [] };
+          if (!Array.isArray(variables.Z)) {
+            variables.Z = variables.Z ? [String(variables.Z)] : [];
+          }
+
+          // Validate invariants
+          const invariants = generated.invariants || [];
+          if (!Array.isArray(invariants) || invariants.length === 0) {
             console.log(`[Batch ${batchId}] Skipping: invariants must be a non-empty array`);
             errorCount++;
             continue;
           }
 
-          // Validate ground truth is valid
-          if (!['VALID', 'INVALID', 'CONDITIONAL'].includes(generated.groundTruth)) {
-            console.log(`[Batch ${batchId}] Skipping: invalid groundTruth=${generated.groundTruth}`);
-            errorCount++;
-            continue;
+          const caseId = await getNextGeneratedCaseId();
+          const difficultyRaw = (generated.difficulty?.toLowerCase() as 'easy' | 'medium' | 'hard' | undefined) || 'medium';
+          const difficulty = difficultyRaw.charAt(0).toUpperCase() + difficultyRaw.slice(1); // "Easy", "Medium", "Hard"
+
+          // Prepare conditional answers
+          let conditional_answers: string | null = null;
+          if (generated.conditional_answers) {
+            conditional_answers = typeof generated.conditional_answers === 'string'
+              ? generated.conditional_answers
+              : JSON.stringify(generated.conditional_answers);
           }
 
-          const caseId = await getNextGeneratedCaseId();
-          const difficulty = (generated.difficulty?.toLowerCase() as 'easy' | 'medium' | 'hard' | undefined) || 'medium';
+          // Prepare hidden timestamp
+          let hidden_timestamp: string | null = null;
+          if (generated.hidden_timestamp) {
+            hidden_timestamp = typeof generated.hidden_timestamp === 'string'
+              ? generated.hidden_timestamp
+              : JSON.stringify(generated.hidden_timestamp);
+          }
 
-          await prisma.l3Case.create({
+          // Generate bucket identifier
+          const bucket = `BucketLarge-${currentDomain.charAt(0)}`;
+
+          await prisma.t3Case.create({
             data: {
-              caseId: generated.caseId || caseId,
+              case_id: generated.case_id || caseId,
+              bucket,
+              pearl_level: 'L3',
               domain: generated.domain || currentDomain,
-              family: selectedFamily,
-              difficulty,
+              subdomain: generated.subdomain || currentSubdomain,
               scenario: generated.scenario,
-              counterfactualClaim: generated.counterfactualClaim,
-              variables: JSON.stringify(generated.variables),
-              invariants: JSON.stringify(generated.invariants),
-              groundTruth: generated.groundTruth,
-              justification: generated.justification,
-              wiseResponse: generated.wiseResponse,
+              counterfactual_claim: generated.counterfactual_claim,
+              label: generated.label,
+              is_ambiguous: generated.is_ambiguous !== undefined ? generated.is_ambiguous : generated.label === 'CONDITIONAL',
+              variables: JSON.stringify(variables),
+              trap_type: generated.trap.type,
+              trap_type_name: generated.trap.type_name || null,
+              trap_subtype: generated.trap.subtype || null,
+              trap_subtype_name: generated.trap.subtype_name || null,
+              difficulty,
+              causal_structure: generated.causal_structure || null,
+              key_insight: generated.key_insight || null,
+              hidden_timestamp,
+              conditional_answers,
+              wise_refusal: generated.wise_refusal || null,
+              gold_rationale: generated.gold_rationale || null,
+              invariants: JSON.stringify(invariants),
               dataset,
               author: 'LLM',
-              sourceCase: caseId,
-              generationBatchId: batchId,
-              isVerified: false,
+              source_case: caseId,
+              generation_batch_id: batchId,
+              is_verified: false,
             },
           });
 
@@ -1972,29 +3293,29 @@ async function runBackgroundGeneration(
             data: {
               scenario: generated.scenario,
               claim: generated.claim,
-              pearlLevel: trap.pearlLevel,
+              pearl_level: trap.pearlLevel,
               domain: generated.annotations.domain,
               subdomain: generated.annotations.subdomain,
-              trapType: finalTrapType,
-              trapSubtype: finalTrapSubtype || 'NONE',
+              trap_type: finalTrapType,
+              trap_subtype: finalTrapSubtype || 'NONE',
               explanation: generated.explanation,
               difficulty: generated.annotations.difficulty?.toLowerCase() || 'medium',
-              groundTruth: generated.groundTruth,
+              ground_truth: generated.groundTruth,
               variables: JSON.stringify(generated.variables),
-              // No causalStructure for AMBIGUOUS cases
-              causalStructure: isAmbiguous ? null : generated.annotations.causalStructure,
-              keyInsight: generated.annotations.keyInsight,
-              wiseRefusal: generated.wiseRefusal,
+              // No causal_structure for AMBIGUOUS cases
+              causal_structure: isAmbiguous ? null : generated.annotations.causalStructure,
+              key_insight: generated.annotations.keyInsight,
+              wise_refusal: generated.wiseRefusal,
               // AMBIGUOUS-specific fields
-              hiddenTimestamp: isAmbiguous ? (generated.hiddenTimestamp || 'TBD') : 'N/A',
-              conditionalAnswers: isAmbiguous
+              hidden_timestamp: isAmbiguous ? (generated.hiddenTimestamp || 'TBD') : 'N/A',
+              conditional_answers: isAmbiguous
                 ? (generated.conditionalAnswers ? JSON.stringify(generated.conditionalAnswers) : 'TBD')
                 : 'N/A',
               author: 'LLM',
-              sourceCase: caseId,
-              isLLMGenerated: true,
-              isVerified: false,
-              generationBatchId: batchId,
+              source_case: caseId,
+              is_llm_generated: true,
+              is_verified: false,
+              generation_batch_id: batchId,
               dataset: dataset,
             },
           });
@@ -2018,6 +3339,7 @@ async function runBackgroundGeneration(
           errorCount++;
         }
       }
+    }
     }
 
     // Check final status (may have been cancelled)
@@ -2132,27 +3454,39 @@ export async function POST(req: NextRequest) {
     }
 
     // Get existing scenarios to seed diversity tracking (full scenarios, not truncated)
-    const existingScenarios = await prisma.question.findMany({
-      where: { dataset: datasetName },
-      select: { scenario: true },
-      take: 20,
-      orderBy: { createdAt: 'desc' },
-    });
+    // Include both Question and T3Case scenarios
+    const [questionScenarios, t3Scenarios] = await Promise.all([
+      prisma.question.findMany({
+        where: { dataset: datasetName },
+        select: { scenario: true },
+        take: 10,
+        orderBy: { created_at: 'desc' },
+      }),
+      prisma.t3Case.findMany({
+        where: { dataset: datasetName },
+        select: { scenario: true },
+        take: 10,
+        orderBy: { created_at: 'desc' },
+      }),
+    ]);
 
     // Pass full scenarios as array for better diversity matching
-    const initialScenarios = existingScenarios.map(q => q.scenario);
+    const initialScenarios = [
+      ...questionScenarios.map(q => q.scenario),
+      ...t3Scenarios.map(c => c.scenario),
+    ].slice(0, 20);
 
     // Create generation batch record
     const batch = await prisma.generationBatch.create({
       data: {
-        pearlLevel: distributionMatrix ? 'MATRIX' : (pearlLevel || null),
+        pearl_level: distributionMatrix ? 'MATRIX' : (pearlLevel || null),
         domain: domain || null,
-        requestedCount: effectiveSize,
-        generatedCount: 0,
+        requested_count: effectiveSize,
+        generated_count: 0,
         status: 'pending',
-        currentIndex: 0,
-        promptNotes: distributionMatrix ? `Matrix: ${matrixSummary}` : (promptNotes || null),
-        createdById: null,
+        current_index: 0,
+        prompt_notes: distributionMatrix ? `Matrix: ${matrixSummary}` : (promptNotes || null),
+        created_by_id: null,
       },
     });
 

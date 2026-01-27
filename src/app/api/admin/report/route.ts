@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Evaluation batch not found' }, { status: 404 });
     }
 
-    if (!batch.reportGenerated || !batch.reportContent) {
+    if (!batch.report_generated || !batch.report_content) {
       // Generate report now if not already generated
       const report = await generateReport(evaluationBatchId);
       
@@ -33,12 +33,12 @@ export async function GET(req: NextRequest) {
     }
 
     if (format === 'text') {
-      return new NextResponse(batch.reportContent, {
+      return new NextResponse(batch.report_content, {
         headers: { 'Content-Type': 'text/markdown' },
       });
     }
 
-    return NextResponse.json({ report: batch.reportContent });
+    return NextResponse.json({ report: batch.report_content });
   }
 
   // If dataset is provided, generate an aggregate report for all evaluations in that dataset
@@ -47,12 +47,10 @@ export async function GET(req: NextRequest) {
       where: {
         OR: [
           { question: { dataset } },
-          { l1Case: { dataset } },
-          { l2Case: { dataset } },
-          { l3Case: { dataset } },
+          { t3_case: { dataset } },
         ],
       },
-      include: { question: true, l1Case: true, l2Case: true, l3Case: true },
+      include: { question: true, t3_case: true },
     });
 
     if (evaluations.length === 0) {
@@ -81,50 +79,53 @@ export async function GET(req: NextRequest) {
 // Helper to generate report from any set of evaluations
 function generateAdhocReport(
   evaluations: Array<{
-    pearlLevelAssessment: string | null;
-    trapTypeAssessment: string | null;
-    groundTruthAssessment: string | null;
-    hasAmbiguity: boolean;
-    hasLogicalIssues: boolean;
-    hasDomainErrors: boolean;
-    clarityScore: number;
-    overallVerdict: string;
-    priorityLevel: number;
-    reportTags: string | null;
-    suggestedCorrections: string | null;
-    structuralNotes: string | null;
-    rubricScore: string | null;
+    pearl_level_assessment: string | null;
+    trap_type_assessment: string | null;
+    ground_truth_assessment: string | null;
+    has_ambiguity: boolean;
+    has_logical_issues: boolean;
+    has_domain_errors: boolean;
+    clarity_score: number;
+    overall_verdict: string;
+    priority_level: number;
+    report_tags: string | null;
+    suggested_corrections: string | null;
+    structural_notes: string | null;
+    rubric_score: string | null;
     question: {
-      sourceCase: string | null;
+      source_case: string | null;
       scenario: string;
-      pearlLevel: string;
-      groundTruth: string;
-      trapType: string;
+      pearl_level: string;
+      ground_truth: string;
+      trap_type: string;
       dataset: string;
     } | null;
-    l1Case: { sourceCase: string | null; scenario: string; groundTruth: string; dataset: string } | null;
-    l2Case: { sourceCase: string | null; scenario: string; trapType: string; dataset: string } | null;
-    l3Case: { sourceCase: string | null; scenario: string; groundTruth: string; family: string; dataset: string } | null;
+    t3_case: { 
+      source_case: string | null; 
+      scenario: string; 
+      label: string; 
+      trap_type: string;
+      pearl_level: string;
+      dataset: string 
+    } | null;
   }>,
   datasetName: string
 ): string {
   const getCaseType = (e: (typeof evaluations)[number]) => {
-    if (e.question?.pearlLevel) return e.question.pearlLevel;
-    if (e.l1Case) return 'L1';
-    if (e.l2Case) return 'L2';
-    if (e.l3Case) return 'L3';
+    if (e.question?.pearl_level) return e.question.pearl_level;
+    if (e.t3_case?.pearl_level) return e.t3_case.pearl_level;
     return 'UNKNOWN';
   };
 
   const getGroundTruth = (e: (typeof evaluations)[number]) => {
-    return e.question?.groundTruth ?? e.l1Case?.groundTruth ?? e.l3Case?.groundTruth ?? 'UNKNOWN';
+    return e.question?.ground_truth ?? e.t3_case?.label ?? 'UNKNOWN';
   };
 
   const rubricTotals: number[] = [];
   evaluations.forEach(e => {
-    if (!e.rubricScore) return;
+    if (!e.rubric_score) return;
     try {
-      const parsed = JSON.parse(e.rubricScore) as { totalScore?: number };
+      const parsed = JSON.parse(e.rubric_score) as { totalScore?: number };
       if (typeof parsed.totalScore === 'number') rubricTotals.push(parsed.totalScore);
     } catch {
       // ignore
@@ -133,16 +134,16 @@ function generateAdhocReport(
 
   const stats = {
     total: evaluations.length,
-    approved: evaluations.filter(e => e.overallVerdict === 'APPROVED').length,
-    needsReview: evaluations.filter(e => e.overallVerdict === 'NEEDS_REVIEW').length,
-    rejected: evaluations.filter(e => e.overallVerdict === 'REJECTED').length,
-    pearlLevelMismatches: evaluations.filter(e => e.pearlLevelAssessment === 'INCORRECT').length,
-    trapTypeMismatches: evaluations.filter(e => e.trapTypeAssessment === 'INCORRECT').length,
-    groundTruthMismatches: evaluations.filter(e => e.groundTruthAssessment === 'INCORRECT').length,
-    ambiguousCases: evaluations.filter(e => e.hasAmbiguity).length,
-    logicalIssues: evaluations.filter(e => e.hasLogicalIssues).length,
-    domainErrors: evaluations.filter(e => e.hasDomainErrors).length,
-    avgClarity: evaluations.reduce((sum, e) => sum + e.clarityScore, 0) / evaluations.length,
+    approved: evaluations.filter(e => e.overall_verdict === 'APPROVED').length,
+    needsReview: evaluations.filter(e => e.overall_verdict === 'NEEDS_REVIEW').length,
+    rejected: evaluations.filter(e => e.overall_verdict === 'REJECTED').length,
+    pearlLevelMismatches: evaluations.filter(e => e.pearl_level_assessment === 'INCORRECT').length,
+    trapTypeMismatches: evaluations.filter(e => e.trap_type_assessment === 'INCORRECT').length,
+    groundTruthMismatches: evaluations.filter(e => e.ground_truth_assessment === 'INCORRECT').length,
+    ambiguousCases: evaluations.filter(e => e.has_ambiguity).length,
+    logicalIssues: evaluations.filter(e => e.has_logical_issues).length,
+    domainErrors: evaluations.filter(e => e.has_domain_errors).length,
+    avgClarity: evaluations.reduce((sum, e) => sum + e.clarity_score, 0) / evaluations.length,
     rubricScored: rubricTotals.length,
     avgRubric: rubricTotals.length ? rubricTotals.reduce((a, b) => a + b, 0) / rubricTotals.length : 0,
   };

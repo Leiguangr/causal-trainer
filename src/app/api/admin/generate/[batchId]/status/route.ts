@@ -14,43 +14,26 @@ export async function GET(
         questions: {
           select: {
             id: true,
-            pearlLevel: true,
-            trapType: true,
-            trapSubtype: true,
+            pearl_level: true,
+            trap_type: true,
+            trap_subtype: true,
             domain: true,
-            groundTruth: true,
-            createdAt: true,
+            ground_truth: true,
+            created_at: true,
           },
-          orderBy: { createdAt: 'asc' },
+          orderBy: { created_at: 'asc' },
         },
-        l1Cases: {
+        t3_cases: {
           select: {
             id: true,
-            evidenceClass: true,
-            evidenceType: true,
+            pearl_level: true,
+            trap_type: true,
+            trap_subtype: true,
             domain: true,
-            groundTruth: true,
-            createdAt: true,
+            label: true,
+            created_at: true,
           },
-          orderBy: { createdAt: 'asc' },
-        },
-        l2Cases: {
-          select: {
-            id: true,
-            trapType: true,
-            createdAt: true,
-          },
-          orderBy: { createdAt: 'asc' },
-        },
-        l3Cases: {
-          select: {
-            id: true,
-            family: true,
-            domain: true,
-            groundTruth: true,
-            createdAt: true,
-          },
-          orderBy: { createdAt: 'asc' },
+          orderBy: { created_at: 'asc' },
         },
       },
     });
@@ -60,54 +43,38 @@ export async function GET(
     }
 
     // Calculate progress percentage
-    const progress = batch.requestedCount > 0
-      ? Math.round((batch.currentIndex / batch.requestedCount) * 100)
+    const progress = batch.requested_count > 0
+      ? Math.round((batch.current_index / batch.requested_count) * 100)
       : 0;
 
     return NextResponse.json({
       batchId: batch.id,
       status: batch.status,
       progress,
-      currentIndex: batch.currentIndex,
-      requestedCount: batch.requestedCount,
-      generatedCount: batch.generatedCount,
-      pearlLevel: batch.pearlLevel,
+      currentIndex: batch.current_index,
+      requestedCount: batch.requested_count,
+      generatedCount: batch.generated_count,
+      pearlLevel: batch.pearl_level,
       domain: batch.domain,
-      createdAt: batch.createdAt,
-      completedAt: batch.completedAt,
-      errorMessage: batch.errorMessage,
+      createdAt: batch.created_at,
+      completedAt: batch.completed_at,
+      errorMessage: batch.error_message,
       questions: [
         ...batch.questions.map(q => ({
           id: q.id,
-          pearlLevel: q.pearlLevel,
-          trapType: q.trapType,
-          trapSubtype: q.trapSubtype,
+          pearl_level: q.pearl_level,
+          trap_type: q.trap_type,
+          trap_subtype: q.trap_subtype,
           domain: q.domain,
-          groundTruth: q.groundTruth,
+          ground_truth: q.ground_truth,
         })),
-        ...batch.l1Cases.map(c => ({
+        ...batch.t3_cases.map(c => ({
           id: c.id,
-          pearlLevel: 'L1',
-          trapType: c.evidenceClass, // displayed in UI; legacy label says "trapType"
-          trapSubtype: c.evidenceType || 'NONE',
+          pearl_level: c.pearl_level,
+          trap_type: c.trap_type,
+          trap_subtype: c.trap_subtype || 'N/A',
           domain: c.domain || 'N/A',
-          groundTruth: c.groundTruth,
-        })),
-        ...batch.l2Cases.map(c => ({
-          id: c.id,
-          pearlLevel: 'L2',
-          trapType: c.trapType, // displayed in UI; legacy label says "trapType"
-          trapSubtype: 'N/A',
-          domain: batch.domain || 'N/A',
-          groundTruth: 'NO', // All L2 cases are INVALID (NO)
-        })),
-        ...batch.l3Cases.map(c => ({
-          id: c.id,
-          pearlLevel: 'L3',
-          trapType: c.family, // displayed in UI; legacy label says "trapType"
-          trapSubtype: 'N/A',
-          domain: c.domain || 'N/A',
-          groundTruth: c.groundTruth,
+          ground_truth: c.label, // T3Case uses 'label' instead of 'ground_truth'
         })),
       ],
     });

@@ -98,6 +98,15 @@ export default function ReviewPage() {
     fetchDatasets();
   }, []);
 
+  // Refresh datasets periodically to catch new imports (but not too frequently to avoid loops)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchDatasets();
+    }, 10000); // Refresh every 10 seconds
+    
+    return () => clearInterval(interval);
+  }, []);
+
   const fetchDatasets = async () => {
     try {
       const res = await fetch('/api/admin/datasets');
@@ -157,7 +166,7 @@ export default function ReviewPage() {
         body: JSON.stringify({
           ...formData,
           author: authorToUse,
-          isVerified: approve,
+          is_verified: approve,
         }),
       });
 
@@ -257,7 +266,7 @@ export default function ReviewPage() {
         };
         console.log('Saving revised question with payload:', savePayload);
         console.log('Revised scenario:', savePayload.scenario?.substring(0, 100));
-        console.log('Revised groundTruth:', savePayload.groundTruth);
+        console.log('Revised ground_truth:', savePayload.ground_truth);
 
         const saveRes = await fetch(`/api/admin/questions/${formData.id}`, {
           method: 'PATCH',
@@ -521,19 +530,19 @@ export default function ReviewPage() {
                     <span className="font-mono text-gray-500">#{idx + 1}</span>
                     {' '}
                     <span className={`px-1 rounded ${
-                      q.pearlLevel === 'L1' ? 'bg-blue-100 text-blue-700' :
-                      q.pearlLevel === 'L2' ? 'bg-purple-100 text-purple-700' :
+                      q.pearl_level === 'L1' ? 'bg-blue-100 text-blue-700' :
+                      q.pearl_level === 'L2' ? 'bg-purple-100 text-purple-700' :
                       'bg-orange-100 text-orange-700'
                     }`}>
-                      {q.pearlLevel}
+                      {q.pearl_level}
                     </span>
                     {' '}
                     <span className={`px-1 rounded ${
-                      q.groundTruth === 'YES' ? 'bg-green-100 text-green-700' :
-                      q.groundTruth === 'NO' ? 'bg-red-100 text-red-700' :
+                      q.ground_truth === 'YES' ? 'bg-green-100 text-green-700' :
+                      q.ground_truth === 'NO' ? 'bg-red-100 text-red-700' :
                       'bg-yellow-100 text-yellow-700'
                     }`}>
-                      {q.groundTruth?.charAt(0)}
+                      {q.ground_truth?.charAt(0)}
                     </span>
                     {' '}
                     <span className="text-gray-600">{q.domain}</span>
@@ -572,7 +581,7 @@ export default function ReviewPage() {
                 <div>
                   <span className="font-semibold text-gray-700">Pearl Level:</span>
                   <span className="ml-2 bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">
-                    {current.pearlLevel}
+                    {current.pearl_level}
                   </span>
                 </div>
                 <div>
@@ -581,7 +590,7 @@ export default function ReviewPage() {
                 </div>
                 <div>
                   <span className="font-semibold text-gray-700">Trap Type:</span>
-                  <span className="ml-2 text-gray-900">{current.trapType}</span>
+                  <span className="ml-2 text-gray-900">{current.trap_type}</span>
                 </div>
                 <div>
                   <span className="font-semibold text-gray-700">Difficulty:</span>
@@ -600,19 +609,19 @@ export default function ReviewPage() {
 
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                   <div className="font-medium text-blue-800 mb-1">Wise Refusal Response</div>
-                  <p className="text-blue-900 text-sm">{current.wiseRefusal || '(No response provided)'}</p>
+                  <p className="text-blue-900 text-sm">{current.wise_refusal || '(No response provided)'}</p>
                 </div>
 
-                {current.keyInsight && (
+                {current.key_insight && (
                   <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3">
                     <div className="font-medium text-green-800 mb-1">Key Insight</div>
-                    <p className="text-green-900 text-sm">{current.keyInsight}</p>
+                    <p className="text-green-900 text-sm">{current.key_insight}</p>
                   </div>
                 )}
 
-                {current.causalStructure && (
+                {current.causal_structure && (
                   <div className="mt-3 text-sm text-gray-600">
-                    <span className="font-medium">Causal Structure:</span> {current.causalStructure}
+                    <span className="font-medium">Causal Structure:</span> {current.causal_structure}
                   </div>
                 )}
               </div>
@@ -670,8 +679,8 @@ export default function ReviewPage() {
                     Pearl Level
                   </label>
                   <select
-                    value={current.pearlLevel || ''}
-                    onChange={(e) => updateField('pearlLevel', e.target.value)}
+                    value={current.pearl_level || ''}
+                    onChange={(e) => updateField('pearl_level', e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2"
                   >
                     <option value="L1">L1</option>
@@ -685,8 +694,8 @@ export default function ReviewPage() {
                     Ground Truth
                   </label>
                   <select
-                    value={current.groundTruth || ''}
-                    onChange={(e) => updateField('groundTruth', e.target.value)}
+                    value={current.ground_truth || ''}
+                    onChange={(e) => updateField('ground_truth', e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2"
                   >
                     <option value="YES">YES</option>
@@ -726,16 +735,16 @@ export default function ReviewPage() {
                     Trap Type
                   </label>
                   <select
-                    value={current.trapType || ''}
+                    value={current.trap_type || ''}
                     onChange={(e) => {
                       const newTrapType = e.target.value;
-                      // Update both trapType and trapSubtype atomically
+                      // Update both trap_type and trap_subtype atomically
                       if (newTrapType === 'NONE') {
-                        updateFields({ trapType: 'NONE', trapSubtype: 'NONE' });
+                        updateFields({ trap_type: 'NONE', trap_subtype: 'NONE' });
                       } else {
                         const trapDef = CHEATSHEET_TAXONOMY.find(t => t.type === newTrapType);
                         const firstSubtype = trapDef?.subtypes[0]?.name || 'NONE';
-                        updateFields({ trapType: newTrapType, trapSubtype: firstSubtype });
+                        updateFields({ trap_type: newTrapType, trap_subtype: firstSubtype });
                       }
                     }}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2"
@@ -752,10 +761,10 @@ export default function ReviewPage() {
                     Trap Subtype
                   </label>
                   <select
-                    value={current.trapSubtype || ''}
-                    onChange={(e) => updateField('trapSubtype', e.target.value)}
+                    value={current.trap_subtype || ''}
+                    onChange={(e) => updateField('trap_subtype', e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2"
-                    disabled={!current.trapType || current.trapType === 'NONE'}
+                    disabled={!current.trap_type || current.trap_type === 'NONE'}
                   >
                     <option value="NONE">NONE</option>
                     {current.trapType && current.trapType !== 'NONE' && (
@@ -799,8 +808,8 @@ export default function ReviewPage() {
                   Causal Structure
                 </label>
                 <input
-                  value={current.causalStructure || ''}
-                  onChange={(e) => updateField('causalStructure', e.target.value)}
+                  value={current.causal_structure || ''}
+                  onChange={(e) => updateField('causal_structure', e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2"
                   placeholder="e.g., Z → X, Z → Y (confounding)"
                 />
@@ -811,8 +820,8 @@ export default function ReviewPage() {
                   Key Insight
                 </label>
                 <input
-                  value={current.keyInsight || ''}
-                  onChange={(e) => updateField('keyInsight', e.target.value)}
+                  value={current.key_insight || ''}
+                  onChange={(e) => updateField('key_insight', e.target.value)}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2"
                   placeholder="One-line takeaway"
                 />
@@ -835,8 +844,8 @@ export default function ReviewPage() {
                   Wise Refusal
                 </label>
                 <textarea
-                  value={current.wiseRefusal || ''}
-                  onChange={(e) => updateField('wiseRefusal', e.target.value)}
+                  value={current.wise_refusal || ''}
+                  onChange={(e) => updateField('wise_refusal', e.target.value)}
                   rows={3}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2"
                   placeholder="YES/NO/AMBIGUOUS - The claim is..."
@@ -858,8 +867,8 @@ export default function ReviewPage() {
                       </span>
                     </label>
                     <textarea
-                      value={current.hiddenTimestamp === 'TBD' ? '' : (current.hiddenTimestamp || '')}
-                      onChange={(e) => updateField('hiddenTimestamp', e.target.value || 'TBD')}
+                      value={current.hidden_timestamp === 'TBD' ? '' : (current.hidden_timestamp || '')}
+                      onChange={(e) => updateField('hidden_timestamp', e.target.value || 'TBD')}
                       rows={2}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2"
                       placeholder="e.g., Did sales lag throughout the quarter (tX effect), or only during the storm window (tZ effect)?"
@@ -877,8 +886,8 @@ export default function ReviewPage() {
                       </span>
                     </label>
                     <textarea
-                      value={current.conditionalAnswers === 'TBD' ? '' : (current.conditionalAnswers || '')}
-                      onChange={(e) => updateField('conditionalAnswers', e.target.value || 'TBD')}
+                      value={current.conditional_answers === 'TBD' ? '' : (current.conditional_answers || '')}
+                      onChange={(e) => updateField('conditional_answers', e.target.value || 'TBD')}
                       rows={4}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 font-mono text-sm"
                       placeholder={`{
@@ -922,8 +931,8 @@ export default function ReviewPage() {
                     Source Case
                   </label>
                   <input
-                    value={current.sourceCase || ''}
-                    onChange={(e) => updateField('sourceCase', e.target.value)}
+                    value={current.source_case || ''}
+                    onChange={(e) => updateField('source_case', e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2"
                     placeholder="e.g., 3.15"
                     disabled
@@ -936,8 +945,8 @@ export default function ReviewPage() {
                   Review Notes (Internal)
                 </label>
                 <textarea
-                  value={current.reviewNotes || ''}
-                  onChange={(e) => updateField('reviewNotes', e.target.value)}
+                  value={current.review_notes || ''}
+                  onChange={(e) => updateField('review_notes', e.target.value)}
                   rows={2}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2"
                   placeholder="Notes for other reviewers..."
@@ -1008,13 +1017,13 @@ export default function ReviewPage() {
               <div className="mb-4 p-4 bg-gray-50 rounded-lg">
                 <p className="text-sm text-gray-500 mb-1">Current Ground Truth:</p>
                 <p className={`font-bold ${
-                  formData.groundTruth === 'YES' ? 'text-green-600' :
-                  formData.groundTruth === 'NO' ? 'text-red-600' : 'text-yellow-600'
+                  formData.ground_truth === 'YES' ? 'text-green-600' :
+                  formData.ground_truth === 'NO' ? 'text-red-600' : 'text-yellow-600'
                 }`}>
-                  {formData.groundTruth}
+                  {formData.ground_truth}
                 </p>
                 <p className="text-sm text-gray-500 mt-2 mb-1">Trap Type:</p>
-                <p className="font-medium">{formData.trapType} / {formData.trapSubtype}</p>
+                <p className="font-medium">{formData.trap_type} / {formData.trap_subtype}</p>
               </div>
 
               <textarea

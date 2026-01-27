@@ -99,26 +99,26 @@ async function upsertQuestionByDatasetSourceCase(args: {
   data: {
     scenario: string;
     claim: string;
-    pearlLevel: string;
+    pearl_level: string;
     domain: string;
     subdomain: string | null;
-    trapType: string;
-    trapSubtype: string;
+    trap_type: string;
+    trap_subtype: string;
     explanation: string;
     difficulty: string;
-    groundTruth: string;
+    ground_truth: string;
     variables: string | null;
-    causalStructure: string | null;
-    keyInsight: string | null;
-    wiseRefusal: string | null;
-    hiddenTimestamp: string | null;
-    conditionalAnswers: string | null;
+    causal_structure: string | null;
+    key_insight: string | null;
+    wise_refusal: string | null;
+    hidden_timestamp: string | null;
+    conditional_answers: string | null;
     author: string | null;
   };
 }) {
   const { dataset, sourceCase, data } = args;
   return prisma.question.create({
-    data: { ...data, dataset, sourceCase: sourceCase || null, isLLMGenerated: false },
+    data: { ...data, dataset, source_case: sourceCase || null, is_llm_generated: false },
   });
 }
 
@@ -141,7 +141,26 @@ async function upsertL1ByDatasetSourceCase(args: {
   };
 }) {
   const { dataset, sourceCase, data } = args;
-  return prisma.l1Case.create({ data: { ...data, dataset, sourceCase: sourceCase || null } });
+  return prisma.t3Case.create({
+    data: {
+      pearl_level: 'L1',
+      scenario: data.scenario,
+      claim: data.claim,
+      label: data.groundTruth, // L1: groundTruth -> label (YES/NO/AMBIGUOUS)
+      is_ambiguous: data.groundTruth === 'AMBIGUOUS',
+      trap_type: data.evidenceClass, // evidenceClass -> trap_type
+      trap_subtype: data.evidenceType || null,
+      gold_rationale: data.whyFlawedOrValid, // whyFlawedOrValid -> gold_rationale
+      domain: data.domain,
+      subdomain: data.subdomain,
+      difficulty: data.difficulty,
+      variables: data.variables,
+      causal_structure: data.causalStructure,
+      author: data.author,
+      dataset,
+      source_case: sourceCase || null,
+    },
+  });
 }
 
 async function upsertL2ByDatasetSourceCase(args: {
@@ -161,7 +180,35 @@ async function upsertL2ByDatasetSourceCase(args: {
   };
 }) {
   const { dataset, sourceCase, data } = args;
-  return prisma.l2Case.create({ data: { ...data, dataset, sourceCase: sourceCase || null } });
+  // L2 cases may have claim embedded in scenario, or scenario itself serves as context
+  // Try to extract claim if present, otherwise use null (claim is optional for L2 in some cases)
+  const { scenario: scenarioOnly, claim } = parseCombinedScenario(data.scenario);
+  
+  // Combine conditional answers into JSON
+  const conditionalAnswers = JSON.stringify({
+    A: data.answerIfA,
+    B: data.answerIfB,
+  });
+
+  return prisma.t3Case.create({
+    data: {
+      pearl_level: 'L2',
+      scenario: scenarioOnly,
+      claim: claim || null, // Claim is optional for L2
+      label: 'NO', // L2 cases are always NO
+      is_ambiguous: true, // L2 cases are ambiguous by nature
+      trap_type: data.trapType,
+      difficulty: data.difficulty,
+      causal_structure: data.causalStructure,
+      hidden_timestamp: data.hiddenQuestion, // hiddenQuestion -> hidden_timestamp
+      conditional_answers: conditionalAnswers, // answerIfA/answerIfB -> conditional_answers
+      wise_refusal: data.wiseRefusal,
+      variables: data.variables,
+      author: data.author,
+      dataset,
+      source_case: sourceCase || null,
+    },
+  });
 }
 
 async function upsertL3ByDatasetSourceCase(args: {
@@ -183,11 +230,41 @@ async function upsertL3ByDatasetSourceCase(args: {
   };
 }) {
   const { dataset, sourceCase, data } = args;
-  return prisma.l3Case.create({ data: { ...data, dataset, sourceCase: sourceCase || null } });
+  return prisma.t3Case.create({
+    data: {
+      pearl_level: 'L3',
+      case_id: data.caseId,
+      domain: data.domain,
+      scenario: data.scenario,
+      counterfactual_claim: data.counterfactualClaim,
+      label: data.groundTruth, // L3: groundTruth -> label (VALID/INVALID/CONDITIONAL)
+      is_ambiguous: data.groundTruth === 'CONDITIONAL',
+      trap_type: data.family, // family -> trap_type (F1-F8)
+      invariants: data.invariants, // Already JSON string
+      variables: data.variables,
+      gold_rationale: data.justification, // justification -> gold_rationale
+      wise_refusal: data.wiseResponse, // wiseResponse -> wise_refusal
+      difficulty: data.difficulty,
+      author: data.author,
+      dataset,
+      source_case: sourceCase || null,
+    },
+  });
 }
 
 export async function POST(req: NextRequest) {
   try {
+    // Check if T3Case model is available (migrations may not be applied)
+    if (!prisma.t3Case) {
+      return NextResponse.json(
+        { 
+          error: 'T3Case model is not available. Please run: npx prisma generate',
+          hint: 'If the table does not exist, run: npx prisma migrate deploy'
+        },
+        { status: 500 }
+      );
+    }
+
     const form = await req.formData();
     const file = form.get('file');
     const dataset = (form.get('dataset') as string | null) || 'default';
@@ -266,46 +343,62 @@ export async function POST(req: NextRequest) {
           errors.push({ index: i, error: 'L1 (T3) missing explanation' });
           continue;
         }
-        await upsertL1ByDatasetSourceCase({
-          dataset,
-          sourceCase,
-          data: {
-            scenario,
-            claim,
-            groundTruth,
-            evidenceClass,
-            evidenceType,
-            whyFlawedOrValid,
-            domain: asString(annotations.domain) || null,
-            subdomain: asString(annotations.subdomain) || null,
-            difficulty,
-            variables: variablesStr,
-            causalStructure: asString(annotations.causalStructure) || null,
-            author,
-          },
-        });
-        imported.l1++;
+        try {
+          await upsertL1ByDatasetSourceCase({
+            dataset,
+            sourceCase,
+            data: {
+              scenario,
+              claim,
+              groundTruth,
+              evidenceClass,
+              evidenceType,
+              whyFlawedOrValid,
+              domain: asString(annotations.domain) || null,
+              subdomain: asString(annotations.subdomain) || null,
+              difficulty,
+              variables: variablesStr,
+              causalStructure: asString(annotations.causalStructure) || null,
+              author,
+            },
+          });
+          imported.l1++;
+        } catch (error: any) {
+          if (error?.message?.includes('does not exist') || error?.code === 'P2021') {
+            errors.push({ index: i, error: 'T3Case table does not exist. Run migrations: npx prisma migrate deploy' });
+          } else {
+            errors.push({ index: i, error: error?.message || 'Failed to import L1 case' });
+          }
+        }
         continue;
       }
 
       if (level === 'L2' && isT3L2(item)) {
-        await upsertL2ByDatasetSourceCase({
-          dataset,
-          sourceCase,
-          data: {
-            scenario,
-            variables: variablesStr,
-            trapType: asString(annotations.trapType) || 'T1',
-            difficulty,
-            causalStructure: asString(annotations.causalStructure) || null,
-            hiddenQuestion: item.hiddenQuestion as string,
-            answerIfA: item.answerIfA as string,
-            answerIfB: item.answerIfB as string,
-            wiseRefusal: item.wiseRefusal as string,
-            author,
-          },
-        });
-        imported.l2++;
+        try {
+          await upsertL2ByDatasetSourceCase({
+            dataset,
+            sourceCase,
+            data: {
+              scenario,
+              variables: variablesStr,
+              trapType: asString(annotations.trapType) || 'T1',
+              difficulty,
+              causalStructure: asString(annotations.causalStructure) || null,
+              hiddenQuestion: item.hiddenQuestion as string,
+              answerIfA: item.answerIfA as string,
+              answerIfB: item.answerIfB as string,
+              wiseRefusal: item.wiseRefusal as string,
+              author,
+            },
+          });
+          imported.l2++;
+        } catch (error: any) {
+          if (error?.message?.includes('does not exist') || error?.code === 'P2021') {
+            errors.push({ index: i, error: 'T3Case table does not exist. Run migrations: npx prisma migrate deploy' });
+          } else {
+            errors.push({ index: i, error: error?.message || 'Failed to import L2 case' });
+          }
+        }
         continue;
       }
 
@@ -330,25 +423,33 @@ export async function POST(req: NextRequest) {
           errors.push({ index: i, error: 'L3 (T3) missing variables' });
           continue;
         }
-        await upsertL3ByDatasetSourceCase({
-          dataset,
-          sourceCase,
-          data: {
-            caseId: asString(annotations.caseId) || null,
-            domain: asString(annotations.domain) || null,
-            family,
-            difficulty,
-            scenario,
-            counterfactualClaim: item.counterfactualClaim as string,
-            variables: variablesRequired,
-            invariants: invariantsStr,
-            groundTruth,
-            justification: item.justification as string,
-            wiseResponse: item.wiseResponse as string,
-            author,
-          },
-        });
-        imported.l3++;
+        try {
+          await upsertL3ByDatasetSourceCase({
+            dataset,
+            sourceCase,
+            data: {
+              caseId: asString(annotations.caseId) || null,
+              domain: asString(annotations.domain) || null,
+              family,
+              difficulty,
+              scenario,
+              counterfactualClaim: item.counterfactualClaim as string,
+              variables: variablesRequired,
+              invariants: invariantsStr,
+              groundTruth,
+              justification: item.justification as string,
+              wiseResponse: item.wiseResponse as string,
+              author,
+            },
+          });
+          imported.l3++;
+        } catch (error: any) {
+          if (error?.message?.includes('does not exist') || error?.code === 'P2021') {
+            errors.push({ index: i, error: 'T3Case table does not exist. Run migrations: npx prisma migrate deploy' });
+          } else {
+            errors.push({ index: i, error: error?.message || 'Failed to import L3 case' });
+          }
+        }
         continue;
       }
 
@@ -366,20 +467,20 @@ export async function POST(req: NextRequest) {
         data: {
           scenario,
           claim,
-          pearlLevel: level,
+          pearl_level: level,
           domain,
           subdomain,
-          trapType,
-          trapSubtype,
+          trap_type: trapType,
+          trap_subtype: trapSubtype,
           explanation,
           difficulty,
-          groundTruth,
+          ground_truth: groundTruth,
           variables: variablesStr,
-          causalStructure: asString(annotations.causalStructure) || null,
-          keyInsight: asString(annotations.keyInsight) || null,
-          wiseRefusal: asString(item.wiseRefusal) || null,
-          hiddenTimestamp: asString(item.hiddenTimestamp) || null,
-          conditionalAnswers: normalizeJsonString(item.conditionalAnswers),
+          causal_structure: asString(annotations.causalStructure) || null,
+          key_insight: asString(annotations.keyInsight) || null,
+          wise_refusal: asString(item.wiseRefusal) || null,
+          hidden_timestamp: asString(item.hiddenTimestamp) || null,
+          conditional_answers: normalizeJsonString(item.conditionalAnswers),
           author,
         },
       });

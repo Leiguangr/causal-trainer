@@ -23,9 +23,7 @@ export async function POST(req: NextRequest) {
       where: { id: evaluationId },
       include: {
         question: true,
-        l1Case: true,
-        l2Case: true,
-        l3Case: true,
+        t3_case: true,
       },
     });
 
@@ -35,16 +33,16 @@ export async function POST(req: NextRequest) {
 
     // Parse rubric score
     let rubricScore: any = null;
-    if (evaluation.rubricScore) {
+    if (evaluation.rubric_score) {
       try {
-        rubricScore = JSON.parse(evaluation.rubricScore);
+        rubricScore = JSON.parse(evaluation.rubric_score);
       } catch {
         // Ignore parse errors
       }
     }
 
     // Get the case data
-    const caseData = evaluation.question || evaluation.l1Case || evaluation.l2Case || evaluation.l3Case;
+    const caseData = evaluation.question || evaluation.t3_case;
     if (!caseData) {
       return NextResponse.json({ error: 'Case not found' }, { status: 404 });
     }
@@ -80,10 +78,14 @@ export async function POST(req: NextRequest) {
       if (revised.scenario) updateData.scenario = revised.scenario;
       if (revised.claim) updateData.claim = revised.claim;
       if (revised.explanation) updateData.explanation = revised.explanation;
-      if (revised.wiseRefusal) updateData.wiseRefusal = revised.wiseRefusal;
-      if (revised.hiddenQuestion) updateData.hiddenQuestion = revised.hiddenQuestion;
-      if (revised.answerIfA) updateData.answerIfA = revised.answerIfA;
-      if (revised.answerIfB) updateData.answerIfB = revised.answerIfB;
+      if (revised.wiseRefusal) updateData.wise_refusal = revised.wiseRefusal;
+      if (revised.hiddenQuestion) updateData.hidden_timestamp = revised.hiddenQuestion;
+      if (revised.answerIfA || revised.answerIfB) {
+        updateData.conditional_answers = JSON.stringify({
+          answer_if_condition_1: revised.answerIfA || '',
+          answer_if_condition_2: revised.answerIfB || '',
+        });
+      }
       
       if (Object.keys(updateData).length > 0) {
         await prisma.question.update({
@@ -91,38 +93,29 @@ export async function POST(req: NextRequest) {
           data: updateData,
         });
       }
-    } else if (caseType === 'L1') {
+    } else {
+      // T3Case unified schema
       if (revised.scenario) updateData.scenario = revised.scenario;
-      if (revised.claim) updateData.claim = revised.claim;
-      if (revised.whyFlawedOrValid) updateData.whyFlawedOrValid = revised.whyFlawedOrValid;
-      
-      if (Object.keys(updateData).length > 0) {
-        await prisma.l1Case.update({
-          where: { id: caseId },
-          data: updateData,
+      if (revised.claim && caseType !== 'L3') updateData.claim = revised.claim;
+      if (revised.counterfactualClaim && caseType === 'L3') updateData.counterfactual_claim = revised.counterfactualClaim;
+      if (revised.goldRationale || revised.whyFlawedOrValid || revised.justification) {
+        updateData.gold_rationale = revised.goldRationale || revised.whyFlawedOrValid || revised.justification;
+      }
+      if (revised.wiseRefusal || revised.wiseResponse) {
+        updateData.wise_refusal = revised.wiseRefusal || revised.wiseResponse;
+      }
+      if (revised.hiddenQuestion || revised.hiddenTimestamp) {
+        updateData.hidden_timestamp = revised.hiddenQuestion || revised.hiddenTimestamp;
+      }
+      if (revised.answerIfA || revised.answerIfB) {
+        updateData.conditional_answers = JSON.stringify({
+          answer_if_condition_1: revised.answerIfA || '',
+          answer_if_condition_2: revised.answerIfB || '',
         });
       }
-    } else if (caseType === 'L2') {
-      if (revised.scenario) updateData.scenario = revised.scenario;
-      if (revised.hiddenQuestion) updateData.hiddenQuestion = revised.hiddenQuestion;
-      if (revised.answerIfA) updateData.answerIfA = revised.answerIfA;
-      if (revised.answerIfB) updateData.answerIfB = revised.answerIfB;
-      if (revised.wiseRefusal) updateData.wiseRefusal = revised.wiseRefusal;
       
       if (Object.keys(updateData).length > 0) {
-        await prisma.l2Case.update({
-          where: { id: caseId },
-          data: updateData,
-        });
-      }
-    } else if (caseType === 'L3') {
-      if (revised.scenario) updateData.scenario = revised.scenario;
-      if (revised.counterfactualClaim) updateData.counterfactualClaim = revised.counterfactualClaim;
-      if (revised.justification) updateData.justification = revised.justification;
-      if (revised.wiseResponse) updateData.wiseResponse = revised.wiseResponse;
-      
-      if (Object.keys(updateData).length > 0) {
-        await prisma.l3Case.update({
+        await prisma.t3Case.update({
           where: { id: caseId },
           data: updateData,
         });
@@ -160,17 +153,17 @@ function buildRevisionPrompt(
   let prompt = `You are revising a ${caseType} causal reasoning case to improve its quality based on rubric feedback.
 
 CURRENT RUBRIC SCORE: ${totalScore}/10 (${acceptanceThreshold})
-OVERALL VERDICT: ${evaluation.overallVerdict}
-PRIORITY: ${evaluation.priorityLevel === 1 ? 'Urgent' : evaluation.priorityLevel === 2 ? 'Normal' : 'Minor'}
+OVERALL VERDICT: ${evaluation.overall_verdict}
+PRIORITY: ${evaluation.priority_level === 1 ? 'Urgent' : evaluation.priority_level === 2 ? 'Normal' : 'Minor'}
 
 RUBRIC FEEDBACK:
 ${rubricFeedback}
 
-${evaluation.suggestedCorrections ? `SUGGESTED CORRECTIONS:\n${evaluation.suggestedCorrections}\n` : ''}
-${evaluation.structuralNotes ? `STRUCTURAL NOTES:\n${evaluation.structuralNotes}\n` : ''}
-${evaluation.hasAmbiguity && evaluation.ambiguityNotes ? `AMBIGUITY ISSUES:\n${evaluation.ambiguityNotes}\n` : ''}
-${evaluation.hasLogicalIssues && evaluation.logicalIssueNotes ? `LOGICAL ISSUES:\n${evaluation.logicalIssueNotes}\n` : ''}
-${evaluation.hasDomainErrors && evaluation.domainErrorNotes ? `DOMAIN ERRORS:\n${evaluation.domainErrorNotes}\n` : ''}
+${evaluation.suggested_corrections ? `SUGGESTED CORRECTIONS:\n${evaluation.suggested_corrections}\n` : ''}
+${evaluation.structural_notes ? `STRUCTURAL NOTES:\n${evaluation.structural_notes}\n` : ''}
+${evaluation.has_ambiguity && evaluation.ambiguity_notes ? `AMBIGUITY ISSUES:\n${evaluation.ambiguity_notes}\n` : ''}
+${evaluation.has_logical_issues && evaluation.logical_issue_notes ? `LOGICAL ISSUES:\n${evaluation.logical_issue_notes}\n` : ''}
+${evaluation.has_domain_errors && evaluation.domain_error_notes ? `DOMAIN ERRORS:\n${evaluation.domain_error_notes}\n` : ''}
 
 CURRENT CASE DATA:
 `;
@@ -180,36 +173,50 @@ CURRENT CASE DATA:
       scenario: caseData.scenario,
       claim: caseData.claim,
       explanation: caseData.explanation,
-      wiseRefusal: caseData.wiseRefusal,
-      hiddenQuestion: caseData.hiddenQuestion,
-      answerIfA: caseData.answerIfA,
-      answerIfB: caseData.answerIfB,
+      wiseRefusal: caseData.wise_refusal,
+      hiddenQuestion: caseData.hidden_timestamp,
+      answerIfA: caseData.conditional_answers ? (JSON.parse(caseData.conditional_answers)?.answer_if_condition_1 || '') : '',
+      answerIfB: caseData.conditional_answers ? (JSON.parse(caseData.conditional_answers)?.answer_if_condition_2 || '') : '',
     }, null, 2);
     prompt += `\n\nTASK: Revise the case content to address the rubric feedback and improve the score. Return a JSON object with revised fields: scenario, claim, explanation, wiseRefusal, hiddenQuestion, answerIfA, answerIfB. Only include fields that need revision.`;
-  } else if (caseType === 'L1') {
-    prompt += JSON.stringify({
+  } else {
+    // T3Case unified schema - parse conditional_answers and hidden_timestamp
+    let hiddenQuestion = caseData.hidden_timestamp;
+    let answerIfA = '';
+    let answerIfB = '';
+    if (caseData.conditional_answers) {
+      try {
+        const parsed = JSON.parse(caseData.conditional_answers);
+        answerIfA = parsed.answer_if_condition_1 || parsed.answerIfA || '';
+        answerIfB = parsed.answer_if_condition_2 || parsed.answerIfB || '';
+      } catch {
+        // ignore
+      }
+    }
+    
+    const t3Data: any = {
       scenario: caseData.scenario,
-      claim: caseData.claim,
-      whyFlawedOrValid: caseData.whyFlawedOrValid,
-    }, null, 2);
-    prompt += `\n\nTASK: Revise the case content to address the rubric feedback and improve the score. Return a JSON object with revised fields: scenario, claim, whyFlawedOrValid. Only include fields that need revision.`;
-  } else if (caseType === 'L2') {
-    prompt += JSON.stringify({
-      scenario: caseData.scenario,
-      hiddenQuestion: caseData.hiddenQuestion,
-      answerIfA: caseData.answerIfA,
-      answerIfB: caseData.answerIfB,
-      wiseRefusal: caseData.wiseRefusal,
-    }, null, 2);
-    prompt += `\n\nTASK: Revise the case content to address the rubric feedback and improve the score. Return a JSON object with revised fields: scenario, hiddenQuestion, answerIfA, answerIfB, wiseRefusal. Only include fields that need revision.`;
-  } else if (caseType === 'L3') {
-    prompt += JSON.stringify({
-      scenario: caseData.scenario,
-      counterfactualClaim: caseData.counterfactualClaim,
-      justification: caseData.justification,
-      wiseResponse: caseData.wiseResponse,
-    }, null, 2);
-    prompt += `\n\nTASK: Revise the case content to address the rubric feedback and improve the score. Return a JSON object with revised fields: scenario, counterfactualClaim, justification, wiseResponse. Only include fields that need revision.`;
+      wiseRefusal: caseData.wise_refusal,
+      goldRationale: caseData.gold_rationale,
+      hiddenQuestion,
+    };
+    
+    if (caseData.pearl_level === 'L3') {
+      t3Data.counterfactualClaim = caseData.counterfactual_claim;
+      t3Data.justification = caseData.gold_rationale;
+      t3Data.wiseResponse = caseData.wise_refusal;
+    } else {
+      t3Data.claim = caseData.claim;
+      t3Data.whyFlawedOrValid = caseData.gold_rationale;
+    }
+    
+    if (answerIfA || answerIfB) {
+      t3Data.answerIfA = answerIfA;
+      t3Data.answerIfB = answerIfB;
+    }
+    
+    prompt += JSON.stringify(t3Data, null, 2);
+    prompt += `\n\nTASK: Revise the case content to address the rubric feedback and improve the score. Return a JSON object with revised fields. For L3 cases, use counterfactualClaim, justification, wiseResponse. For L1/L2 cases, use claim, whyFlawedOrValid, wiseRefusal. Include hiddenQuestion and answerIfA/answerIfB if applicable. Only include fields that need revision.`;
   }
 
   return prompt;

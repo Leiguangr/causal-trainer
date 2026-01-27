@@ -181,7 +181,7 @@ function QuizContent() {
         <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
           <div className="flex items-center gap-2 mb-4">
             <span className="text-xs font-medium px-2 py-1 rounded-full bg-primary-100 text-primary-700">
-              {currentQuestion.pearlLevel}
+              {currentQuestion.pearl_level}
             </span>
             <span className="text-xs font-medium px-2 py-1 rounded-full bg-gray-100 text-gray-700">
               {currentQuestion.domain}

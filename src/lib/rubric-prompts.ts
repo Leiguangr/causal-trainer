@@ -1,12 +1,12 @@
 /**
- * Rubric Prompts for Case Quality Scoring
+ * Unified Rubric Prompts for T3 Case Quality Scoring
  * 
- * This file contains generator- and reviewer-ready rubrics for evaluating
- * the quality of causal reasoning cases at each Pearl level (L1, L2, L3).
- * These rubrics are designed for both human QA and automated/semi-automated scoring.
+ * This file contains the unified 10-point rubric for evaluating
+ * the quality of causal reasoning cases across all Pearl levels (L1, L2, L3).
+ * The rubric is standardized per Table 7 in the assignment requirements.
  */
 
-import type { PearlLevel } from '@/types';
+import type { PearlLevel, T3Case } from '@/types';
 
 export interface RubricScore {
   totalScore: number;
@@ -20,477 +20,281 @@ export type T3CaseType = 'L1' | 'L2' | 'L3';
 
 export type Difficulty = 'easy' | 'medium' | 'hard';
 
-export interface T3BaseRubricPayload {
-  caseType: T3CaseType;
-  id: string;
-  dataset: string;
-  generationBatchId?: string | null;
-  difficulty: Difficulty;
-  scenario: string;
-  variables: Record<string, unknown>;
-  causalStructure?: string | null;
+// Unified rubric payload for T3Case
+export interface T3RubricPayload {
+  case: T3Case;
 }
-
-export interface L1RubricPayload extends T3BaseRubricPayload {
-  caseType: 'L1';
-  claim: string;
-  groundTruth: 'YES' | 'NO' | 'AMBIGUOUS';
-  evidenceClass: 'WOLF' | 'SHEEP' | 'NONE';
-  evidenceType?: string | null;
-  whyFlawedOrValid: string;
-  domain?: string | null;
-  subdomain?: string | null;
-}
-
-export interface L2RubricPayload extends T3BaseRubricPayload {
-  caseType: 'L2';
-  trapType: string; // T1..T17
-  hiddenQuestion: string;
-  answerIfA: string;
-  answerIfB: string;
-  wiseRefusal: string;
-}
-
-export interface L3RubricPayload extends T3BaseRubricPayload {
-  caseType: 'L3';
-  family: string; // F1..F8
-  counterfactualClaim: string;
-  invariants: string[];
-  groundTruth: 'VALID' | 'INVALID' | 'CONDITIONAL';
-  justification: string;
-  wiseResponse: string;
-  domain?: string | null;
-}
-
-export type T3RubricPayload = L1RubricPayload | L2RubricPayload | L3RubricPayload;
 
 function varValueToString(v: unknown): string {
   if (typeof v === 'string') return v;
   if (typeof v === 'number' || typeof v === 'boolean') return String(v);
   if (v == null) return 'Not specified';
+  if (typeof v === 'object' && 'name' in v && typeof v.name === 'string') {
+    return `${v.name}${'role' in v && typeof v.role === 'string' ? ` (${v.role})` : ''}`;
+  }
   return JSON.stringify(v);
 }
 
-function getVar(variables: Record<string, unknown>, key: string): string {
+function getVar(variables: T3Case['variables'], key: 'X' | 'Y'): string {
+  if (!variables) return 'Not specified';
   return varValueToString(variables[key]);
 }
 
-function getVarZ(variables: Record<string, unknown>): string {
-  const z = variables['Z'];
-  if (Array.isArray(z)) return z.map(varValueToString).join(', ');
-  return varValueToString(z);
+function getVarZ(variables: T3Case['variables']): string {
+  if (!variables || !variables.Z) return 'Not specified';
+  if (Array.isArray(variables.Z)) {
+    return variables.Z.length > 0 ? variables.Z.join(', ') : 'Not specified';
+  }
+  return varValueToString(variables.Z);
 }
 
-function asL1GroundTruth(raw: string | null | undefined): L1RubricPayload['groundTruth'] {
-  if (raw === 'YES' || raw === 'NO' || raw === 'AMBIGUOUS') return raw;
-  return 'AMBIGUOUS';
-}
-
-function asL3GroundTruth(raw: string | null | undefined): L3RubricPayload['groundTruth'] {
-  if (raw === 'VALID' || raw === 'INVALID' || raw === 'CONDITIONAL') return raw;
-  return 'CONDITIONAL';
+function parseConditionalAnswers(conditionalAnswers: string | null | undefined): { answerIfA?: string; answerIfB?: string } {
+  if (!conditionalAnswers) return {};
+  try {
+    const parsed = typeof conditionalAnswers === 'string' ? JSON.parse(conditionalAnswers) : conditionalAnswers;
+    if (typeof parsed === 'object' && parsed !== null) {
+      return {
+        answerIfA: parsed.answer_if_condition_1 || parsed.answerIfA || parsed.answer_if_A || '',
+        answerIfB: parsed.answer_if_condition_2 || parsed.answerIfB || parsed.answer_if_B || '',
+      };
+    }
+  } catch {
+    // If parsing fails, treat as string
+    return { answerIfA: conditionalAnswers as string, answerIfB: conditionalAnswers as string };
+  }
+  return {};
 }
 
 /**
- * Build the L1 Case Quality Rubric prompt
+ * Build the unified T3 Case Quality Rubric prompt (Table 7)
+ * This rubric applies to all levels (L1, L2, L3) with level-specific validation rules
  */
-export function buildL1RubricPrompt(payload: L1RubricPayload): string {
-  const variables = payload.variables;
+export function buildT3RubricPrompt(payload: T3RubricPayload): string {
+  const { case: c } = payload;
+  const variables = c.variables;
   const zStr = getVarZ(variables);
+  const conditionalAnswers = parseConditionalAnswers(c.conditional_answers);
+  
+  // Level-specific trap type validation rules (Table 8)
+  const trapTypeGuidelines = c.pearl_level === 'L1'
+    ? `**L1 (Association) Trap Type Guidelines:**
+- Trap type must be W1–W10 (Wolf types) or S1–S8 (Sheep types) or A (Ambiguous)
+- Label must correctly identify trap type
+- WOLF cases should appear valid but contain traps
+- SHEEP cases should have strong evidence`
+    : c.pearl_level === 'L2'
+    ? `**L2 (Intervention) Trap Type Guidelines:**
+- Trap type must be T1–T17 (17 trap types across 6 families)
+- All L2 cases must be invalid causal claims (label must be "NO")
+- Trap type must match family (F1–F6) and difficulty level`
+    : `**L3 (Counterfactual) Trap Type Guidelines:**
+- Trap type must be F1–F8 (8 families with subtypes)
+- Label must match counterfactual validity
+- Trap type must align with family classification`;
 
-  return `You are an expert evaluator using the **L1 Case Quality Rubric** to assess the quality of an L1 causal reasoning case. This rubric evaluates whether the case text reliably elicits the correct judgment (WOLF = NO, SHEEP = YES).
+  // Level-specific label validation
+  const labelGuidelines = c.pearl_level === 'L1'
+    ? `**L1 Label Values:** YES (valid causal claim - SHEEP cases), NO (invalid causal claim - WOLF cases), AMBIGUOUS (unclear or conditional relationship)`
+    : c.pearl_level === 'L2'
+    ? `**L2 Label Values:** NO (all L2 cases must be labeled NO - invalid causal claims)`
+    : `**L3 Label Values:** VALID (valid counterfactual claim), INVALID (invalid counterfactual claim), CONDITIONAL (conditional validity depending on context)`;
+
+  return `You are an expert evaluator using the **Unified T3 Case Quality Rubric** (Table 7) to assess the quality of a ${c.pearl_level} causal reasoning case. This unified rubric evaluates cases across all Pearl levels using the same 10-point structure.
 
 ---
 
-# L1 Case Quality Rubric (Total: **10 points**)
+# Unified T3 Case Quality Rubric (Total: **10.0 points**)
 
 ## CASE TO EVALUATE:
 
-**SCENARIO**: ${payload.scenario}
+**SCENARIO**: ${c.scenario}
 
-**CLAIM**: ${payload.claim}
+${c.claim ? `**CLAIM**: ${c.claim}` : ''}
+${c.counterfactual_claim ? `**COUNTERFACTUAL CLAIM**: ${c.counterfactual_claim}` : ''}
 
 **ASSIGNED LABELS**:
-- Case Type: L1
-- Ground Truth: ${payload.groundTruth}
-- Evidence Class: ${payload.evidenceClass}
-- Evidence Type: ${payload.evidenceType ?? 'Not specified'}
-- Domain: ${payload.domain ?? 'Not specified'}${payload.subdomain ? ` / ${payload.subdomain}` : ''}
-- Difficulty: ${payload.difficulty}
+- Pearl Level: ${c.pearl_level}
+- Label: ${c.label}
+- Is Ambiguous: ${c.is_ambiguous}
+- Trap Type: ${c.trap_type}${c.trap_type_name ? ` (${c.trap_type_name})` : ''}${c.trap_subtype ? ` / ${c.trap_subtype}${c.trap_subtype_name ? ` (${c.trap_subtype_name})` : ''}` : ''}
+- Domain: ${c.domain || 'Not specified'}${c.subdomain ? ` / ${c.subdomain}` : ''}
+- Difficulty: ${c.difficulty}
 
 **VARIABLES**:
-- X (Claimed Cause): ${getVar(variables, 'X')}
-- Y (Claimed Effect): ${getVar(variables, 'Y')}
-- Z (Confounder/Instrument/Stratifier): ${zStr}
+- X: ${getVar(variables, 'X')}
+- Y: ${getVar(variables, 'Y')}
+- Z: ${zStr}
 
-**CAUSAL STRUCTURE**: ${payload.causalStructure || 'Not specified'}
-
-**WHY FLAWED/VALID**: ${payload.whyFlawedOrValid}
+**CAUSAL STRUCTURE**: ${c.causal_structure || 'Not specified'}
+${c.key_insight ? `**KEY INSIGHT**: ${c.key_insight}` : ''}
+${c.hidden_timestamp ? `**HIDDEN TIMESTAMP/QUESTION**: ${typeof c.hidden_timestamp === 'string' ? c.hidden_timestamp : JSON.stringify(c.hidden_timestamp)}` : ''}
+${conditionalAnswers.answerIfA ? `**CONDITIONAL ANSWER A**: ${conditionalAnswers.answerIfA}` : ''}
+${conditionalAnswers.answerIfB ? `**CONDITIONAL ANSWER B**: ${conditionalAnswers.answerIfB}` : ''}
+${c.wise_refusal ? `**WISE REFUSAL**: ${c.wise_refusal}` : ''}
+${c.gold_rationale ? `**GOLD RATIONALE**: ${c.gold_rationale}` : ''}
+${c.invariants ? `**INVARIANTS**: ${typeof c.invariants === 'string' ? c.invariants : JSON.stringify(c.invariants)}` : ''}
 
 ---
 
-## RUBRIC CATEGORIES:
+## RUBRIC CATEGORIES (Table 7):
 
-### 1. Scenario Clarity — **2 points** *(required)*
+### 1. Scenario Clarity — **1.0 point**
 
-**Goal:** The causal story is legible without ambiguity.
+**Goal:** X, Y, Z clearly defined
 
 **What is evaluated:**
 - Are the key variables clearly defined?
 - Can a reader identify:
-  - **X** = claimed cause
-  - **Y** = claimed effect
-  - **Z** = confounder / instrument / stratifier (if applicable)
+  - **X** = exposure/treatment/predictor variable
+  - **Y** = outcome variable
+  - **Z** = confounders, mediators, colliders, or mechanisms (array)
 
-**Scoring:**
-- **2 points**: X, Y (and Z if relevant) are explicitly or unambiguously defined
-- **1 point**: One variable is implicit but reasonably inferable
-- **0 points**: Variables are unclear, overloaded, or confused
+**Scoring (Maximum: 1.0 point):**
+- **1.0 point**: X, Y, and Z (if applicable) are explicitly or unambiguously defined
+- **0.5 point**: One variable is implicit but reasonably inferable
+- **0.0 points**: Variables are unclear, overloaded, or confused
 
-**Automatic fail conditions:**
-- Multiple competing Xs or Ys
-- Z introduced but not causally interpretable
+**Important:** This category is scored out of 1.0 point maximum. Do not exceed 1.0 point.
 
 ---
 
-### 2. Causal Claim Explicitness — **1 point**
+### 2. Hidden Question Quality — **1.0 point**
 
-**Goal:** The model is not guessing what judgment is being tested.
+**Goal:** Identifies key ambiguity
 
 **What is evaluated:**
-- Is there a **clear causal claim** stated in the scenario?
-- Is the claim phrased as causation (not mere association)?
-
-**Scoring:**
-- **1 point**: Explicit causal claim ("X causes Y")
-- **0 points**: Only correlational language or no explicit claim
-
-> *Rationale*: L1 evaluates judgment of a claim, not inference of one.
-
----
-
-### 3. Wise Refusal Quality — **2 points** *(required)*
-
-**Goal:** The case cleanly instantiates **exactly one** causal pattern.
-
-**What is evaluated:**
-- Does the scenario follow the **correct template** for its declared subtype?
-- Are **required elements present** and **forbidden elements absent**?
-
-**Scoring:**
-- **2 points**: Clean instantiation; no leakage from other types
-- **1 point**: Minor noise but dominant pattern is intact
-- **0 points**: Mixed signals (e.g., confounding + post hoc)
-
-**Automatic fail conditions:**
-- WOLF case includes valid causal identification
-- SHEEP case contains unresolved confounding or bias
-
----
-
-### 4. Ground Truth Unambiguity — **2 points**
-
-**Goal:** The correct answer is determinable *from the text alone*.
-
-**What is evaluated:**
-- Would informed reviewers independently agree on YES/NO?
-- Is any critical information missing that could flip the answer?
-
-**Scoring:**
-- **2 points**: Ground truth is unambiguous
-- **1 point**: Slight ambiguity but dominant interpretation is clear
-- **0 points**: Plausible disagreement among experts
-
-**Automatic fail conditions:**
-- "It depends" is a reasonable answer
-- Requires external data or assumptions
-
----
-
-### 5. Difficulty Calibration — **1 point** *(required)*
-
-**Goal:** The labeled difficulty matches the inferential load.
-
-**What is evaluated:**
-- Does the stated difficulty (Easy / Medium / Hard) align with:
-  - Explicitness of signals
-  - Structural complexity
-  - Need for inference vs. recognition
-
-**Scoring:**
-- **1 point**: Difficulty label is appropriate
-- **0 points**: Case is mis-labeled (e.g., trivial but marked Hard)
-
----
-
-### 6. Domain Plausibility & Realism — **1 point**
-
-**Goal:** The case feels like something that *could actually occur*.
-
-**What is evaluated:**
-- Is the domain realistic and internally consistent?
-- Are actors, behaviors, and outcomes plausible?
-
-**Scoring:**
-- **1 point**: Realistic and coherent
-- **0 points**: Artificial, contrived, or implausible
-
-> *Note*: This improves generalization and reduces pattern overfitting.
-
----
-
-### 7. Noise Discipline (No Extraneous Cues) — **1 point**
-
-**Goal:** The case tests causal reasoning, not keyword spotting.
-
-**What is evaluated:**
-- Absence of:
-  - Irrelevant statistics
-  - Redundant explanations
-  - Meta-language ("this study proves…")
-- No cues that trivially give away the answer
-
-**Scoring:**
-- **1 point**: High signal-to-noise ratio
-- **0 points**: Distracting or leading information present
-
----
-
-## SUMMARY TABLE
-
-| Category                  | Points |
-| ------------------------- | ------ |
-| Scenario clarity          | 2      |
-| Causal claim explicitness | 1      |
-| Wise refusal quality      | 2      |
-| Ground truth unambiguity  | 2      |
-| Difficulty calibration    | 1      |
-| Domain plausibility       | 1      |
-| Noise discipline          | 1      |
-| **Total**                 | **10** |
-
----
-
-## ACCEPTANCE THRESHOLDS
-
-- **8–10** → ACCEPT (benchmark quality)
-- **6–7** → REVISE (fixable issues)
-- **≤5** → REJECT (structural failure)
-
----
-
-## YOUR TASK:
-
-Evaluate the case above using this rubric. Return a JSON object with the following structure (JSON only):
-
-\`\`\`json
-{
-  "categoryScores": {
-    "scenarioClarity": 0-2,
-    "causalClaimExplicitness": 0-1,
-    "wiseRefusalQuality": 0-2,
-    "groundTruthUnambiguity": 0-2,
-    "difficultyCalibration": 0-1,
-    "domainPlausibility": 0-1,
-    "noiseDiscipline": 0-1
-  },
-  "categoryNotes": {
-    "scenarioClarity": "Brief justification for the score...",
-    "causalClaimExplicitness": "Brief justification for the score...",
-    "wiseRefusalQuality": "Brief justification for the score...",
-    "groundTruthUnambiguity": "Brief justification for the score...",
-    "difficultyCalibration": "Brief justification for the score...",
-    "domainPlausibility": "Brief justification for the score...",
-    "noiseDiscipline": "Brief justification for the score..."
-  },
-  "totalScore": 0-10
-}
-\`\`\`
-
-**Important:**
-- Calculate totalScore as the sum of all categoryScores
-- Provide clear, specific justifications in categoryNotes
-- Be strict but fair in your evaluation`;
-}
-
-/**
- * Build the L2 Case Quality Rubric prompt
- */
-export function buildL2RubricPrompt(payload: L2RubricPayload): string {
-  const variables = payload.variables;
-
-  return `You are an expert evaluator using the **T3-L2 Case Scoring Rubric** to assess the quality of an L2 causal reasoning case. This rubric evaluates whether the case text correctly handles causal ambiguity and conditional reasoning.
-
----
-
-# T3-L2 Case Scoring Rubric (Total: 10 points)
-
-## CASE TO EVALUATE:
-
-**SCENARIO**: ${payload.scenario}
-
-**VARIABLES**:
-- X (Exposure): ${getVar(variables, 'X')}
-- Y (Outcome): ${getVar(variables, 'Y')}
-- Z (Ambiguous Variable): ${getVar(variables, 'Z')}
-
-**ANNOTATIONS**:
-- Case Type: L2
-- Trap Type: ${payload.trapType || 'Not specified'}
-- Difficulty: ${payload.difficulty}
-- Causal Structure: ${payload.causalStructure || 'Not specified'}
-
-**HIDDEN QUESTION**: ${payload.hiddenQuestion || 'Not specified'}
-
-**CONDITIONAL ANSWERS**:
-- **Answer if A**: ${payload.answerIfA || 'Not specified'}
-- **Answer if B**: ${payload.answerIfB || 'Not specified'}
-
-**WISE REFUSAL**: ${payload.wiseRefusal || 'Not specified'}
-
----
-
-## RUBRIC CATEGORIES:
-
-### 1. Scenario Clarity — **2.0 points**
-
-**Goal:** Ensure the causal setup is legible and structurally complete.
-
-**What to evaluate:**
-- Are **X (exposure)**, **Y (outcome)**, and **Z (ambiguous variable)** explicitly identified?
-- Are their roles *consistent* across the scenario, variables list, and later reasoning?
-- Is the observed association between X and Y clearly stated?
-
-**Scoring:**
-- **2.0 (Full credit)**: X, Y, and Z are all explicitly named and clearly defined. Roles are unambiguous and consistent. Scenario clearly states an observed relationship between X and Y.
-- **1.0 (Partial credit)**: X and Y are clear, but Z is vague, implicit, or inconsistently described. Minor confusion about roles, but intended structure is recoverable.
-- **0.0 (No credit)**: One or more of X, Y, Z are missing, mislabeled, or interchangeable. Scenario does not clearly describe what is being correlated or compared.
-
-**Common failure modes:**
-- Z mentioned narratively but never defined as an explicit variable
-- Multiple candidates for X or Y with no clear primary one
-- Scenario reads like a conclusion rather than an observation
-
----
-
-### 2. Hidden Question Quality — **2.0 points**
-
-**Goal:** Test whether the case correctly identifies the *pivotal missing information*.
-
-**What to evaluate:**
-- Does the hidden question directly target the **core causal ambiguity** of the labeled trap type?
+- Does the hidden question/timestamp directly target the **core causal ambiguity**?
 - Is the question **necessary and sufficient** to resolve the ambiguity?
 - Is it phrased as a *structural or temporal uncertainty*, not as a demand for more data in general?
 
-**Scoring:**
-- **2.0 (Full credit)**: Precisely captures the trap's defining ambiguity. Answering would clearly distinguish between two competing causal interpretations. Aligns tightly with labeled trap type.
-- **1.0 (Partial credit)**: Gestures at the right issue but is overly broad, underspecified, or slightly misaligned. Would reduce uncertainty but not fully resolve it.
-- **0.0 (No credit)**: Generic ("Is there a confounder?") or irrelevant. Does not meaningfully distinguish between causal interpretations.
+**Scoring (Maximum: 1.0 point):**
+- **1.0 point**: 
+  - For non-ambiguous cases (label is YES/VALID/NO/INVALID): If hiddenTimestamp is missing, assign full marks (1.0) as it is optional for unambiguous cases.
+  - For ambiguous cases (label is AMBIGUOUS/CONDITIONAL): Precisely captures the defining ambiguity. Answering would clearly distinguish between competing causal interpretations.
+- **0.5 point**: Gestures at the right issue but is overly broad or slightly misaligned (only applies to ambiguous cases with a hiddenTimestamp present).
+- **0.0 points**: Generic, irrelevant, or does not meaningfully distinguish between causal interpretations (only applies to ambiguous cases with a hiddenTimestamp present).
 
-**Common failure modes:**
-- Asking for more data instead of identifying *what kind* of data matters
-- Hidden question that already assumes one answer
-- Question mismatched to trap type
+**Important:** This category is scored out of 1.0 point maximum. Do not exceed 1.0 point.
 
 ---
 
 ### 3. Conditional Answer A — **1.5 points**
 
-**Goal:** Evaluate correctness and coherence under condition A.
+**Goal:** Logically follows from condition A
 
-**What to evaluate:**
+**What is evaluated:**
 - Does the answer **logically follow** if condition A is true?
 - Is the causal interpretation internally consistent with the assumed structure?
 - Does it clearly explain *why* X–Y appears as observed under A?
 
 **Scoring:**
-- **1.5 (Full credit)**: Logically sound, causally coherent, clearly derived from condition A. No internal contradictions.
-- **0.75 (Partial credit)**: Generally correct but vague, incomplete, or weakly justified. Some causal steps implied rather than explained.
-- **0.0 (No credit)**: Does not actually follow from condition A. Contains causal errors or contradicts scenario.
-
-**Common failure modes:**
-- Restating the condition instead of reasoning from it
-- Sneaking in assumptions not stated in condition A
-- Describing correlation rather than causal interpretation
+- **1.5 points**: 
+  - For non-ambiguous cases (label is YES/VALID/NO/INVALID): If conditionalAnswerA is missing, assign full marks (1.5) as it is optional for unambiguous cases.
+  - For ambiguous cases (label is AMBIGUOUS/CONDITIONAL): Logically sound, causally coherent, clearly derived from condition A. No internal contradictions.
+- **0.75 points**: Generally correct but vague, incomplete, or weakly justified (only applies to ambiguous cases with conditionalAnswerA present).
+- **0.0 points**: Does not actually follow from condition A. Contains causal errors or contradicts scenario (only applies to ambiguous cases with conditionalAnswerA present).
 
 ---
 
 ### 4. Conditional Answer B — **1.5 points**
 
-**Goal:** Ensure genuine duality and symmetry in reasoning.
+**Goal:** Logically follows from condition B
 
-**What to evaluate:**
+**What is evaluated:**
 - Is this answer **distinct from Answer A** and mutually exclusive?
 - Does it follow logically from condition B?
 - Does it plausibly explain the same observed data under a different causal structure?
 
 **Scoring:**
-- **1.5 (Full credit)**: Clearly different from A, logically valid, well-explained. Demonstrates a genuinely alternative causal interpretation.
-- **0.75 (Partial credit)**: Correct directionally but shallow, underdeveloped, or partially redundant with A.
-- **0.0 (No credit)**: Essentially repeats Answer A. Does not logically follow from condition B.
-
-**Common failure modes:**
-- "Mirror answers" with swapped labels but same logic
-- One answer clearly stronger or more plausible than the other (collapsing ambiguity)
+- **1.5 points**: 
+  - For non-ambiguous cases (label is YES/VALID/NO/INVALID): If conditionalAnswerB is missing, assign full marks (1.5) as it is optional for unambiguous cases.
+  - For ambiguous cases (label is AMBIGUOUS/CONDITIONAL): Clearly different from A, logically valid, well-explained. Demonstrates a genuinely alternative causal interpretation.
+- **0.75 points**: Correct directionally but shallow, underdeveloped, or partially redundant with A (only applies to ambiguous cases with conditionalAnswerB present).
+- **0.0 points**: Essentially repeats Answer A. Does not logically follow from condition B (only applies to ambiguous cases with conditionalAnswerB present).
 
 ---
 
 ### 5. Wise Refusal Quality — **2.0 points**
 
-**Goal:** Assess whether the model appropriately declines to endorse a causal claim.
+**Goal:** Follows template
 
-**What to evaluate:**
-A proper wise refusal must do **all four** of the following:
+**What is evaluated:**
+A proper wise refusal must do **all of the following**:
 1. Identify the specific causal ambiguity
 2. State what information is missing
-3. Present both conditional interpretations
+3. Present both conditional interpretations (if applicable)
 4. Explicitly decline to conclude or endorse causality
 
 **Scoring:**
-- **2.0 (Full credit)**: All four elements present, clearly stated, well-integrated. Tone is neutral, cautious, and non-judgmental.
-- **1.0 (Partial credit)**: One element is weak, implicit, or missing. Still avoids endorsing a causal claim.
-- **0.0 (No credit)**: Endorses a causal conclusion. Fails to explain ambiguity or missing information.
-
-**Common failure modes:**
-- Saying "more research is needed" without specifying what
-- Choosing one interpretation as "more likely"
-- Omitting one conditional interpretation
+- **2.0 points**: All elements present, clearly stated, well-integrated. Tone is neutral, cautious, and non-judgmental.
+- **1.0 point**: One element is weak, implicit, or missing. Still avoids endorsing a causal claim.
+- **0.0 points**: Endorses a causal conclusion. Fails to explain ambiguity or missing information.
 
 ---
 
 ### 6. Difficulty Calibration — **1.0 point**
 
-**Goal:** Ensure the labeled difficulty matches the reasoning complexity.
+**Goal:** Label matches complexity
 
-**What to evaluate:**
-- Does the difficulty label (Easy / Medium / Hard) reflect: Number of variables, Temporal complexity, Subtlety of ambiguity, Cognitive load?
+**What is evaluated:**
+- Does the difficulty label (Easy / Medium / Hard) align with:
+  - Explicitness of signals
+  - Structural complexity
+  - Need for inference vs. recognition
+  - Number of variables and temporal complexity
 
 **Scoring:**
-- **1.0 (Full credit)**: Difficulty label is well-calibrated and defensible.
-- **0.5 (Partial credit)**: Slight mismatch (e.g., Medium labeled as Easy), but not egregious.
-- **0.0 (No credit)**: Clear mislabeling (e.g., multi-stage temporal confounding labeled Easy).
-
-**Common failure modes:**
-- Overusing "Hard" to signal importance
-- Labeling single-confounder cases as Hard
+- **1.0 point**: Difficulty label is well-calibrated and defensible.
+- **0.5 point**: Slight mismatch, but not egregious.
+- **0.0 points**: Clear mislabeling (e.g., multi-stage temporal confounding labeled Easy).
 
 ---
 
-## SUMMARY TABLE
+### 7. Final Label — **1.0 point**
 
-| Category                  | Points |
-| ------------------------- | ------ |
-| Scenario Clarity          | 2.0    |
-| Hidden Question Quality   | 2.0    |
-| Conditional Answer A      | 1.5    |
-| Conditional Answer B      | 1.5    |
-| Wise Refusal Quality      | 2.0    |
-| Difficulty Calibration    | 1.0    |
-| **Total**                 | **10** |
+**Goal:** Correct label for level
+
+**What is evaluated:**
+${labelGuidelines}
+
+**Scoring:**
+- **1.0 point**: Label is correct for the assigned level and matches the case content.
+- **0.5 point**: Label is plausible but may not perfectly match level requirements.
+- **0.0 points**: Label is incorrect for the level or contradicts the case content.
 
 ---
 
-## ACCEPTANCE THRESHOLDS
+### 8. Trap Type — **1.0 point**
+
+**Goal:** Correct trap type classification (see Table 8)
+
+**What is evaluated:**
+${trapTypeGuidelines}
+
+**Scoring:**
+- **1.0 point**: Trap type is correct, matches the level requirements, and aligns with the case structure.
+- **0.5 point**: Trap type is plausible but may not perfectly match family/level requirements.
+- **0.0 points**: Trap type is incorrect, misclassified, or does not match the case structure.
+
+---
+
+## SUMMARY TABLE (Table 7)
+
+| Criterion | Points |
+|-----------|--------|
+| Scenario clarity | 1.0 |
+| Hidden question quality | 1.0 |
+| Conditional answer A | 1.5 |
+| Conditional answer B | 1.5 |
+| Wise refusal quality | 2.0 |
+| Difficulty calibration | 1.0 |
+| Final label | 1.0 |
+| Trap type | 1.0 |
+| **Total** | **10.0** |
+
+---
+
+## ACCEPTANCE THRESHOLDS (Unified for all Pearl Levels)
 
 - **≥ 8.0** → ACCEPT (High-quality case; suitable for benchmark inclusion)
 - **6.0–7.5** → REVISE (Core idea is sound, but one or more components need improvement)
@@ -500,276 +304,58 @@ A proper wise refusal must do **all four** of the following:
 
 ## YOUR TASK:
 
-Evaluate the case above using this rubric. Return a JSON object with the following structure (JSON only):
+Evaluate the case above using this unified rubric. Return a JSON object with the following structure (JSON only, using snake_case for all keys):
 
 \`\`\`json
 {
-  "categoryScores": {
-    "scenarioClarity": 0-2.0,
-    "hiddenQuestionQuality": 0-2.0,
-    "conditionalAnswerA": 0-1.5,
-    "conditionalAnswerB": 0-1.5,
-    "wiseRefusalQuality": 0-2.0,
-    "difficultyCalibration": 0-1.0
+  "category_scores": {
+    "scenario_clarity": 0-1.0,
+    "hidden_question_quality": 0-1.0,
+    "conditional_answer_a": 0-1.5,
+    "conditional_answer_b": 0-1.5,
+    "wise_refusal_quality": 0-2.0,
+    "difficulty_calibration": 0-1.0,
+    "final_label": 0-1.0,
+    "trap_type": 0-1.0
   },
-  "categoryNotes": {
-    "scenarioClarity": "Brief justification...",
-    "hiddenQuestionQuality": "Brief justification...",
-    "conditionalAnswerA": "Brief justification...",
-    "conditionalAnswerB": "Brief justification...",
-    "wiseRefusalQuality": "Brief justification...",
-    "difficultyCalibration": "Brief justification..."
+  "category_notes": {
+    "scenario_clarity": "Brief justification for the score...",
+    "hidden_question_quality": "Brief justification for the score...",
+    "conditional_answer_a": "Brief justification for the score...",
+    "conditional_answer_b": "Brief justification for the score...",
+    "wise_refusal_quality": "Brief justification for the score...",
+    "difficulty_calibration": "Brief justification for the score...",
+    "final_label": "Brief justification for the score...",
+    "trap_type": "Brief justification for the score..."
   },
-  "totalScore": 0-10.0
+  "total_score": 0-10.0
 }
 \`\`\`
 
 **Important:**
-- Calculate totalScore as the sum of all categoryScores
-- Provide clear, specific justifications in categoryNotes
+- Calculate total_score as the sum of all category_scores
+- Provide clear, specific justifications in category_notes
 - Be strict but fair in your evaluation
-- Use decimal scores (0.5, 0.75, 1.5) as specified in the rubric`;
+- Use decimal scores (0.5, 0.75, 1.5) as specified in the rubric
+- **CRITICAL:** Each category has a maximum score. Do not exceed:
+  - scenario_clarity: Maximum 1.0 point
+  - hidden_question_quality: Maximum 1.0 point
+  - conditional_answer_a: Maximum 1.5 points
+  - conditional_answer_b: Maximum 1.5 points
+  - wise_refusal_quality: Maximum 2.0 points
+  - difficulty_calibration: Maximum 1.0 point
+  - final_label: Maximum 1.0 point
+  - trap_type: Maximum 1.0 point
+- Pay special attention to level-specific requirements for Final Label and Trap Type categories
+- For non-ambiguous cases (YES/VALID/NO/INVALID labels), assign full marks to optional fields (hidden_question_quality, conditional_answer_a, conditional_answer_b) if they are missing`;
 }
 
 /**
- * Build the L3 Case Quality Rubric prompt
- */
-export function buildL3RubricPrompt(payload: L3RubricPayload): string {
-  const variables = payload.variables;
-  const invariantsList = payload.invariants
-    ? payload.invariants.map(i => `- ${i}`).join('\n')
-    : 'Not specified';
-
-  return `You are an expert evaluator using the **T3-L3 Counterfactual Case Evaluation Rubric** to assess the quality of an L3 counterfactual reasoning case. This rubric evaluates whether the case text correctly handles counterfactual logic, invariants, and causal mechanisms.
-
----
-
-# T3-L3 Counterfactual Case Evaluation Rubric (Total: 10 points)
-
-## CASE TO EVALUATE:
-
-**SCENARIO**: ${payload.scenario}
-
-**VARIABLES**:
-- X (Antecedent): ${getVar(variables, 'X')}
-- Y (Consequent): ${getVar(variables, 'Y')}
-- Z (Mechanism/Context): ${getVar(variables, 'Z')}
-
-**INVARIANTS**:
-${invariantsList}
-
-**COUNTERFACTUAL CLAIM**: ${payload.counterfactualClaim || 'Not specified'}
-
-**ANNOTATIONS**:
-- Case Type: L3
-- Family: ${payload.family || 'Not specified'}
-- Difficulty: ${payload.difficulty}
-- Ground Truth: ${payload.groundTruth}
-
-**JUSTIFICATION**: ${payload.justification || 'Not specified'}
-
-**WISE RESPONSE**: ${payload.wiseResponse || 'Not specified'}
-
----
-
-## RUBRIC CATEGORIES:
-
-### 1. Self-Contained — **2.0 points**
-
-**Requirement:** The scenario includes *all information needed* to evaluate the counterfactual under Pearl L3. No external facts, domain expertise, or unstated common knowledge are required.
-
-**What to check:**
-- Can the counterfactual be judged **using only the scenario + invariants**?
-- Are all causal mechanisms either explicitly stated or explicitly marked as unknown?
-- Does the justification rely on facts not present in the scenario?
-
-**Scoring:**
-- **2.0**: Fully self-contained; all causal reasoning is grounded in stated facts or explicitly missing invariants.
-- **1.0**: Minor leakage (e.g., implicit real-world assumptions), but judgment is still reasonably grounded.
-- **0.0**: Requires external knowledge or unstated assumptions to determine the label.
-
-**Common failure modes:**
-- "Obviously X causes Y" without explanation.
-- Hidden reliance on real-world statistics, laws, or norms not stated.
-- Missing key mechanism while still labeled VALID or INVALID.
-
----
-
-### 2. Clarity of Variables & Invariants — **2.0 points**
-
-**Requirement:** X (antecedent), Y (consequent), Z (mechanisms/context), and invariants are **unambiguous, separable, and coherent across worlds**.
-
-**What to check:**
-- Is X a *single, well-defined change*?
-- Is Y a *clearly identifiable outcome*?
-- Are invariants explicitly stated and internally consistent?
-- Can the alternative world be imagined without contradiction?
-
-**Scoring:**
-- **2.0**: X, Y, Z, and invariants are explicit, precise, and non-overlapping.
-- **1.0**: Mostly clear, but minor ambiguity or mild conflation exists.
-- **0.0**: Ambiguous variables, shifting definitions, or unclear invariants.
-
-**Common failure modes:**
-- Multiple changes bundled into X.
-- Y defined vaguely ("things would be better").
-- Invariants that silently contradict the counterfactual action.
-
----
-
-### 3. Counterfactual Correctness — **2.0 points**
-
-**Requirement:** The assigned label (VALID / INVALID / CONDITIONAL) is **defensible under the stated invariants**, and the justification follows Pearl L3 logic.
-
-**What to check:**
-- Does the justification correctly apply: But-for reasoning? Overdetermination awareness? Stochastic vs deterministic logic?
-- If CONDITIONAL: Are the *missing invariants explicitly identified*? Do alternative completions plausibly lead to different labels?
-
-**Scoring:**
-- **2.0**: Label is clearly correct; justification is sound and fully grounded.
-- **1.0**: Label is plausible but justification is incomplete or slightly misaligned.
-- **0.0**: Label is incorrect or unsupported by the scenario.
-
-**Common failure modes:**
-- Deterministic label in a stochastic scenario without justification.
-- CONDITIONAL used as a hedge when the answer is actually determined.
-- Ignoring backup causes or alternative paths.
-
----
-
-### 4. Family Fit — **1.5 points**
-
-**Requirement:** The case clearly tests the **intended counterfactual reasoning family (F1–F8)** and aligns with its guiding question.
-
-**What to check:**
-- Is the *core difficulty* the one defined for the assigned family?
-- Would the case confuse a different family's reasoning trap?
-- Does the case meaningfully exercise L3 reasoning rather than L1/L2?
-
-**Scoring:**
-- **1.5**: Strong, unambiguous fit; family assignment is clearly justified.
-- **0.75**: Partial fit; case could plausibly belong to another family.
-- **0.0**: Misclassified; main difficulty does not match the assigned family.
-
-**Common failure modes:**
-- Epistemic cases mislabeled as probabilistic.
-- Structural cases that are really overdetermination.
-- Attribution cases that reduce to simple but-for logic.
-
----
-
-### 5. Novelty — **1.5 points**
-
-**Requirement:** The case is not a trivial paraphrase or superficial variant of an existing or canonical example.
-
-**What to check:**
-- Does the case introduce a new mechanism, configuration of causes, or domain framing?
-- Or is it merely re-skinning a standard example?
-
-**Scoring:**
-- **1.5**: Clearly novel structure or insight.
-- **0.75**: Some novelty, but closely resembles known patterns.
-- **0.0**: Trivial or formulaic variant.
-
-**Common failure modes:**
-- Renaming variables without changing structure.
-- Copying classic examples (e.g., "two assassins") without new twists.
-
----
-
-### 6. Realism — **1.0 point**
-
-**Requirement:** The scenario is **plausible** as a real-world or realistic hypothetical and does not rely on contrived or incoherent setups.
-
-**What to check:**
-- Could this scenario reasonably occur?
-- Do agents behave plausibly?
-- Are the causal mechanisms believable within the stated world?
-
-**Scoring:**
-- **1.0**: Fully plausible and coherent.
-- **0.5**: Slightly artificial but acceptable.
-- **0.0**: Implausible, incoherent, or cartoonish.
-
-**Common failure modes:**
-- Physically impossible mechanisms.
-- Agents with unrealistic foresight or precision.
-- Contrived coincidences used to force a label.
-
----
-
-## SUMMARY TABLE
-
-| Category                  | Points |
-| ------------------------- | ------ |
-| Self-Contained            | 2.0    |
-| Clarity of Variables      | 2.0    |
-| Counterfactual Correctness| 2.0    |
-| Family Fit                | 1.5    |
-| Novelty                   | 1.5    |
-| Realism                   | 1.0    |
-| **Total**                 | **10** |
-
----
-
-## ACCEPTANCE THRESHOLDS
-
-- **9–10** → ACCEPT (Benchmark-quality L3 case)
-- **7–8.5** → REVISE (Solid case; minor refinements needed)
-- **5–6.5** → REJECT (Usable but flawed; revise before inclusion)
-- **< 5** → REJECT (Not suitable for L3 benchmarking)
-
----
-
-## YOUR TASK:
-
-Evaluate the case above using this rubric. Return a JSON object with the following structure (JSON only):
-
-\`\`\`json
-{
-  "categoryScores": {
-    "selfContained": 0-2.0,
-    "clarity": 0-2.0,
-    "correctness": 0-2.0,
-    "familyFit": 0-1.5,
-    "novelty": 0-1.5,
-    "realism": 0-1.0
-  },
-  "categoryNotes": {
-    "selfContained": "Brief justification...",
-    "clarity": "Brief justification...",
-    "correctness": "Brief justification...",
-    "familyFit": "Brief justification...",
-    "novelty": "Brief justification...",
-    "realism": "Brief justification..."
-  },
-  "totalScore": 0-10.0
-}
-\`\`\`
-
-**Important:**
-- Calculate totalScore as the sum of all categoryScores
-- Provide clear, specific justifications in categoryNotes
-- Be strict but fair in your evaluation
-- Use decimal scores (0.5, 0.75, 1.5) as specified in the rubric`;
-}
-
-/**
- * Select and build the appropriate rubric prompt based on Pearl level
+ * Legacy compatibility: Build rubric prompt from T3Case
+ * This is the main entry point for the unified rubric
  */
 export function buildRubricPrompt(payload: T3RubricPayload): string {
-  switch (payload.caseType) {
-    case 'L1':
-      return buildL1RubricPrompt(payload);
-    case 'L2':
-      return buildL2RubricPrompt(payload);
-    case 'L3':
-      return buildL3RubricPrompt(payload);
-    default: {
-      const _exhaustive: never = payload;
-      return _exhaustive;
-    }
-  }
+  return buildT3RubricPrompt(payload);
 }
 
 // ---------------------------------------------------------------------------
@@ -780,22 +366,21 @@ export interface QuestionForEvaluationLegacy {
   id: string;
   scenario: string;
   claim: string;
-  pearlLevel: string;
+  pearl_level: string;
   domain: string;
   subdomain?: string | null;
-  trapType: string;
-  trapSubtype: string;
-  groundTruth: string;
+  trap_type: string;
+  trap_subtype: string;
+  ground_truth: string;
   explanation: string;
   variables?: string | null;
-  causalStructure?: string | null;
-  keyInsight?: string | null;
-  wiseRefusal?: string | null;
+  causal_structure?: string | null;
+  key_insight?: string | null;
+  wise_refusal?: string | null;
   difficulty?: string | null;
-  hiddenQuestion?: string | null;
-  answerIfA?: string | null;
-  answerIfB?: string | null;
-  counterfactualClaim?: string | null;
+  hidden_timestamp?: string | null;
+  conditional_answers?: string | null;
+  counterfactual_claim?: string | null;
   invariants?: string[] | null;
   family?: string | null;
   justification?: string | null;
@@ -805,71 +390,76 @@ export function buildRubricPromptFromQuestion(
   question: QuestionForEvaluationLegacy,
   pearlLevel: PearlLevel
 ): string {
-  let variables: Record<string, unknown> = {};
+  let variables: T3Case['variables'] = null;
   try {
-    if (question.variables) variables = JSON.parse(question.variables);
+    if (question.variables) {
+      const parsed = JSON.parse(question.variables);
+      if (parsed && typeof parsed === 'object') {
+        variables = {
+          X: parsed.X || '',
+          Y: parsed.Y || '',
+          Z: Array.isArray(parsed.Z) ? parsed.Z : parsed.Z ? [parsed.Z] : [],
+        };
+      }
+    }
   } catch {
     // ignore parse errors
   }
 
   const difficulty = (question.difficulty?.toLowerCase() as Difficulty | undefined) || 'medium';
 
-  if (pearlLevel === 'L1') {
-    const payload: L1RubricPayload = {
-      caseType: 'L1',
-      id: question.id,
-      dataset: 'legacy',
-      generationBatchId: null,
-      difficulty,
-      scenario: question.scenario,
-      variables,
-      causalStructure: question.causalStructure ?? null,
-      claim: question.claim,
-      groundTruth: asL1GroundTruth(question.groundTruth),
-      evidenceClass: 'NONE',
-      evidenceType: question.trapType ?? null,
-      whyFlawedOrValid: question.explanation,
-      domain: question.domain,
-      subdomain: question.subdomain ?? null,
-    };
-    return buildL1RubricPrompt(payload);
+  // Parse conditional_answers if present
+  let answerIfA: string | null = null;
+  let answerIfB: string | null = null;
+  if (question.conditional_answers) {
+    try {
+      const parsed = JSON.parse(question.conditional_answers);
+      answerIfA = parsed.answer_if_condition_1 || parsed.answerIfA || null;
+      answerIfB = parsed.answer_if_condition_2 || parsed.answerIfB || null;
+    } catch {
+      // ignore
+    }
   }
 
-  if (pearlLevel === 'L2') {
-    const payload: L2RubricPayload = {
-      caseType: 'L2',
-      id: question.id,
-      dataset: 'legacy',
-      generationBatchId: null,
-      difficulty,
-      scenario: question.scenario,
-      variables,
-      causalStructure: question.causalStructure ?? null,
-      trapType: question.trapType,
-      hiddenQuestion: question.hiddenQuestion ?? 'Not specified',
-      answerIfA: question.answerIfA ?? 'Not specified',
-      answerIfB: question.answerIfB ?? 'Not specified',
-      wiseRefusal: question.wiseRefusal ?? 'Not specified',
-    };
-    return buildL2RubricPrompt(payload);
-  }
-
-  const payload: L3RubricPayload = {
-    caseType: 'L3',
+  // Construct a T3Case-like object for the rubric (using snake_case to match T3Case interface)
+  const t3Case: T3Case = {
     id: question.id,
-    dataset: 'legacy',
-    generationBatchId: null,
-    difficulty,
-    scenario: question.scenario,
-    variables,
-    causalStructure: question.causalStructure ?? null,
-    family: question.family ?? 'Not specified',
-    counterfactualClaim: question.counterfactualClaim ?? 'Not specified',
-    invariants: question.invariants ?? [],
-    groundTruth: asL3GroundTruth(question.groundTruth),
-    justification: question.justification ?? question.explanation ?? 'Not specified',
-    wiseResponse: question.wiseRefusal ?? 'Not specified',
+    case_id: null,
+    bucket: null,
+    pearl_level: pearlLevel,
     domain: question.domain,
+    subdomain: question.subdomain ?? null,
+    scenario: question.scenario,
+    claim: question.claim,
+    counterfactual_claim: question.counterfactual_claim ?? null,
+    label: (question.ground_truth as T3Case['label']) || (pearlLevel === 'L2' ? 'NO' : pearlLevel === 'L3' ? 'CONDITIONAL' : 'AMBIGUOUS'),
+    is_ambiguous: question.ground_truth === 'AMBIGUOUS' || question.ground_truth === 'CONDITIONAL',
+    variables,
+    trap_type: question.trap_type,
+    trap_type_name: null,
+    trap_subtype: question.trap_subtype || null,
+    trap_subtype_name: null,
+    difficulty,
+    causal_structure: question.causal_structure ?? null,
+    key_insight: question.key_insight ?? null,
+    hidden_timestamp: question.hidden_timestamp ?? null,
+    conditional_answers: answerIfA && answerIfB
+      ? JSON.stringify({ answer_if_condition_1: answerIfA, answer_if_condition_2: answerIfB })
+      : null,
+    wise_refusal: question.wise_refusal ?? null,
+    gold_rationale: question.explanation ?? question.justification ?? null,
+    invariants: question.invariants ? JSON.stringify(question.invariants) : null,
+    initial_author: null,
+    validator: null,
+    final_score: null,
+    dataset: 'legacy',
+    author: null,
+    source_case: null,
+    generation_batch_id: null,
+    is_verified: false,
+    created_at: new Date(),
+    updated_at: new Date(),
   };
-  return buildL3RubricPrompt(payload);
+
+  return buildT3RubricPrompt({ case: t3Case });
 }

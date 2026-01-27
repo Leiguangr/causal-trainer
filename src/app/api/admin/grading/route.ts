@@ -27,31 +27,29 @@ export async function GET(req: NextRequest) {
 
     const batches = await prisma.evaluationBatch.findMany({
       where: dataset ? { dataset } : undefined,
-      orderBy: { createdAt: 'desc' },
+      orderBy: { created_at: 'desc' },
       take: 50,
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const where: any = {};
 
-    if (evaluationBatchId) where.evaluationBatchId = evaluationBatchId;
-    if (overallVerdict) where.overallVerdict = overallVerdict;
-    if (priorityLevel) where.priorityLevel = Number.parseInt(priorityLevel, 10);
+    if (evaluationBatchId) where.evaluation_batch_id = evaluationBatchId;
+    if (overallVerdict) where.overall_verdict = overallVerdict;
+    if (priorityLevel) where.priority_level = Number.parseInt(priorityLevel, 10);
 
-    if (caseType === 'legacy') where.questionId = { not: null };
-    if (caseType === 'L1') where.l1CaseId = { not: null };
-    if (caseType === 'L2') where.l2CaseId = { not: null };
-    if (caseType === 'L3') where.l3CaseId = { not: null };
+    if (caseType === 'legacy') where.question_id = { not: null };
+    if (caseType === 'L1') where.t3_case_id = { not: null };
+    if (caseType === 'L2') where.t3_case_id = { not: null };
+    if (caseType === 'L3') where.t3_case_id = { not: null };
 
     if (dataset) {
       // Support cases where EvaluationBatch.dataset might be null (e.g., all-dataset runs),
       // by filtering on the underlying case dataset as well.
       where.OR = [
-        { evaluationBatch: { is: { dataset } } },
+        { evaluation_batch: { is: { dataset } } },
         { question: { is: { dataset } } },
-        { l1Case: { is: { dataset } } },
-        { l2Case: { is: { dataset } } },
-        { l3Case: { is: { dataset } } },
+        { t3_case: { is: { dataset } } },
       ];
     }
 
@@ -60,13 +58,11 @@ export async function GET(req: NextRequest) {
       prisma.caseEvaluation.findMany({
         where,
         include: {
-          evaluationBatch: true,
+          evaluation_batch: true,
           question: true,
-          l1Case: true,
-          l2Case: true,
-          l3Case: true,
+          t3_case: true,
         },
-        orderBy: [{ priorityLevel: 'asc' }, { createdAt: 'desc' }],
+        orderBy: [{ priority_level: 'asc' }, { created_at: 'desc' }],
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
@@ -78,6 +74,12 @@ export async function GET(req: NextRequest) {
       pageSize,
       total,
       evaluations,
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
     });
   } catch (error) {
     console.error('Grading API error:', error);

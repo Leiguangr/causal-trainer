@@ -8,297 +8,260 @@ datasource db {
 }
 
 model User {
-  id               String             @id @default(cuid())
-  email            String             @unique
-  name             String?
-  password         String
-  role             String             @default("user") // user, admin
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  id                 String             @id @default(cuid())
+  email              String             @unique
+  name               String?
+  password           String
+  role               String             @default("user") // user, admin
+  created_at         DateTime           @default(now())
+  updated_at         DateTime           @updatedAt
 
-  quizSessions     QuizSession[]
-  corrections      Correction[]       @relation("SubmittedCorrections")
-  reviews          Correction[]       @relation("ReviewedCorrections")
-  generationBatches GenerationBatch[]
+  quiz_sessions      QuizSession[]
+  corrections        Correction[]       @relation("SubmittedCorrections")
+  reviews            Correction[]       @relation("ReviewedCorrections")
+  generation_batches GenerationBatch[]
 }
 
 model Question {
-  id                String      @id @default(cuid())
-  scenario          String
-  claim             String
-  pearlLevel        String      // L1, L2, L3
-  domain            String      // Markets, Medicine, Law, etc.
-  subdomain         String?     // More specific domain (e.g., "Commodities")
-  trapType          String      // CONFOUNDING, REVERSE, SELECTION, etc.
-  trapSubtype       String      // More specific subtype
-  explanation       String
-  difficulty        String      @default("medium") // easy, medium, hard
-  groundTruth       String      @default("NO") // YES, NO, AMBIGUOUS
-  variables         String?     // JSON string for SQLite: { X, Y, Z[] }
-  causalStructure   String?     // Brief description of causal graph (null for AMBIGUOUS)
-  keyInsight        String?     // One-line takeaway
-  wiseRefusal       String?     // Complete answer with verdict
+  id                 String      @id @default(cuid())
+  scenario           String
+  claim              String
+  pearl_level        String      // L1, L2, L3
+  domain             String      // Markets, Medicine, Law, etc.
+  subdomain          String?      // More specific domain (e.g., "Commodities")
+  trap_type          String       // CONFOUNDING, REVERSE, SELECTION, etc.
+  trap_subtype       String       // More specific subtype
+  explanation        String
+  difficulty         String       @default("medium") // easy, medium, hard
+  ground_truth       String       @default("NO") // YES, NO, AMBIGUOUS
+  variables          String?      // JSON string for SQLite: { X, Y, Z[] }
+  causal_structure   String?      // Brief description of causal graph (null for AMBIGUOUS)
+  key_insight        String?      // One-line takeaway
+  wise_refusal       String?      // Complete answer with verdict
 
   // New metadata fields
-  author            String?     // Who made/reviewed the annotation (e.g., "LLM", "admin@example.com")
-  hiddenTimestamp   String?     // For AMBIGUOUS: temporal/causal ordering question. "N/A" for YES/NO.
-  conditionalAnswers String?    // For AMBIGUOUS: JSON with "Answer if..." sections. "N/A" for YES/NO.
+  author             String?      // Who made/reviewed the annotation (e.g., "LLM", "admin@example.com")
+  hidden_timestamp   String?      // For AMBIGUOUS: temporal/causal ordering question. "N/A" for YES/NO.
+  conditional_answers String?      // For AMBIGUOUS: JSON with "Answer if..." sections. "N/A" for YES/NO.
 
-  isVerified        Boolean     @default(false)
-  isLLMGenerated    Boolean     @default(false)
-  sourceCase        String?     // e.g., "3.15" from BucketLarge-G
-  generationBatchId String?     // Track which batch this came from
-  reviewNotes       String?     // Admin notes during review
-  dataset           String      @default("default") // Dataset identifier for grouping questions
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  is_verified         Boolean      @default(false)
+  is_llm_generated    Boolean      @default(false)
+  source_case         String?      // e.g., "3.15" from BucketLarge-G
+  generation_batch_id String?      // Track which batch this came from
+  review_notes        String?      // Admin notes during review
+  dataset             String       @default("default") // Dataset identifier for grouping questions
+  created_at          DateTime     @default(now())
+  updated_at          DateTime     @updatedAt
 
-  answers           Answer[]
-  corrections       Correction[]
-  generationBatch   GenerationBatch? @relation(fields: [generationBatchId], references: [id])
-  evaluations       CaseEvaluation[]
+  answers             Answer[]      @relation("QuestionAnswers")
+  corrections         Correction[]
+  generation_batch    GenerationBatch? @relation(fields: [generation_batch_id], references: [id])
+  evaluations        CaseEvaluation[]
 }
 
 // =============================================================================
-// NEW: Per-level case tables (new source of truth going forward)
-// - These are intentionally mutually different schemas.
+// Unified T3Case table (replaces L1Case, L2Case, L3Case)
+// - All cases use the same unified schema structure from Appendix B, Table 9
+// - Level-specific differences are handled via pearlLevel field and validation
 // - Existing Question table remains intact for legacy data flows.
 // =============================================================================
 
-model L1Case {
-  id              String   @id @default(cuid())
-  scenario        String
-  claim           String
-  groundTruth     String   // YES, NO, AMBIGUOUS
+model T3Case {
+  id                   String   @id @default(cuid())
+  
+  // Identity & Metadata (Table 9)
+  case_id              String?  // Case reference ID from original benchmark (e.g., "1.1")
+  bucket               String?  // Bucket identifier (e.g., "BucketLarge-A")
+  pearl_level          String   // "L1", "L2", or "L3"
+  domain               String?  // Domain name (e.g., "Medicine", "Economics")
+  subdomain            String?  // Optional subdomain specification
+  
+  // Case Content (Table 9)
+  scenario             String   // Description of the situation or problem (1–3 sentences)
+  claim                String?  // The causal claim being evaluated (required for L1/L2, optional for L3)
+  counterfactual_claim String?  // For L3: "If [X had been different], then [Y]."
+  label                String   // Case label (YES/NO/AMBIGUOUS for L1, NO for L2, VALID/INVALID/CONDITIONAL for L3)
+  is_ambiguous         Boolean  @default(false) // Whether the case is ambiguous
+  
+  // Variables (Table 9) - JSON: { X, Y, Z[] } where Z is always an array
+  variables            String?  // JSON string: { X: string|object, Y: string|object, Z: string[] }
+  
+  // Trap Structure (Table 9) - stored as separate fields for easier querying
+  trap_type            String   // Trap type code (W1–W10/S1–S8/A for L1, T1–T17 for L2, F1–F8 for L3)
+  trap_type_name       String?  // Human-readable trap type name (optional)
+  trap_subtype         String?  // Trap subtype (optional)
+  trap_subtype_name    String?  // Human-readable subtype name (optional)
+  
+  // Reasoning Fields (Table 9)
+  difficulty           String   @default("medium") // "Easy", "Medium", or "Hard"
+  causal_structure     String?  // Description of the causal graph structure
+  key_insight          String?  // One-line memorable takeaway
+  
+  // Ambiguity Handling (Table 9)
+  hidden_timestamp     String?  // Question that reveals temporal/causal ordering (object/string)
+  conditional_answers  String?  // Conditional answers for different scenarios (object/array JSON)
+  
+  // Explanations (Table 9)
+  wise_refusal         String?  // Response identifying missing information or biases
+  gold_rationale       String?  // Complete explanation of the correct reasoning
+  
+  // L3-Specific Fields
+  invariants           String?  // JSON array of invariant strings (L3 only)
+  
+  // Assignment 2 Fields (Table 9)
+  initial_author       String?  // Student who created the case
+  validator            String?  // Student who validated the case
+  final_score          Float?   // Quality score (0–10) from rubric evaluation
+  
+  // Metadata
+  dataset              String   @default("default")
+  author               String?  // e.g., "LLM"
+  source_case          String?  // Optional external ID
+  generation_batch_id  String?
+  is_verified          Boolean  @default(false)
+  created_at           DateTime @default(now())
+  updated_at            DateTime @updatedAt
 
-  // Evidence classification (T3-L1)
-  evidenceClass   String   // WOLF, SHEEP, NONE
-  evidenceType    String?  // W1..W10, S1..S8 (null for AMBIGUOUS)
-
-  // “Why Flawed/Valid”
-  whyFlawedOrValid String
-
-  // Optional metadata (kept close to existing app needs)
-  domain          String?
-  subdomain       String?
-  difficulty      String   @default("medium") // easy, medium, hard
-  variables       String?  // JSON: { X, Y, Z? } (Z is a single optional variable, not an array)
-  causalStructure String?  // Optional; may be null for AMBIGUOUS
-
-  dataset         String   @default("default")
-  author          String?  // e.g., "LLM"
-  sourceCase      String?  // Optional external ID
-  generationBatchId String?
-
-  isVerified      Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  generationBatch GenerationBatch? @relation(fields: [generationBatchId], references: [id])
-
-  evaluations     CaseEvaluation[]
-}
-
-model L2Case {
-  id             String   @id @default(cuid())
-
-  // Revamped L2 schema (T1..T17)
-  scenario       String
-  variables      String?  // JSON: { X, Y, Z, ... } (stored as string for SQLite)
-
-  trapType       String   // T1..T17
-  difficulty     String   @default("medium") // easy, medium, hard
-  causalStructure String?
-
-  hiddenQuestion String
-  answerIfA      String
-  answerIfB      String
-  wiseRefusal    String
-
-  dataset         String   @default("default")
-  author          String?  // e.g., "LLM"
-  sourceCase      String?  // Optional external ID
-  generationBatchId String?
-
-  isVerified      Boolean  @default(false)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  generationBatch GenerationBatch? @relation(fields: [generationBatchId], references: [id])
-
-  evaluations     CaseEvaluation[]
-}
-
-model L3Case {
-  id                  String   @id @default(cuid())
-  caseId              String?  // Case ID (e.g., "G.123")
-  domain              String?  // D1-D10
-  family              String   // F1-F8
-  difficulty          String   @default("medium") // easy, medium, hard
-  scenario            String   // 2-5 sentences: what happened in World A
-  counterfactualClaim String   // "If [X had been different], then [Y]."
-  variables           String   // JSON: { X, Y, Z }
-  invariants          String   // JSON array of invariant strings
-  groundTruth         String   // VALID, INVALID, CONDITIONAL
-  justification       String   // 2-4 sentences grounded in Scenario + Invariants
-  wiseResponse        String   // Brief structured reasoning template
-
-  dataset             String   @default("default")
-  author              String?  // e.g., "LLM"
-  sourceCase          String?  // Optional external ID
-  generationBatchId   String?
-  isVerified          Boolean  @default(false)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-
-  generationBatch     GenerationBatch? @relation(fields: [generationBatchId], references: [id])
-
-  evaluations         CaseEvaluation[]
+  generation_batch     GenerationBatch? @relation("T3CaseGenerationBatch", fields: [generation_batch_id], references: [id])
+  evaluations          CaseEvaluation[]
 }
 
 model QuizSession {
-  id              String      @id @default(cuid())
-  userId          String
-  user            User        @relation(fields: [userId], references: [id])
-  totalQuestions  Int
-  correctAnswers  Int         @default(0)
-  domainsFilter   String?     // JSON array of selected domains
-  levelsFilter    String?     // JSON array of selected levels
-  difficulty      String?     // easy, medium, hard, or null for all
-  startedAt       DateTime    @default(now())
-  completedAt     DateTime?
+  id               String      @id @default(cuid())
+  user_id          String
+  user             User        @relation(fields: [user_id], references: [id])
+  total_questions  Int
+  correct_answers  Int         @default(0)
+  domains_filter   String?     // JSON array of selected domains
+  levels_filter    String?     // JSON array of selected levels
+  difficulty       String?     // easy, medium, hard, or null for all
+  started_at       DateTime    @default(now())
+  completed_at     DateTime?
   
-  answers         Answer[]
+  answers          Answer[]
 }
 
 model Answer {
-  id              String      @id @default(cuid())
-  sessionId       String
-  session         QuizSession @relation(fields: [sessionId], references: [id])
-  questionId      String
-  question        Question    @relation(fields: [questionId], references: [id])
-  selectedType    String
-  selectedSubtype String?
-  isCorrect       Boolean
-  isTypeCorrect   Boolean     // Track if just the type was correct
-  timeTakenMs     Int?
-  answeredAt      DateTime    @default(now())
+  id                String      @id @default(cuid())
+  session_id        String
+  session           QuizSession @relation(fields: [session_id], references: [id])
+  question_id       String
+  question          Question    @relation("QuestionAnswers", fields: [question_id], references: [id])
+  selected_type     String
+  selected_subtype  String?
+  is_correct        Boolean
+  is_type_correct   Boolean     // Track if just the type was correct
+  time_taken_ms     Int?
+  answered_at       DateTime    @default(now())
 }
 
 model Correction {
   id                    String      @id @default(cuid())
-  questionId            String
-  question              Question    @relation(fields: [questionId], references: [id])
-  submittedById         String
-  submittedBy           User        @relation("SubmittedCorrections", fields: [submittedById], references: [id])
-  suggestedType         String?
-  suggestedSubtype      String?
-  suggestedExplanation  String?
+  question_id           String
+  question              Question    @relation(fields: [question_id], references: [id])
+  submitted_by_id      String
+  submitted_by          User        @relation("SubmittedCorrections", fields: [submitted_by_id], references: [id])
+  suggested_type        String?
+  suggested_subtype     String?
+  suggested_explanation String?
   comment               String?
   status                String      @default("pending") // pending, approved, rejected
-  reviewedById          String?
-  reviewedBy            User?       @relation("ReviewedCorrections", fields: [reviewedById], references: [id])
-  reviewNote            String?
-  createdAt             DateTime    @default(now())
-  reviewedAt            DateTime?
+  reviewed_by_id        String?
+  reviewed_by           User?       @relation("ReviewedCorrections", fields: [reviewed_by_id], references: [id])
+  review_note           String?
+  created_at            DateTime    @default(now())
+  reviewed_at           DateTime?
 }
 
 model GenerationBatch {
-  id              String      @id @default(cuid())
-  pearlLevel      String?     // Target level for this batch (L1, L2, L3, or null for mixed)
-  domain          String?     // Target domain for this batch
-  requestedCount  Int         // How many questions were requested
-  generatedCount  Int         // How many were actually generated
-  approvedCount   Int         @default(0) // How many have been verified
-  promptNotes     String?     // Custom instructions for generation
-  status          String      @default("pending") // pending, running, completed, failed
-  errorMessage    String?     // Error message if failed
-  currentIndex    Int         @default(0) // Current question being generated
-  createdAt       DateTime    @default(now())
-  completedAt     DateTime?   // When generation finished
-  createdById     String?     // Admin user ID (optional)
-  createdBy       User?       @relation(fields: [createdById], references: [id])
+  id                  String      @id @default(cuid())
+  pearl_level         String?     // Target level for this batch (L1, L2, L3, or null for mixed)
+  domain              String?     // Target domain for this batch
+  requested_count     Int         // How many questions were requested
+  generated_count     Int         // How many were actually generated
+  approved_count      Int         @default(0) // How many have been verified
+  prompt_notes        String?     // Custom instructions for generation
+  status              String      @default("pending") // pending, running, completed, failed
+  error_message       String?     // Error message if failed
+  current_index       Int         @default(0) // Current question being generated
+  created_at          DateTime    @default(now())
+  completed_at        DateTime?   // When generation finished
+  created_by_id       String?     // Admin user ID (optional)
+  created_by          User?       @relation(fields: [created_by_id], references: [id])
 
-  questions       Question[]
-  l1Cases         L1Case[]
-  l2Cases         L2Case[]
-  l3Cases         L3Case[]
+  questions           Question[]
+  t3_cases             T3Case[]    @relation("T3CaseGenerationBatch")
 }
 
 // Evaluation Agent observations for proofreading and report aggregation
 model CaseEvaluation {
-  id              String      @id @default(cuid())
-  questionId      String?
-  question        Question?   @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  l1CaseId        String?
-  l1Case          L1Case?     @relation(fields: [l1CaseId], references: [id], onDelete: Cascade)
-  l2CaseId        String?
-  l2Case          L2Case?     @relation(fields: [l2CaseId], references: [id], onDelete: Cascade)
-  l3CaseId        String?
-  l3Case          L3Case?     @relation(fields: [l3CaseId], references: [id], onDelete: Cascade)
-  evaluationBatchId String?
-  evaluationBatch EvaluationBatch? @relation(fields: [evaluationBatchId], references: [id])
+  id                      String      @id @default(cuid())
+  question_id             String?
+  question                Question?   @relation(fields: [question_id], references: [id], onDelete: Cascade)
+  t3_case_id              String?
+  t3_case                 T3Case?     @relation(fields: [t3_case_id], references: [id], onDelete: Cascade)
+  evaluation_batch_id     String?
+  evaluation_batch        EvaluationBatch? @relation(fields: [evaluation_batch_id], references: [id])
 
   // Structural Analysis
-  pearlLevelAssessment    String?   // Agent's assessment: CORRECT, INCORRECT, UNCERTAIN
-  suggestedPearlLevel     String?   // If incorrect, what should it be?
-  trapTypeAssessment      String?   // CORRECT, INCORRECT, UNCERTAIN
-  suggestedTrapType       String?   // If incorrect, what should it be?
-  trapSubtypeAssessment   String?   // CORRECT, INCORRECT, UNCERTAIN
-  suggestedTrapSubtype    String?   // If incorrect, what should it be?
-  groundTruthAssessment   String?   // CORRECT, INCORRECT, UNCERTAIN
-  suggestedGroundTruth    String?   // If incorrect, what should it be?
+  pearl_level_assessment    String?   // Agent's assessment: CORRECT, INCORRECT, UNCERTAIN
+  suggested_pearl_level     String?   // If incorrect, what should it be?
+  trap_type_assessment      String?   // CORRECT, INCORRECT, UNCERTAIN
+  suggested_trap_type       String?   // If incorrect, what should it be?
+  trap_subtype_assessment   String?   // CORRECT, INCORRECT, UNCERTAIN
+  suggested_trap_subtype    String?   // If incorrect, what should it be?
+  ground_truth_assessment   String?   // CORRECT, INCORRECT, UNCERTAIN
+  suggested_ground_truth    String?   // If incorrect, what should it be?
 
   // Quality Flags
-  hasAmbiguity            Boolean   @default(false) // Is the scenario/claim ambiguous?
-  ambiguityNotes          String?   // Description of ambiguity
-  hasLogicalIssues        Boolean   @default(false) // Logical inconsistencies?
-  logicalIssueNotes       String?   // Description of issues
-  hasDomainErrors         Boolean   @default(false) // Factual/domain errors?
-  domainErrorNotes        String?   // Description of errors
-  clarityScore            Int       @default(3)     // 1-5 clarity rating
-  difficultyAssessment    String?   // Agent's assessment of difficulty
+  has_ambiguity            Boolean   @default(false) // Is the scenario/claim ambiguous?
+  ambiguity_notes          String?   // Description of ambiguity
+  has_logical_issues       Boolean   @default(false) // Logical inconsistencies?
+  logical_issue_notes      String?   // Description of issues
+  has_domain_errors        Boolean   @default(false) // Factual/domain errors?
+  domain_error_notes       String?   // Description of errors
+  clarity_score            Int       @default(3)     // 1-5 clarity rating
+  difficulty_assessment    String?   // Agent's assessment of difficulty
 
   // Detailed Analysis
-  structuralNotes         String?   // Free-form structural analysis
-  causalGraphNotes        String?   // Notes on causal structure accuracy
-  variableNotes           String?   // Notes on X, Y, Z variable accuracy
+  structural_notes         String?   // Free-form structural analysis
+  causal_graph_notes       String?   // Notes on causal structure accuracy
+  variable_notes           String?   // Notes on X, Y, Z variable accuracy
 
   // Model Testing (optional)
-  modelTestResults        String?   // JSON: { model: string, response: string, correct: boolean }[]
+  model_test_results       String?   // JSON: { model: string, response: string, correct: boolean }[]
 
   // Recommendations
-  overallVerdict          String    @default("NEEDS_REVIEW") // APPROVED, NEEDS_REVIEW, REJECTED
-  suggestedCorrections    String?   // Markdown summary of recommended fixes
-  priorityLevel           Int       @default(2) // 1=urgent, 2=normal, 3=minor
+  overall_verdict          String    @default("NEEDS_REVIEW") // APPROVED, NEEDS_REVIEW, REJECTED
+  suggested_corrections    String?   // Markdown summary of recommended fixes
+  priority_level           Int       @default(2) // 1=urgent, 2=normal, 3=minor
 
   // Report Aggregation Tags
-  reportTags              String?   // JSON array of tags for report categorization
+  report_tags              String?   // JSON array of tags for report categorization
 
   // Rubric-based scoring
-  rubricScore             String?   // JSON: RubricScore object with category scores and notes
+  rubric_score             String?   // JSON: RubricScore object with category scores and notes
 
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @updatedAt
+  created_at               DateTime  @default(now())
+  updated_at               DateTime  @updatedAt
 }
 
 // Batch tracking for evaluation runs
 model EvaluationBatch {
-  id              String      @id @default(cuid())
-  dataset         String?     // Which dataset to evaluate
-  questionFilter  String?     // JSON filter criteria
-  totalCount      Int         // How many questions to evaluate
-  completedCount  Int         @default(0)
-  status          String      @default("pending") // pending, running, completed, failed
-  errorMessage    String?
+  id                String      @id @default(cuid())
+  dataset           String?     // Which dataset to evaluate
+  question_filter   String?     // JSON filter criteria
+  total_count       Int         // How many questions to evaluate
+  completed_count   Int         @default(0)
+  status            String      @default("pending") // pending, running, completed, failed
+  error_message     String?
 
   // Report generation
-  reportGenerated Boolean     @default(false)
-  reportContent   String?     // Generated markdown report
+  report_generated  Boolean     @default(false)
+  report_content    String?     // Generated markdown report
 
-  createdAt       DateTime    @default(now())
-  completedAt     DateTime?
+  created_at        DateTime    @default(now())
+  completed_at      DateTime?
 
-  evaluations     CaseEvaluation[]
+  evaluations       CaseEvaluation[]
 }
-

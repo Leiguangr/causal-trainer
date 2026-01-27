@@ -63,10 +63,10 @@ export async function GET(req: NextRequest) {
     // Build where clause
     const where: Record<string, unknown> = {};
     if (pearlLevels.length > 0 && !pearlLevels.includes('all')) {
-      where.pearlLevel = { in: pearlLevels };
+      where.pearl_level = { in: pearlLevels };
     }
     if (verifiedOnly) {
-      where.isVerified = true;
+      where.is_verified = true;
     }
     if (dataset && dataset !== 'all') {
       where.dataset = dataset;
@@ -85,49 +85,44 @@ export async function GET(req: NextRequest) {
       if (wantsL3) allowed.push('L3');
       // Keep legacy L1 export if user explicitly included L1 (for backward compatibility)
       if (wantsL1) allowed.push('L1');
-      questionWhere.pearlLevel = { in: allowed };
+      questionWhere.pearl_level = { in: allowed };
     }
 
     // Determine which sources to include
     const includeLegacy = searchParams.get('includeLegacy') !== 'false';
     const includeT3 = searchParams.get('includeT3') !== 'false';
 
-    const [questions, l1Cases, l2Cases, l3Cases] = await Promise.all([
+    // Build T3Case where clause
+    const t3Where: Record<string, unknown> = {};
+    if (verifiedOnly) {
+      t3Where.is_verified = true;
+    }
+    if (dataset && dataset !== 'all') {
+      t3Where.dataset = dataset;
+    }
+    if (!wantsAll) {
+      const allowedLevels: string[] = [];
+      if (wantsL1) allowedLevels.push('L1');
+      if (wantsL2) allowedLevels.push('L2');
+      if (wantsL3) allowedLevels.push('L3');
+      if (allowedLevels.length > 0) {
+        t3Where.pearl_level = { in: allowedLevels };
+      }
+    }
+
+    const [questions, t3Cases] = await Promise.all([
       // Legacy Question table (only if includeLegacy is true)
       includeLegacy
         ? prisma.question.findMany({
             where: questionWhere,
-            orderBy: [{ pearlLevel: 'asc' }, { sourceCase: 'asc' }],
+            orderBy: [{ pearl_level: 'asc' }, { source_case: 'asc' }],
           })
         : Promise.resolve([]),
-      // T3 L1Case (only if includeT3 is true and wantsL1)
-      includeT3 && wantsL1
-        ? prisma.l1Case.findMany({
-            where: {
-              ...(verifiedOnly ? { isVerified: true } : {}),
-              ...(dataset && dataset !== 'all' ? { dataset } : {}),
-            },
-            orderBy: [{ sourceCase: 'asc' }],
-          })
-        : Promise.resolve([]),
-      // T3 L2Case (only if includeT3 is true and wantsL2)
-      includeT3 && wantsL2
-        ? prisma.l2Case.findMany({
-            where: {
-              ...(verifiedOnly ? { isVerified: true } : {}),
-              ...(dataset && dataset !== 'all' ? { dataset } : {}),
-            },
-            orderBy: [{ sourceCase: 'asc' }],
-          })
-        : Promise.resolve([]),
-      // T3 L3Case (only if includeT3 is true and wantsL3)
-      includeT3 && wantsL3
-        ? prisma.l3Case.findMany({
-            where: {
-              ...(verifiedOnly ? { isVerified: true } : {}),
-              ...(dataset && dataset !== 'all' ? { dataset } : {}),
-            },
-            orderBy: [{ sourceCase: 'asc' }],
+      // Unified T3Case table (only if includeT3 is true)
+      includeT3
+        ? prisma.t3Case.findMany({
+            where: t3Where,
+            orderBy: [{ pearl_level: 'asc' }, { source_case: 'asc' }],
           })
         : Promise.resolve([]),
     ]);
@@ -135,18 +130,19 @@ export async function GET(req: NextRequest) {
     // Count by level
     const distribution = {
       L1:
-        (includeLegacy ? questions.filter((q: { pearlLevel: string }) => q.pearlLevel === 'L1').length : 0) +
-        (includeT3 ? l1Cases.length : 0),
+        (includeLegacy ? questions.filter((q: { pearl_level: string }) => q.pearl_level === 'L1').length : 0) +
+        (includeT3 ? t3Cases.filter((c: { pearl_level: string }) => c.pearl_level === 'L1').length : 0),
       L2:
-        (includeLegacy ? questions.filter((q: { pearlLevel: string }) => q.pearlLevel === 'L2').length : 0) +
-        (includeT3 ? l2Cases.length : 0),
+        (includeLegacy ? questions.filter((q: { pearl_level: string }) => q.pearl_level === 'L2').length : 0) +
+        (includeT3 ? t3Cases.filter((c: { pearl_level: string }) => c.pearl_level === 'L2').length : 0),
       L3:
-        (includeLegacy ? questions.filter((q: { pearlLevel: string }) => q.pearlLevel === 'L3').length : 0) +
-        (includeT3 ? l3Cases.length : 0),
+        (includeLegacy ? questions.filter((q: { pearl_level: string }) => q.pearl_level === 'L3').length : 0) +
+        (includeT3 ? t3Cases.filter((c: { pearl_level: string }) => c.pearl_level === 'L3').length : 0),
     };
 
-    // Map L1Case rows into the same export shape as legacy questions
-    const l1Exports = l1Cases.map((c: any) => {
+    // Map T3Case rows into unified export format (Table 9 schema) - already in snake_case
+    const t3Exports = t3Cases.map((c: any) => {
+      // Parse variables (JSON string to object)
       let variables: unknown = null;
       try {
         variables = c.variables ? JSON.parse(c.variables) : null;
@@ -154,100 +150,99 @@ export async function GET(req: NextRequest) {
         variables = c.variables;
       }
 
-      const combinedScenario = c.claim ? `${c.scenario}\n\nClaim: "${c.claim}"` : c.scenario;
-
-      return {
-        // Scenario: clear description of the situation
-        scenario: combinedScenario,
-        variables,
-        annotations: {
-          caseId: c.sourceCase || c.id,
-          pearlLevel: 'L1',
-          domain: c.domain,
-          subdomain: c.subdomain,
-          trapType: c.evidenceClass, // exported under legacy name
-          trapSubtype: c.evidenceType || 'NONE',
-          difficulty: c.difficulty,
-          causalStructure: c.causalStructure,
-          keyInsight: null,
-          author: c.author || 'Unknown',
-        },
-        groundTruth: c.groundTruth,
-        hiddenTimestamp: null,
-        conditionalAnswers: null,
-        wiseRefusal: null,
-        explanation: c.whyFlawedOrValid,
-      };
-    });
-
-    // Map L2Case rows into the new L2 export schema
-    const l2Exports = l2Cases.map((c: any) => {
-      let variables: unknown = null;
+      // Parse conditional answers
+      let conditional_answers: unknown = null;
       try {
-        variables = c.variables ? JSON.parse(c.variables) : null;
+        conditional_answers = c.conditional_answers ? JSON.parse(c.conditional_answers) : null;
       } catch {
-        variables = c.variables;
+        conditional_answers = c.conditional_answers;
       }
 
-      return {
-        // Scenario: narrative with X, Y, Z labeled
-        scenario: c.scenario,
-        variables,
-        annotations: {
-          caseId: c.sourceCase || c.id,
-          pearlLevel: 'L2',
-          trapType: c.trapType,
-          difficulty: c.difficulty,
-          causalStructure: c.causalStructure,
-          author: c.author || 'Unknown',
-        },
-        hiddenQuestion: c.hiddenQuestion,
-        answerIfA: c.answerIfA,
-        answerIfB: c.answerIfB,
-        wiseRefusal: c.wiseRefusal,
-      };
-    });
-
-    // Map L3Case rows into the new L3 export schema
-    const l3Exports = l3Cases.map((c: any) => {
-      let variables: unknown = null;
+      // Parse invariants (L3 only)
       let invariants: unknown = null;
-      try {
-        variables = c.variables ? JSON.parse(c.variables) : null;
-      } catch {
-        variables = c.variables;
-      }
-      try {
-        invariants = c.invariants ? JSON.parse(c.invariants) : null;
-      } catch {
-        invariants = c.invariants;
+      if (c.pearl_level === 'L3' && c.invariants) {
+        try {
+          invariants = JSON.parse(c.invariants);
+        } catch {
+          invariants = c.invariants;
+        }
       }
 
-      return {
-        // Scenario: what happened in World A
-        scenario: c.scenario,
-        counterfactualClaim: c.counterfactualClaim,
-        variables,
-        invariants,
-        annotations: {
-          caseId: c.caseId || c.sourceCase || c.id,
-          pearlLevel: 'L3',
-          domain: c.domain,
-          family: c.family,
-          difficulty: c.difficulty,
-          author: c.author || 'Unknown',
-        },
-        groundTruth: c.groundTruth,
-        justification: c.justification,
-        wiseResponse: c.wiseResponse,
+      // Parse hidden timestamp
+      let hidden_timestamp: unknown = null;
+      if (c.hidden_timestamp) {
+        try {
+          hidden_timestamp = JSON.parse(c.hidden_timestamp);
+        } catch {
+          hidden_timestamp = c.hidden_timestamp;
+        }
+      }
+
+      // Build trap object
+      const trap = {
+        type: c.trap_type,
+        type_name: c.trap_type_name || null,
+        subtype: c.trap_subtype || null,
+        subtype_name: c.trap_subtype_name || null,
       };
+
+      // Base export structure matching Table 9 (snake_case)
+      const baseExport: any = {
+        // Identity & Metadata (Table 9)
+        id: c.case_id || c.id,
+        case_id: c.case_id || null,
+        bucket: c.bucket || null,
+        pearl_level: c.pearl_level,
+        domain: c.domain || null,
+        subdomain: c.subdomain || null,
+
+        // Case Content (Table 9)
+        scenario: c.scenario,
+        claim: c.claim || null,
+        counterfactual_claim: c.counterfactual_claim || null,
+        label: c.label,
+        is_ambiguous: c.is_ambiguous,
+
+        // Variables (Table 9)
+        variables,
+
+        // Trap Structure (Table 9)
+        trap,
+
+        // Reasoning Fields (Table 9)
+        difficulty: c.difficulty,
+        causal_structure: c.causal_structure || null,
+        key_insight: c.key_insight || null,
+
+        // Ambiguity Handling (Table 9)
+        hidden_timestamp,
+        conditional_answers,
+
+        // Explanations (Table 9)
+        wise_refusal: c.wise_refusal || null,
+        gold_rationale: c.gold_rationale || null,
+
+        // L3-Specific
+        invariants: c.pearl_level === 'L3' ? invariants : null,
+
+        // Assignment 2 Fields (Table 9)
+        initial_author: c.initial_author || null,
+        validator: c.validator || null,
+        final_score: c.final_score || null,
+
+        // Metadata
+        dataset: c.dataset,
+        author: c.author || 'Unknown',
+        source_case: c.source_case || null,
+        is_verified: c.is_verified,
+      };
+
+      return baseExport;
     });
 
     // Clean scenarios if requested (for eval export)
     let processedQuestions = includeLegacy ? questions : [];
-    let processedL1Exports = includeT3 ? l1Exports : [];
-    let processedL2Exports = includeT3 ? l2Exports : [];
-    let processedL3Exports = includeT3 ? l3Exports : [];
+    let processedT3Exports = includeT3 ? t3Exports : [];
     if (cleanForEval) {
       // Process in batches to avoid rate limits
       const cleanedQuestions = [];
@@ -256,62 +251,30 @@ export async function GET(req: NextRequest) {
         const combinedText = q.claim
           ? `${q.scenario}\n\nClaim: "${q.claim}"`
           : q.scenario;
-        const cleanedScenario = await cleanScenarioForEval(combinedText, q.trapType);
+        const cleanedScenario = await cleanScenarioForEval(combinedText, q.trap_type);
         cleanedQuestions.push({ ...q, scenario: cleanedScenario, claim: '' }); // Clear claim since it's now in scenario
       }
       processedQuestions = cleanedQuestions;
 
-      const cleanedL1 = [];
-      for (const item of l1Exports) {
-        const trapLabel = `${item.annotations.trapType}${item.annotations.trapSubtype ? `/${item.annotations.trapSubtype}` : ''}`;
-        const cleanedScenario = await cleanScenarioForEval(item.scenario, trapLabel);
-        cleanedL1.push({
+      const cleanedT3 = [];
+      for (const item of t3Exports) {
+        const trapLabel = item.trap?.type || item.trap?.typeName || 'UNKNOWN';
+        const scenarioToClean = item.claim
+          ? `${item.scenario}\n\nClaim: "${item.claim}"`
+          : item.scenario;
+        const cleanedScenario = await cleanScenarioForEval(scenarioToClean, trapLabel);
+        cleanedT3.push({
           ...item,
           scenario: cleanedScenario,
+          claim: '', // Clear claim since it's now in scenario for eval
         });
       }
-      processedL1Exports = cleanedL1;
-
-      const cleanedL2 = [];
-      for (const item of l2Exports) {
-        const cleanedScenario = await cleanScenarioForEval(item.scenario, item.annotations.trapType);
-        cleanedL2.push({
-          ...item,
-          scenario: cleanedScenario,
-        });
-      }
-      processedL2Exports = cleanedL2;
-
-      const cleanedL3 = [];
-      for (const item of l3Exports) {
-        // For L3, clean the scenario (not the counterfactual claim, as that's the question)
-        const cleanedScenario = await cleanScenarioForEval(item.scenario, item.annotations.family || 'L3');
-        cleanedL3.push({
-          ...item,
-          scenario: cleanedScenario,
-        });
-      }
-      processedL3Exports = cleanedL3;
+      processedT3Exports = cleanedT3;
     }
 
-    // Format export
-    const exportData = {
-      metadata: {
-        exportDate: new Date().toISOString(),
-        totalQuestions: processedQuestions.length + processedL1Exports.length + processedL2Exports.length + processedL3Exports.length,
-        distribution,
-        version: '1.0',
-        cleanedForEval: cleanForEval,
-        filters: {
-          pearlLevels: pearlLevels.length > 0 ? pearlLevels : ['L1', 'L2', 'L3'],
-          verifiedOnly,
-          dataset: dataset || 'all',
-          includeLegacy,
-          includeT3,
-        },
-      },
-      questions: [
-        ...processedQuestions.map((q: any) => {
+    // Export data (already in snake_case from database)
+    const convertedQuestions = [
+      ...processedQuestions.map((q: any) => {
         // Parse variables if it's a JSON string
         let variables;
         try {
@@ -321,11 +284,11 @@ export async function GET(req: NextRequest) {
         }
 
         // Parse conditional answers if it's a JSON string
-        let conditionalAnswers;
+        let conditional_answers;
         try {
-          conditionalAnswers = q.conditionalAnswers ? JSON.parse(q.conditionalAnswers) : null;
+          conditional_answers = q.conditional_answers ? JSON.parse(q.conditional_answers) : null;
         } catch {
-          conditionalAnswers = q.conditionalAnswers;
+          conditional_answers = q.conditional_answers;
         }
 
         // Concatenate scenario and claim into a single scenario field
@@ -343,29 +306,29 @@ export async function GET(req: NextRequest) {
 
           // Annotations: structured metadata
           annotations: {
-            caseId: q.sourceCase || q.id,
-            pearlLevel: q.pearlLevel,
+            case_id: q.source_case || q.id,
+            pearl_level: q.pearl_level,
             domain: q.domain,
             subdomain: q.subdomain,
-            trapType: q.trapType,
-            trapSubtype: q.trapSubtype,
+            trap_type: q.trap_type,
+            trap_subtype: q.trap_subtype,
             difficulty: q.difficulty,
-            causalStructure: q.causalStructure,
-            keyInsight: q.keyInsight,
+            causal_structure: q.causal_structure,
+            key_insight: q.key_insight,
             author: q.author || 'Unknown',
           },
 
           // Ground truth answer
-          groundTruth: q.groundTruth,
+          ground_truth: q.ground_truth,
 
           // Hidden Timestamp: question that reveals temporal/causal ordering
-          hiddenTimestamp: q.hiddenTimestamp || null,
+          hidden_timestamp: q.hidden_timestamp || null,
 
           // Conditional Answers: "Answer if..." sections for different scenarios
-          conditionalAnswers: conditionalAnswers || null,
+          conditional_answers: conditional_answers || null,
 
           // Wise Refusal: response that identifies missing info or biases
-          wiseRefusal: q.wiseRefusal,
+          wise_refusal: q.wise_refusal,
 
           // Additional explanation
           explanation: q.explanation,
@@ -377,23 +340,39 @@ export async function GET(req: NextRequest) {
             scenario: combinedScenario,
             variables,
             annotations: {
-              caseId: q.sourceCase || q.id,
-              pearlLevel: q.pearlLevel,
+              case_id: q.source_case || q.id,
+              pearl_level: q.pearl_level,
               domain: q.domain,
               subdomain: q.subdomain,
               difficulty: q.difficulty,
               author: q.author || 'Unknown',
             },
-            groundTruth: q.groundTruth,
+            ground_truth: q.ground_truth,
           };
         }
 
         return baseExport;
-        }),
-        ...processedL1Exports,
-        ...processedL2Exports,
-        ...processedL3Exports,
-      ],
+      }),
+      ...processedT3Exports,
+    ];
+
+    // Format export
+    const exportData = {
+      metadata: {
+        exportDate: new Date().toISOString(),
+        totalQuestions: convertedQuestions.length,
+        distribution,
+        version: '2.0', // Updated for unified T3Case schema
+        cleanedForEval: cleanForEval,
+        filters: {
+          pearlLevels: pearlLevels.length > 0 ? pearlLevels : ['L1', 'L2', 'L3'],
+          verifiedOnly,
+          dataset: dataset || 'all',
+          includeLegacy,
+          includeT3,
+        },
+      },
+      questions: convertedQuestions,
     };
 
     if (format === 'json') {
@@ -402,6 +381,7 @@ export async function GET(req: NextRequest) {
         : `causal-questions-${new Date().toISOString().split('T')[0]}.json`;
 
       // Export just the array of questions (no metadata wrapper) for easy combining
+      // All field names are in snake_case format
       return new NextResponse(JSON.stringify(exportData.questions, null, 2), {
         headers: {
           'Content-Type': 'application/json',
