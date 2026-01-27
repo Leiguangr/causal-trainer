@@ -558,7 +558,6 @@ export async function evaluateLegacyQuestions(
         await new Promise(resolve => setTimeout(resolve, 250));
       }
     }
-  }
 }
 
 
