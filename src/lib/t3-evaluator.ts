@@ -2,6 +2,7 @@ import OpenAI from 'openai';
 import { buildRubricPrompt, buildRubricPromptFromQuestion, type T3RubricPayload, type QuestionForEvaluationLegacy } from './rubric-prompts';
 import { prisma } from './prisma';
 import type { Difficulty, PearlLevel, T3Case } from '@/types';
+import { processBatch, shouldUseBatchAPI, type BatchRequest, type BatchResponse } from './openai-batch';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -130,6 +131,69 @@ function deriveClarityScore(categoryScores: Record<string, number>, caseType: 'L
   return 1;
 }
 
+/**
+ * Process a batch response and return T3RubricEvaluation
+ */
+function processBatchResponse(
+  response: BatchResponse,
+  caseType: 'L1' | 'L2' | 'L3',
+  difficulty: string
+): T3RubricEvaluation {
+  if (response.error) {
+    throw new Error(`Batch API error: ${response.error.message}`);
+  }
+
+  const content = response.response?.body?.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error('Empty response from T3 rubric scoring agent');
+  }
+
+  const parsed = JSON.parse(content) as {
+    categoryScores?: unknown;
+    category_scores?: unknown; // snake_case format
+    categoryNotes?: unknown;
+    category_notes?: unknown; // snake_case format
+    totalScore?: unknown;
+    total_score?: unknown; // snake_case format
+  };
+
+  // Support both camelCase (legacy) and snake_case (new format)
+  const categoryScores = normalizeScores(parsed.categoryScores || parsed.category_scores);
+  const categoryNotes = normalizeNotes(parsed.categoryNotes || parsed.category_notes);
+  const calculatedTotal = Object.values(categoryScores).reduce((sum, s) => sum + s, 0);
+  
+  // If total_score is provided and matches calculated, use it; otherwise use calculated
+  const providedTotal = coerceNumber(parsed.totalScore || parsed.total_score);
+  const finalTotal = providedTotal !== null && Math.abs(providedTotal - calculatedTotal) < 0.01 
+    ? providedTotal 
+    : calculatedTotal;
+
+  // Determine acceptance threshold (unified rubric, no version needed)
+  const rubricVersion = 'unified';
+  const { overallVerdict, priorityLevel, acceptanceThreshold } = decideVerdict(
+    calculatedTotal,
+    caseType
+  );
+
+  const rubricScore: StoredRubricScore = {
+    categoryScores,
+    categoryNotes,
+    totalScore: finalTotal,
+    acceptanceThreshold,
+    rubricVersion,
+  };
+
+  // Derive clarity score from rubric categories
+  const clarityScore = deriveClarityScore(categoryScores, caseType);
+
+  return {
+    rubricScore,
+    overallVerdict,
+    priorityLevel,
+    clarityScore,
+    difficultyAssessment: normalizeDifficulty(difficulty),
+  };
+}
 
 export async function scoreT3CaseWithRubric(
   payload: T3RubricPayload,
@@ -323,42 +387,112 @@ export async function evaluateL1Cases(
   startingCompletedCount: number = 0
 ): Promise<void> {
   const total = caseIds.length;
+  const useBatch = shouldUseBatchAPI(total);
 
-  // Use synchronous API calls
-  for (let i = 0; i < total; i++) {
-    const id = caseIds[i];
-    try {
-      const row = await prisma.t3Case.findUnique({ where: { id, pearl_level: 'L1' } });
-      if (!row) continue;
+  if (useBatch) {
+    console.log(`[Evaluation Batch ${evaluationBatchId}] Using OpenAI Batch API for ${total} L1 cases (cost savings)`);
+    
+    // Load all cases
+    const rows = await Promise.all(
+      caseIds.map(id => prisma.t3Case.findUnique({ where: { id, pearl_level: 'L1' } }))
+    );
+    const validRows = rows.filter((row): row is NonNullable<typeof row> => row !== null);
 
+    // Build batch requests
+    const batchRequests: BatchRequest[] = validRows.map((row, idx) => {
       const payload = buildT3RubricPayloadFromRow(row);
-      const scored = await scoreT3CaseWithRubric(payload, row.difficulty);
-
-      await prisma.caseEvaluation.create({
-        data: {
-          question_id: null,
-          t3_case_id: row.id,
-          evaluation_batch_id: evaluationBatchId,
-          overall_verdict: scored.overallVerdict,
-          priority_level: scored.priorityLevel,
-          rubric_score: JSON.stringify(scored.rubricScore),
-          clarity_score: scored.clarityScore,
-          difficulty_assessment: scored.difficultyAssessment,
-          // T3 cases have fixed pearl level, ground truth, and trap type from their schema
-          pearl_level_assessment: 'CORRECT', // T3Case pearl_level is always correct
-          ground_truth_assessment: 'CORRECT', // Label is part of the case schema
-          trap_type_assessment: 'CORRECT', // Trap type is part of the case schema
-          report_tags: JSON.stringify([]),
+      const rubricPrompt = buildRubricPrompt(payload);
+      return {
+        custom_id: `eval_l1_${evaluationBatchId}_${idx}`,
+        method: 'POST',
+        url: '/v1/chat/completions',
+        body: {
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: RUBRIC_SCORING_SYSTEM_PROMPT },
+            { role: 'user', content: rubricPrompt },
+          ],
+          temperature: 0.2,
+          response_format: { type: 'json_object' },
         },
-      });
-    } catch (error) {
-      console.error(`Failed to evaluate L1Case ${id}:`, error);
-    } finally {
-      await prisma.evaluationBatch.update({
-        where: { id: evaluationBatchId },
-        data: { completed_count: startingCompletedCount + i + 1 },
-      });
-      await new Promise(resolve => setTimeout(resolve, 250));
+      };
+    });
+
+    // Process batch
+    const batchResponses = await processBatch(batchRequests, (status) => {
+      console.log(`[Evaluation Batch ${evaluationBatchId}] Batch API status: ${status}`);
+    });
+
+    // Process results
+    for (let i = 0; i < validRows.length; i++) {
+      const row = validRows[i];
+      const response = batchResponses[i];
+      
+      try {
+        const scored = processBatchResponse(response, 'L1', row.difficulty);
+
+        await prisma.caseEvaluation.create({
+          data: {
+            question_id: null,
+            t3_case_id: row.id,
+            evaluation_batch_id: evaluationBatchId,
+            overall_verdict: scored.overallVerdict,
+            priority_level: scored.priorityLevel,
+            rubric_score: JSON.stringify(scored.rubricScore),
+            clarity_score: scored.clarityScore,
+            difficulty_assessment: scored.difficultyAssessment,
+            pearl_level_assessment: 'CORRECT',
+            ground_truth_assessment: 'CORRECT',
+            trap_type_assessment: 'CORRECT',
+            report_tags: JSON.stringify([]),
+          },
+        });
+      } catch (error) {
+        console.error(`Failed to evaluate L1Case ${row.id}:`, error);
+      } finally {
+        await prisma.evaluationBatch.update({
+          where: { id: evaluationBatchId },
+          data: { completed_count: startingCompletedCount + i + 1 },
+        });
+      }
+    }
+  } else {
+    // Use synchronous API for small batches
+    for (let i = 0; i < total; i++) {
+      const id = caseIds[i];
+      try {
+        const row = await prisma.t3Case.findUnique({ where: { id, pearl_level: 'L1' } });
+        if (!row) continue;
+
+        const payload = buildT3RubricPayloadFromRow(row);
+        const scored = await scoreT3CaseWithRubric(payload, row.difficulty);
+
+        await prisma.caseEvaluation.create({
+          data: {
+            question_id: null,
+            t3_case_id: row.id,
+            evaluation_batch_id: evaluationBatchId,
+            overall_verdict: scored.overallVerdict,
+            priority_level: scored.priorityLevel,
+            rubric_score: JSON.stringify(scored.rubricScore),
+            clarity_score: scored.clarityScore,
+            difficulty_assessment: scored.difficultyAssessment,
+            // T3 cases have fixed pearl level, ground truth, and trap type from their schema
+            pearl_level_assessment: 'CORRECT', // T3Case pearl_level is always correct
+            ground_truth_assessment: 'CORRECT', // Label is part of the case schema
+            trap_type_assessment: 'CORRECT', // Trap type is part of the case schema
+            report_tags: JSON.stringify([]),
+          },
+        });
+      } catch (error) {
+        console.error(`Failed to evaluate L1Case ${id}:`, error);
+      } finally {
+        await prisma.evaluationBatch.update({
+          where: { id: evaluationBatchId },
+          data: { completed_count: startingCompletedCount + i + 1 },
+        });
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
     }
   }
 }
@@ -369,42 +503,112 @@ export async function evaluateL2Cases(
   startingCompletedCount: number = 0
 ): Promise<void> {
   const total = caseIds.length;
+  const useBatch = shouldUseBatchAPI(total);
 
-  // Use synchronous API calls
-  for (let i = 0; i < total; i++) {
-    const id = caseIds[i];
-    try {
-      const row = await prisma.t3Case.findUnique({ where: { id, pearl_level: 'L2' } });
-      if (!row) continue;
+  if (useBatch) {
+    console.log(`[Evaluation Batch ${evaluationBatchId}] Using OpenAI Batch API for ${total} L2 cases (cost savings)`);
+    
+    // Load all cases
+    const rows = await Promise.all(
+      caseIds.map(id => prisma.t3Case.findUnique({ where: { id, pearl_level: 'L2' } }))
+    );
+    const validRows = rows.filter((row): row is NonNullable<typeof row> => row !== null);
 
+    // Build batch requests
+    const batchRequests: BatchRequest[] = validRows.map((row, idx) => {
       const payload = buildT3RubricPayloadFromRow(row);
-      const scored = await scoreT3CaseWithRubric(payload, row.difficulty);
-
-      await prisma.caseEvaluation.create({
-        data: {
-          question_id: null,
-          t3_case_id: row.id,
-          evaluation_batch_id: evaluationBatchId,
-          overall_verdict: scored.overallVerdict,
-          priority_level: scored.priorityLevel,
-          rubric_score: JSON.stringify(scored.rubricScore),
-          clarity_score: scored.clarityScore,
-          difficulty_assessment: scored.difficultyAssessment,
-          // T3 cases have fixed pearl level and trap type from their schema
-          pearl_level_assessment: 'CORRECT', // T3Case pearl_level is always correct
-          trap_type_assessment: 'CORRECT', // Trap type is part of the case schema
-          ground_truth_assessment: 'CORRECT', // Label is part of the case schema (L2 always NO)
-          report_tags: JSON.stringify([]),
+      const rubricPrompt = buildRubricPrompt(payload);
+      return {
+        custom_id: `eval_l2_${evaluationBatchId}_${idx}`,
+        method: 'POST',
+        url: '/v1/chat/completions',
+        body: {
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: RUBRIC_SCORING_SYSTEM_PROMPT },
+            { role: 'user', content: rubricPrompt },
+          ],
+          temperature: 0.2,
+          response_format: { type: 'json_object' },
         },
-      });
-    } catch (error) {
-      console.error(`Failed to evaluate L2Case ${id}:`, error);
-    } finally {
-      await prisma.evaluationBatch.update({
-        where: { id: evaluationBatchId },
-        data: { completed_count: startingCompletedCount + i + 1 },
-      });
-      await new Promise(resolve => setTimeout(resolve, 250));
+      };
+    });
+
+    // Process batch
+    const batchResponses = await processBatch(batchRequests, (status) => {
+      console.log(`[Evaluation Batch ${evaluationBatchId}] Batch API status: ${status}`);
+    });
+
+    // Process results
+    for (let i = 0; i < validRows.length; i++) {
+      const row = validRows[i];
+      const response = batchResponses[i];
+      
+      try {
+        const scored = processBatchResponse(response, 'L2', row.difficulty);
+
+        await prisma.caseEvaluation.create({
+          data: {
+            question_id: null,
+            t3_case_id: row.id,
+            evaluation_batch_id: evaluationBatchId,
+            overall_verdict: scored.overallVerdict,
+            priority_level: scored.priorityLevel,
+            rubric_score: JSON.stringify(scored.rubricScore),
+            clarity_score: scored.clarityScore,
+            difficulty_assessment: scored.difficultyAssessment,
+            pearl_level_assessment: 'CORRECT',
+            trap_type_assessment: 'CORRECT',
+            ground_truth_assessment: 'CORRECT',
+            report_tags: JSON.stringify([]),
+          },
+        });
+      } catch (error) {
+        console.error(`Failed to evaluate L2Case ${row.id}:`, error);
+      } finally {
+        await prisma.evaluationBatch.update({
+          where: { id: evaluationBatchId },
+          data: { completed_count: startingCompletedCount + i + 1 },
+        });
+      }
+    }
+  } else {
+    // Use synchronous API for small batches
+    for (let i = 0; i < total; i++) {
+      const id = caseIds[i];
+      try {
+        const row = await prisma.t3Case.findUnique({ where: { id, pearl_level: 'L2' } });
+        if (!row) continue;
+
+        const payload = buildT3RubricPayloadFromRow(row);
+        const scored = await scoreT3CaseWithRubric(payload, row.difficulty);
+
+        await prisma.caseEvaluation.create({
+          data: {
+            question_id: null,
+            t3_case_id: row.id,
+            evaluation_batch_id: evaluationBatchId,
+            overall_verdict: scored.overallVerdict,
+            priority_level: scored.priorityLevel,
+            rubric_score: JSON.stringify(scored.rubricScore),
+            clarity_score: scored.clarityScore,
+            difficulty_assessment: scored.difficultyAssessment,
+            // T3 cases have fixed pearl level and trap type from their schema
+            pearl_level_assessment: 'CORRECT', // T3Case pearl_level is always correct
+            trap_type_assessment: 'CORRECT', // Trap type is part of the case schema
+            ground_truth_assessment: 'CORRECT', // Label is part of the case schema (L2 always NO)
+            report_tags: JSON.stringify([]),
+          },
+        });
+      } catch (error) {
+        console.error(`Failed to evaluate L2Case ${id}:`, error);
+      } finally {
+        await prisma.evaluationBatch.update({
+          where: { id: evaluationBatchId },
+          data: { completed_count: startingCompletedCount + i + 1 },
+        });
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
     }
   }
 }
@@ -415,42 +619,112 @@ export async function evaluateL3Cases(
   startingCompletedCount: number = 0
 ): Promise<void> {
   const total = caseIds.length;
+  const useBatch = shouldUseBatchAPI(total);
 
-  // Use synchronous API calls
-  for (let i = 0; i < total; i++) {
-    const id = caseIds[i];
-    try {
-      const row = await prisma.t3Case.findUnique({ where: { id, pearl_level: 'L3' } });
-      if (!row) continue;
+  if (useBatch) {
+    console.log(`[Evaluation Batch ${evaluationBatchId}] Using OpenAI Batch API for ${total} L3 cases (cost savings)`);
+    
+    // Load all cases
+    const rows = await Promise.all(
+      caseIds.map(id => prisma.t3Case.findUnique({ where: { id, pearl_level: 'L3' } }))
+    );
+    const validRows = rows.filter((row): row is NonNullable<typeof row> => row !== null);
 
+    // Build batch requests
+    const batchRequests: BatchRequest[] = validRows.map((row, idx) => {
       const payload = buildT3RubricPayloadFromRow(row);
-      const scored = await scoreT3CaseWithRubric(payload, row.difficulty);
-
-      await prisma.caseEvaluation.create({
-        data: {
-          question_id: null,
-          t3_case_id: row.id,
-          evaluation_batch_id: evaluationBatchId,
-          overall_verdict: scored.overallVerdict,
-          priority_level: scored.priorityLevel,
-          rubric_score: JSON.stringify(scored.rubricScore),
-          clarity_score: scored.clarityScore,
-          difficulty_assessment: scored.difficultyAssessment,
-          // T3 cases have fixed pearl level and ground truth from their schema
-          pearl_level_assessment: 'CORRECT', // T3Case pearl_level is always correct
-          ground_truth_assessment: 'CORRECT', // Label is part of the case schema
-          trap_type_assessment: 'CORRECT', // Trap type (family) is part of the case schema
-          report_tags: JSON.stringify([]),
+      const rubricPrompt = buildRubricPrompt(payload);
+      return {
+        custom_id: `eval_l3_${evaluationBatchId}_${idx}`,
+        method: 'POST',
+        url: '/v1/chat/completions',
+        body: {
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: RUBRIC_SCORING_SYSTEM_PROMPT },
+            { role: 'user', content: rubricPrompt },
+          ],
+          temperature: 0.2,
+          response_format: { type: 'json_object' },
         },
-      });
-    } catch (error) {
-      console.error(`Failed to evaluate L3Case ${id}:`, error);
-    } finally {
-      await prisma.evaluationBatch.update({
-        where: { id: evaluationBatchId },
-        data: { completed_count: startingCompletedCount + i + 1 },
-      });
-      await new Promise(resolve => setTimeout(resolve, 250));
+      };
+    });
+
+    // Process batch
+    const batchResponses = await processBatch(batchRequests, (status) => {
+      console.log(`[Evaluation Batch ${evaluationBatchId}] Batch API status: ${status}`);
+    });
+
+    // Process results
+    for (let i = 0; i < validRows.length; i++) {
+      const row = validRows[i];
+      const response = batchResponses[i];
+      
+      try {
+        const scored = processBatchResponse(response, 'L3', row.difficulty);
+
+        await prisma.caseEvaluation.create({
+          data: {
+            question_id: null,
+            t3_case_id: row.id,
+            evaluation_batch_id: evaluationBatchId,
+            overall_verdict: scored.overallVerdict,
+            priority_level: scored.priorityLevel,
+            rubric_score: JSON.stringify(scored.rubricScore),
+            clarity_score: scored.clarityScore,
+            difficulty_assessment: scored.difficultyAssessment,
+            pearl_level_assessment: 'CORRECT',
+            ground_truth_assessment: 'CORRECT',
+            trap_type_assessment: 'CORRECT',
+            report_tags: JSON.stringify([]),
+          },
+        });
+      } catch (error) {
+        console.error(`Failed to evaluate L3Case ${row.id}:`, error);
+      } finally {
+        await prisma.evaluationBatch.update({
+          where: { id: evaluationBatchId },
+          data: { completed_count: startingCompletedCount + i + 1 },
+        });
+      }
+    }
+  } else {
+    // Use synchronous API for small batches
+    for (let i = 0; i < total; i++) {
+      const id = caseIds[i];
+      try {
+        const row = await prisma.t3Case.findUnique({ where: { id, pearl_level: 'L3' } });
+        if (!row) continue;
+
+        const payload = buildT3RubricPayloadFromRow(row);
+        const scored = await scoreT3CaseWithRubric(payload, row.difficulty);
+
+        await prisma.caseEvaluation.create({
+          data: {
+            question_id: null,
+            t3_case_id: row.id,
+            evaluation_batch_id: evaluationBatchId,
+            overall_verdict: scored.overallVerdict,
+            priority_level: scored.priorityLevel,
+            rubric_score: JSON.stringify(scored.rubricScore),
+            clarity_score: scored.clarityScore,
+            difficulty_assessment: scored.difficultyAssessment,
+            // T3 cases have fixed pearl level and ground truth from their schema
+            pearl_level_assessment: 'CORRECT', // T3Case pearl_level is always correct
+            ground_truth_assessment: 'CORRECT', // Label is part of the case schema
+            trap_type_assessment: 'CORRECT', // Trap type (family) is part of the case schema
+            report_tags: JSON.stringify([]),
+          },
+        });
+      } catch (error) {
+        console.error(`Failed to evaluate L3Case ${id}:`, error);
+      } finally {
+        await prisma.evaluationBatch.update({
+          where: { id: evaluationBatchId },
+          data: { completed_count: startingCompletedCount + i + 1 },
+        });
+        await new Promise(resolve => setTimeout(resolve, 250));
+      }
     }
   }
 }
@@ -464,9 +738,112 @@ export async function evaluateLegacyQuestions(
   startingCompletedCount: number = 0
 ): Promise<void> {
   const total = questionIds.length;
+  const useBatch = shouldUseBatchAPI(total);
 
-  // Use synchronous API calls
-  for (let i = 0; i < total; i++) {
+  if (useBatch) {
+    console.log(`[Evaluation Batch ${evaluationBatchId}] Using OpenAI Batch API for ${total} legacy questions (cost savings)`);
+    
+    // Load all questions
+    const questions = await Promise.all(
+      questionIds.map(id => prisma.question.findUnique({ where: { id } }))
+    );
+    const validQuestions = questions.filter((q): q is NonNullable<typeof q> => q !== null);
+
+    // Build batch requests
+    const batchRequests: BatchRequest[] = validQuestions.map((question, idx) => {
+      const pearlLevel = (question.pearl_level as PearlLevel) || 'L1';
+      const rubricPrompt = buildRubricPromptFromQuestion(question, pearlLevel);
+      return {
+        custom_id: `eval_legacy_${evaluationBatchId}_${idx}`,
+        method: 'POST',
+        url: '/v1/chat/completions',
+        body: {
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: RUBRIC_SCORING_SYSTEM_PROMPT },
+            { role: 'user', content: rubricPrompt },
+          ],
+          temperature: 0.2,
+          response_format: { type: 'json_object' },
+        },
+      };
+    });
+
+    // Process batch
+    const batchResponses = await processBatch(batchRequests, (status) => {
+      console.log(`[Evaluation Batch ${evaluationBatchId}] Batch API status: ${status}`);
+    });
+
+    // Process results
+    for (let i = 0; i < validQuestions.length; i++) {
+      const question = validQuestions[i];
+      const response = batchResponses[i];
+      const pearlLevel = (question.pearl_level as PearlLevel) || 'L1';
+      
+      try {
+        const parsed = JSON.parse(response.response?.body?.choices?.[0]?.message?.content || '{}') as {
+          categoryScores?: unknown;
+          category_scores?: unknown;
+          categoryNotes?: unknown;
+          category_notes?: unknown;
+          totalScore?: unknown;
+          total_score?: unknown;
+        };
+
+        const categoryScores = normalizeScores(parsed.categoryScores || parsed.category_scores);
+        const categoryNotes = normalizeNotes(parsed.categoryNotes || parsed.category_notes);
+        const calculatedTotal = Object.values(categoryScores).reduce((sum, s) => sum + s, 0);
+        
+        const providedTotal = coerceNumber(parsed.totalScore || parsed.total_score);
+        const finalTotal = providedTotal !== null && Math.abs(providedTotal - calculatedTotal) < 0.01 
+          ? providedTotal 
+          : calculatedTotal;
+
+        const rubricVersion = 'unified';
+        const { overallVerdict, priorityLevel, acceptanceThreshold } = decideVerdict(
+          finalTotal,
+          pearlLevel
+        );
+
+        const rubricScore: StoredRubricScore = {
+          categoryScores,
+          categoryNotes,
+          totalScore: finalTotal,
+          acceptanceThreshold,
+          rubricVersion,
+        };
+
+        const clarityScore = deriveClarityScore(categoryScores, pearlLevel);
+        const difficulty = normalizeDifficulty(question.difficulty);
+
+        await prisma.caseEvaluation.create({
+          data: {
+            question_id: question.id,
+            t3_case_id: null,
+            evaluation_batch_id: evaluationBatchId,
+            overall_verdict: overallVerdict,
+            priority_level: priorityLevel,
+            rubric_score: JSON.stringify(rubricScore),
+            clarity_score: clarityScore,
+            difficulty_assessment: difficulty,
+            pearl_level_assessment: 'CORRECT',
+            ground_truth_assessment: 'CORRECT',
+            trap_type_assessment: 'CORRECT',
+            report_tags: JSON.stringify([]),
+          },
+        });
+      } catch (error) {
+        console.error(`Failed to evaluate Question ${question.id}:`, error);
+      } finally {
+        await prisma.evaluationBatch.update({
+          where: { id: evaluationBatchId },
+          data: { completed_count: startingCompletedCount + i + 1 },
+        });
+      }
+    }
+  } else {
+    // Use synchronous API for small batches
+    for (let i = 0; i < total; i++) {
       const id = questionIds[i];
       try {
         const question = await prisma.question.findUnique({ where: { id } });
@@ -558,6 +935,7 @@ export async function evaluateLegacyQuestions(
         await new Promise(resolve => setTimeout(resolve, 250));
       }
     }
+  }
 }
 
 
