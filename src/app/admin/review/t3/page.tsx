@@ -172,18 +172,28 @@ export default function ReviewT3Page() {
     const pearlLevel = c.pearl_level || c._caseType || 'L1';
     
     if (pearlLevel === 'L1') {
-      // Extract evidence class and type from trap_type
-      const trapType = c.trap_type || '';
-      let evidenceClass = 'NONE';
+      // Extract evidence class from label (ground truth), not trap_type
+      // SHEEP can only be YES, WOLF can only be NO, AMBIGUOUS must be NONE
+      const label = c.label || 'AMBIGUOUS';
+      let evidenceClass: 'WOLF' | 'SHEEP' | 'NONE' = 'NONE';
       let evidenceType: string | null = null;
       
-      if (trapType.match(/^W[0-9]+/)) {
-        evidenceClass = 'WOLF';
-        evidenceType = trapType;
-      } else if (trapType.match(/^S[0-9]+/)) {
+      if (label === 'YES') {
         evidenceClass = 'SHEEP';
-        evidenceType = trapType;
-      } else if (trapType === 'A') {
+        // Only set evidenceType if trap_type is valid SHEEP type (S1-S8)
+        const trapType = c.trap_type || '';
+        if (trapType.match(/^S[0-9]+/)) {
+          evidenceType = trapType;
+        }
+      } else if (label === 'NO') {
+        evidenceClass = 'WOLF';
+        // Only set evidenceType if trap_type is valid WOLF type (W1-W10)
+        const trapType = c.trap_type || '';
+        if (trapType.match(/^W[0-9]+/)) {
+          evidenceType = trapType;
+        }
+      } else {
+        // AMBIGUOUS must always be NONE, regardless of trap_type
         evidenceClass = 'NONE';
         evidenceType = null;
       }
@@ -318,17 +328,34 @@ export default function ReviewT3Page() {
     
     if (caseType === 'L1') {
       const l1 = displayCase as Partial<L1Case>;
-      // Map evidenceClass/evidenceType back to trap_type
+      const label = l1.groundTruth || 'AMBIGUOUS';
+      
+      // Validate and enforce consistency: label determines evidence class
+      // SHEEP can only be YES, WOLF can only be NO, AMBIGUOUS must be NONE
       let trapType = l1.evidenceType || '';
-      if (l1.evidenceClass === 'NONE' && !trapType) {
-        trapType = 'A';
+      
+      if (label === 'AMBIGUOUS') {
+        // AMBIGUOUS cases must have trap_type null (not set) and evidenceClass NONE
+        trapType = null;
+      } else if (label === 'YES') {
+        // YES cases must have SHEEP trap types (S1-S8)
+        if (!trapType || !trapType.match(/^S[0-9]+/)) {
+          // If trap_type is invalid for YES, default to S1
+          trapType = 'S1';
+        }
+      } else if (label === 'NO') {
+        // NO cases must have WOLF trap types (W1-W10)
+        if (!trapType || !trapType.match(/^W[0-9]+/)) {
+          // If trap_type is invalid for NO, default to W1
+          trapType = 'W1';
+        }
       }
       
       return {
         scenario: l1.scenario,
         claim: l1.claim,
-        label: l1.groundTruth,
-        trap_type: trapType,
+        label,
+        trap_type: trapType, // null for AMBIGUOUS, S1-S8 for YES, W1-W10 for NO
         gold_rationale: l1.whyFlawedOrValid,
         domain: l1.domain,
         subdomain: l1.subdomain,
@@ -374,13 +401,14 @@ export default function ReviewT3Page() {
     } else {
       // L3
       const l3 = displayCase as Partial<L3Case>;
+      const isConditional = l3.groundTruth === 'CONDITIONAL';
       
       return {
         scenario: l3.scenario,
         counterfactual_claim: l3.counterfactualClaim,
         label: l3.groundTruth,
-        is_ambiguous: l3.groundTruth === 'CONDITIONAL',
-        trap_type: l3.family, // L3 family is stored in trap_type
+        is_ambiguous: isConditional,
+        trap_type: isConditional ? null : (l3.family || null), // CONDITIONAL should not have trap_type (family) set
         gold_rationale: l3.justification,
         wise_refusal: l3.wiseResponse,
         invariants: l3.invariants,

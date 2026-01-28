@@ -316,7 +316,7 @@ REQUIRED OUTPUT FORMAT (${pearlLevel}):
     "Y": "string or object (effect variable)",
     "Z": ["string"] (array of confounders/mediators, always an array)
   },
-  "trap_type": "string (W1-W10, S1-S8, or A for AMBIGUOUS - infer from scenario if missing)",
+  "trap_type": "string (W1-W10, S1-S8 for L1, T1-T17 for L2, F1-F8 for L3). Null for AMBIGUOUS/CONDITIONAL cases (no trap - ambiguity is about causal graph structure, not a trap).",
   "trap_subtype": "string or null",
   "difficulty": "easy|medium|hard",
   "causal_structure": "string (natural language, full sentences, NOT mathematical notation)",

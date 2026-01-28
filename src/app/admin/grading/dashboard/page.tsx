@@ -27,6 +27,8 @@ interface GradingStats {
   datasetCounts: Record<string, number>;
   timeSeries: Record<string, number>;
   batchCounts: Record<string, { count: number; dataset: string | null; status: string }>;
+  labelDistribution: Record<string, Record<string, number>>;
+  trapTypeDistribution: Record<string, Record<string, number>>;
 }
 
 interface EvaluationBatch {
@@ -523,7 +525,7 @@ export default function GradingDashboardPage() {
 
         {/* Time Series */}
         {Object.keys(stats.timeSeries).length > 0 && (
-          <div className="bg-white rounded-lg shadow-sm p-6">
+          <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
             <h2 className="text-xl font-semibold mb-4">Evaluations Over Time</h2>
             <div className="space-y-2">
               {Object.entries(stats.timeSeries)
@@ -543,6 +545,92 @@ export default function GradingDashboardPage() {
                     </div>
                   </div>
                 ))}
+            </div>
+          </div>
+        )}
+
+        {/* Label Distribution by Case Type */}
+        {stats.labelDistribution && (
+          <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+            <h2 className="text-xl font-semibold mb-4">Label Distribution by Case Type</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {(['L1', 'L2', 'L3', 'legacy'] as const).map(caseType => {
+                const labels = stats.labelDistribution[caseType];
+                if (!labels || Object.keys(labels).length === 0) return null;
+                const maxCount = Math.max(...Object.values(labels));
+                return (
+                  <div key={caseType} className="border rounded-lg p-4">
+                    <h3 className="text-lg font-medium mb-3">{caseType === 'legacy' ? 'Legacy' : caseType} Cases</h3>
+                    <div className="space-y-2">
+                      {Object.entries(labels)
+                        .filter(([, count]) => count > 0)
+                        .sort(([, a], [, b]) => b - a)
+                        .map(([label, count]) => (
+                          <div key={label}>
+                            <div className="flex justify-between text-sm mb-1">
+                              <span className="font-medium">{label}</span>
+                              <span>{count}</span>
+                            </div>
+                            <div className="w-full bg-gray-200 rounded-full h-3">
+                              <div
+                                className={`h-3 rounded-full ${
+                                  label === 'YES' || label === 'VALID' ? 'bg-green-600' :
+                                  label === 'NO' || label === 'INVALID' ? 'bg-red-600' :
+                                  'bg-yellow-600'
+                                }`}
+                                style={{ width: `${getBarWidth(count, maxCount)}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Trap Type Distribution by Case Type */}
+        {stats.trapTypeDistribution && (
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            <h2 className="text-xl font-semibold mb-4">Trap Type Distribution by Case Type</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {(['L1', 'L2', 'L3', 'legacy'] as const).map(caseType => {
+                const trapTypes = stats.trapTypeDistribution[caseType];
+                if (!trapTypes || Object.keys(trapTypes).length === 0) return null;
+                const maxCount = Math.max(...Object.values(trapTypes));
+                const total = Object.values(trapTypes).reduce((a, b) => a + b, 0);
+                return (
+                  <div key={caseType} className="border rounded-lg p-4">
+                    <h3 className="text-lg font-medium mb-3">
+                      {caseType === 'legacy' ? 'Legacy' : caseType} Cases
+                      <span className="text-sm text-gray-500 ml-2">({total} total)</span>
+                    </h3>
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {Object.entries(trapTypes)
+                        .sort(([, a], [, b]) => b - a)
+                        .map(([trapType, count]) => {
+                          const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : '0';
+                          return (
+                            <div key={trapType}>
+                              <div className="flex justify-between text-sm mb-1">
+                                <span className="font-medium">{trapType}</span>
+                                <span>{count} ({percentage}%)</span>
+                              </div>
+                              <div className="w-full bg-gray-200 rounded-full h-3">
+                                <div
+                                  className="bg-blue-600 h-3 rounded-full"
+                                  style={{ width: `${getBarWidth(count, maxCount)}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

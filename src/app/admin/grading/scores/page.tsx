@@ -266,8 +266,16 @@ export default function ScoresPage() {
   const [caseType, setCaseType] = useState<string>('all');
   const [overallVerdict, setOverallVerdict] = useState<string>('');
   const [priorityLevel, setPriorityLevel] = useState<string>('');
-  const [page, setPage] = useState<number>(1);
-  const pageSize = 20; // Smaller page size for detailed view
+  const [sortBy, setSortBy] = useState<string>('priority');
+  const [sortOrder, setSortOrder] = useState<string>('asc');
+  const [currentIndex, setCurrentIndex] = useState<number>(0);
+  const [showCaseList, setShowCaseList] = useState<boolean>(false);
+  const [bulkReviseProgress, setBulkReviseProgress] = useState<{
+    isActive: boolean;
+    processed: number;
+    total: number;
+    status: string;
+  } | null>(null);
 
   const query = useMemo(() => {
     const p = new URLSearchParams();
@@ -276,10 +284,12 @@ export default function ScoresPage() {
     if (caseType) p.set('caseType', caseType);
     if (overallVerdict) p.set('overallVerdict', overallVerdict);
     if (priorityLevel) p.set('priorityLevel', priorityLevel);
-    p.set('page', String(page));
-    p.set('pageSize', String(pageSize));
+    p.set('sortBy', sortBy);
+    p.set('sortOrder', sortOrder);
+    p.set('page', '1');
+    p.set('pageSize', '500'); // Load all matching evaluations
     return p.toString();
-  }, [dataset, evaluationBatchId, caseType, overallVerdict, priorityLevel, page]);
+  }, [dataset, evaluationBatchId, caseType, overallVerdict, priorityLevel, sortBy, sortOrder]);
 
   useEffect(() => {
     const run = async () => {
@@ -289,6 +299,8 @@ export default function ScoresPage() {
         const json = (await res.json()) as GradingResponse;
         if (!res.ok) throw new Error((json as any).error || 'Failed to load');
         setData(json);
+        // Reset to first evaluation when filters change
+        setCurrentIndex(0);
       } catch (err) {
         console.error(err);
         setData(null);
@@ -302,7 +314,13 @@ export default function ScoresPage() {
   const batches = data?.batches ?? [];
   const evaluations = data?.evaluations ?? [];
   const total = data?.total ?? 0;
-  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  
+  // Get flagged cases (NEEDS_REVIEW or REJECTED)
+  const flaggedEvaluations = evaluations.filter(e => 
+    e.overall_verdict === 'NEEDS_REVIEW' || e.overall_verdict === 'REJECTED'
+  );
+  
+  const currentEvaluation = evaluations[currentIndex] || null;
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -564,8 +582,8 @@ export default function ScoresPage() {
 
         {/* Filters */}
         <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4">Filters</h2>
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+          <h2 className="text-xl font-semibold mb-4">Filters & Sorting</h2>
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-3 mb-3">
             <input
               value={dataset}
               onChange={(e) => {
@@ -632,13 +650,143 @@ export default function ScoresPage() {
               ))}
             </select>
           </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Sort By</label>
+              <select
+                value={sortBy}
+                onChange={(e) => {
+                  setSortBy(e.target.value);
+                  setPage(1);
+                }}
+                className="border border-gray-300 rounded-lg px-3 py-2 w-full"
+              >
+                <option value="priority">Priority Level</option>
+                <option value="caseType">Case Type (L1/L2/L3)</option>
+                <option value="created">Created Date</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Sort Order</label>
+              <select
+                value={sortOrder}
+                onChange={(e) => {
+                  setSortOrder(e.target.value);
+                }}
+                className="border border-gray-300 rounded-lg px-3 py-2 w-full"
+              >
+                <option value="asc">Ascending</option>
+                <option value="desc">Descending</option>
+              </select>
+            </div>
+          </div>
           <div className="mt-3 text-xs text-gray-500">
             Showing <strong>{evaluations.length}</strong> of <strong>{total}</strong> evaluations.
-            Page {page} of {pageCount}.
+            {flaggedEvaluations.length > 0 && (
+              <span className="ml-2 text-orange-600 font-medium">
+                {flaggedEvaluations.length} flagged for revision
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Evaluations List */}
+        {/* Bulk Revise Button */}
+        {flaggedEvaluations.length > 0 && (
+          <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Bulk Revision</h3>
+                <p className="text-sm text-gray-600">
+                  {flaggedEvaluations.length} cases flagged (NEEDS_REVIEW or REJECTED)
+                </p>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!confirm(`Revise all ${flaggedEvaluations.length} flagged cases using LLM? This will process them one by one.`)) return;
+                  
+                  setBulkReviseProgress({
+                    isActive: true,
+                    processed: 0,
+                    total: flaggedEvaluations.length,
+                    status: 'Starting bulk revision...',
+                  });
+
+                  let successCount = 0;
+                  let errorCount = 0;
+
+                  for (let i = 0; i < flaggedEvaluations.length; i++) {
+                    const e = flaggedEvaluations[i];
+                    const c = getCaseFromEvaluation(e);
+                    
+                    setBulkReviseProgress({
+                      isActive: true,
+                      processed: i,
+                      total: flaggedEvaluations.length,
+                      status: `Revising ${c.kind} case ${i + 1} of ${flaggedEvaluations.length}...`,
+                    });
+
+                    try {
+                      const res = await fetch('/api/admin/revise-case', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          caseId: c.id,
+                          caseType: c.kind,
+                          evaluationId: e.id,
+                        }),
+                      });
+                      if (res.ok) {
+                        successCount++;
+                      } else {
+                        errorCount++;
+                      }
+                    } catch (error) {
+                      console.error('Revise error:', error);
+                      errorCount++;
+                    }
+                  }
+
+                  setBulkReviseProgress({
+                    isActive: true,
+                    processed: flaggedEvaluations.length,
+                    total: flaggedEvaluations.length,
+                    status: 'Complete!',
+                  });
+
+                  setTimeout(() => {
+                    alert(`Bulk revision complete!\n- Successfully revised: ${successCount}\n- Errors: ${errorCount}\n\nRefreshing...`);
+                    setBulkReviseProgress(null);
+                    window.location.reload();
+                  }, 1000);
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                disabled={bulkReviseProgress?.isActive}
+              >
+                {bulkReviseProgress?.isActive ? 'Revising...' : `Bulk Revise ${flaggedEvaluations.length} Flagged Cases`}
+              </button>
+            </div>
+            {bulkReviseProgress?.isActive && (
+              <div className="mt-4">
+                <div className="flex justify-between text-sm text-gray-600 mb-2">
+                  <span>{bulkReviseProgress.status}</span>
+                  <span>
+                    {bulkReviseProgress.processed} / {bulkReviseProgress.total} ({Math.round((bulkReviseProgress.processed / bulkReviseProgress.total) * 100)}%)
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3">
+                  <div
+                    className="bg-blue-600 h-3 rounded-full transition-all duration-300"
+                    style={{
+                      width: `${(bulkReviseProgress.processed / bulkReviseProgress.total) * 100}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Evaluations Display */}
         {isLoading && (
           <div className="text-center py-12">
             <p className="text-gray-500">Loading evaluations...</p>
@@ -651,108 +799,125 @@ export default function ScoresPage() {
           </div>
         )}
 
-        <div className="space-y-6">
-          {evaluations.map((e) => {
-            const c = getCaseFromEvaluation(e);
-            const title =
-              c.kind === 'legacy'
+        {!isLoading && evaluations.length > 0 && (
+          <div className="bg-white rounded-lg shadow-sm p-6">
+            {/* Case Selection Dropdown */}
+            <div className="mb-6 flex items-center gap-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Select Evaluation ({currentIndex + 1} of {evaluations.length})
+                </label>
+                <div className="relative">
+                  <select
+                    value={currentIndex}
+                    onChange={(e) => setCurrentIndex(Number.parseInt(e.target.value, 10))}
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm font-medium bg-white"
+                  >
+                    {evaluations.map((e, idx) => {
+                      const c = getCaseFromEvaluation(e);
+                      const title = c.kind === 'legacy'
+                        ? `${c.sourceCase || e.question_id || 'legacy'} (${c.pearlLevel || '—'} / ${c.trapType || '—'})`
+                        : `${c.sourceCase || c.id} (${c.kind})`;
+                      return (
+                        <option key={e.id} value={idx}>
+                          [{e.overall_verdict}] {title} - {getPriorityLabel(e.priority_level)} Priority
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
+                  disabled={currentIndex === 0}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  ← Previous
+                </button>
+                <button
+                  onClick={() => setCurrentIndex(Math.min(evaluations.length - 1, currentIndex + 1))}
+                  disabled={currentIndex >= evaluations.length - 1}
+                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+
+            {/* Single Evaluation Display */}
+            {currentEvaluation && (() => {
+              const e = currentEvaluation;
+              const c = getCaseFromEvaluation(e);
+              const title = c.kind === 'legacy'
                 ? `${c.sourceCase || e.question_id || 'legacy'} (${c.pearlLevel || '—'} / ${c.trapType || '—'})`
                 : `${c.sourceCase || c.id} (${c.kind})`;
 
-            return (
-              <div
-                key={e.id}
-                className={`bg-white border-2 rounded-lg p-6 ${getVerdictColor(e.overall_verdict)}`}
-              >
-                {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-                      <span className="px-2 py-1 rounded text-xs font-bold border bg-white/80">
-                        {e.overall_verdict}
-                      </span>
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-medium ${getPriorityColor(
-                          e.priority_level
-                        )}`}
-                      >
-                        {getPriorityLabel(e.priority_level)} Priority
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-600 space-x-3">
-                      <span>Dataset: {c.dataset || '—'}</span>
-                      <span>·</span>
-                      <span>
-                        Batch:{' '}
-                        <span className="font-mono">
-                          {e.evaluation_batch_id ? e.evaluation_batch_id.slice(0, 8) : '—'}
+              return (
+                <div
+                  key={e.id}
+                  className={`border-2 rounded-lg p-6 ${getVerdictColor(e.overall_verdict)}`}
+                >
+                  {/* Header */}
+                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+                        <span className="px-2 py-1 rounded text-xs font-bold border bg-white/80">
+                          {e.overall_verdict}
                         </span>
-                      </span>
-                      <span>·</span>
-                      <span>Created {new Date(e.created_at).toLocaleString()}</span>
+                        <span
+                          className={`px-2 py-1 rounded text-xs font-medium ${getPriorityColor(
+                            e.priority_level
+                          )}`}
+                        >
+                          {getPriorityLabel(e.priority_level)} Priority
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-600 space-x-3">
+                        <span>Dataset: {c.dataset || '—'}</span>
+                        <span>·</span>
+                        <span>
+                          Batch:{' '}
+                          <span className="font-mono">
+                            {e.evaluation_batch_id ? e.evaluation_batch_id.slice(0, 8) : '—'}
+                          </span>
+                        </span>
+                        <span>·</span>
+                        <span>Created {new Date(e.created_at).toLocaleString()}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Action Buttons */}
-                <div className="flex gap-2 mb-4 flex-wrap">
-                  <button
-                    onClick={async () => {
-                      if (!confirm(`Use LLM to revise this ${c.kind} case based on the rubric feedback?`)) return;
-                      try {
-                        const res = await fetch('/api/admin/revise-case', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            caseId: c.id,
-                            caseType: c.kind,
-                            evaluationId: e.id,
-                          }),
-                        });
-                        if (res.ok) {
-                          alert('Case revised successfully! Refreshing...');
-                          window.location.reload();
-                        } else {
-                          const error = await res.json();
-                          alert(`Failed to revise: ${error.error || 'Unknown error'}`);
+                  {/* Action Buttons */}
+                  <div className="flex gap-2 mb-4 flex-wrap">
+                    <button
+                      onClick={async () => {
+                        if (!confirm(`Delete this ${c.kind} case? This will also delete its evaluation.`)) return;
+                        try {
+                          const endpoint = c.kind === 'legacy' 
+                            ? `/api/admin/questions/${c.id}`
+                            : `/api/admin/t3-cases/${c.id}`;
+                          const res = await fetch(endpoint, { method: 'DELETE' });
+                          if (res.ok) {
+                            alert('Case deleted. Refreshing...');
+                            window.location.reload();
+                          } else {
+                            const error = await res.json();
+                            alert(`Failed to delete: ${error.error || 'Unknown error'}`);
+                          }
+                        } catch (error) {
+                          console.error('Delete error:', error);
+                          alert('Failed to delete case');
                         }
-                      } catch (error) {
-                        console.error('Revise error:', error);
-                        alert('Failed to revise case');
-                      }
-                    }}
-                    className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
-                  >
-                    LLM Revise
-                  </button>
-                  <button
-                    onClick={async () => {
-                      if (!confirm(`Delete this ${c.kind} case? This will also delete its evaluation.`)) return;
-                      try {
-                        const endpoint = c.kind === 'legacy' 
-                          ? `/api/admin/questions/${c.id}`
-                          : `/api/admin/t3-cases/${c.id}`;
-                        const res = await fetch(endpoint, { method: 'DELETE' });
-                        if (res.ok) {
-                          alert('Case deleted. Refreshing...');
-                          window.location.reload();
-                        } else {
-                          const error = await res.json();
-                          alert(`Failed to delete: ${error.error || 'Unknown error'}`);
-                        }
-                      } catch (error) {
-                        console.error('Delete error:', error);
-                        alert('Failed to delete case');
-                      }
-                    }}
-                    className="px-3 py-1.5 bg-red-600 text-white text-sm rounded hover:bg-red-700"
-                  >
-                    Delete
-                  </button>
-                </div>
+                      }}
+                      className="px-3 py-1.5 bg-red-600 text-white text-sm rounded hover:bg-red-700"
+                    >
+                      Delete
+                    </button>
+                  </div>
 
-                {/* Case Content - Expanded */}
+                  {/* Case Content - Expanded */}
                 <div className="mb-6 space-y-4 bg-gray-50 rounded-lg p-4">
                   <h3 className="text-base font-semibold text-gray-900 mb-3">Case Data</h3>
                   
@@ -1101,35 +1266,9 @@ export default function ScoresPage() {
                     </div>
                   </details>
                 )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Pagination */}
-        {evaluations.length > 0 && (
-          <div className="mt-6 flex items-center justify-between bg-white rounded-lg shadow-sm p-4">
-            <div className="text-sm text-gray-600">
-              Page {page} of {pageCount} ({total} total evaluations)
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-300"
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                disabled={page >= pageCount}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-300"
-              >
-                Next
-              </button>
-            </div>
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>

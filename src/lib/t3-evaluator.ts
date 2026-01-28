@@ -80,8 +80,8 @@ function decideVerdict(totalScore: number, caseType: 'L1' | 'L2' | 'L3'): {
   priorityLevel: number;
   acceptanceThreshold: 'ACCEPT' | 'REVISE' | 'REJECT';
 } {
-  // Unified decision rule - same thresholds for all levels:
-  // ≥8.0 → ACCEPT, 6.0-7.5 → REVISE, <6.0 → REJECT
+  // Unified decision rule per Section A.3 of assignment requirements:
+  // ≥8.0 → ACCEPT, 6.0-7.0 (inclusive) → REVISE, <6.0 → REJECT
   let acceptanceThreshold: 'ACCEPT' | 'REVISE' | 'REJECT';
   let overallVerdict: T3OverallVerdict;
   let priorityLevel: number;
@@ -90,7 +90,7 @@ function decideVerdict(totalScore: number, caseType: 'L1' | 'L2' | 'L3'): {
     acceptanceThreshold = 'ACCEPT';
     overallVerdict = 'APPROVED';
     priorityLevel = 3;
-  } else if (totalScore >= 6.0) {
+  } else if (totalScore >= 6.0 && totalScore <= 7.0) {
     acceptanceThreshold = 'REVISE';
     overallVerdict = 'NEEDS_REVIEW';
     priorityLevel = 2;

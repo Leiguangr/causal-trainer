@@ -65,8 +65,20 @@ export interface EvaluateRequest {
 // POST - Start evaluation for legacy Question records
 export async function POST(req: NextRequest) {
   try {
-    const body: EvaluateRequest = await req.json();
+    let body: EvaluateRequest;
+    try {
+      body = await req.json();
+    } catch (error) {
+      return NextResponse.json({
+        error: 'Invalid JSON in request body',
+        details: error instanceof Error ? error.message : 'Unknown parsing error',
+      }, { status: 400 });
+    }
+
     const { dataset, questionIds, batchId, unverifiedOnly = false, skipAlreadyEvaluated = true } = body;
+
+    // Note: Empty dataset means "all datasets" - this is allowed
+    // At least one filter should be provided, but we allow empty dataset for "all"
 
     // Build query for questions to evaluate
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -112,11 +124,19 @@ export async function POST(req: NextRequest) {
       const errorDetails: string[] = [];
       if (initialCount === 0) {
         errorDetails.push('No questions found matching the specified criteria');
-        if (dataset) errorDetails.push(`Dataset: ${dataset}`);
+        if (dataset) {
+          errorDetails.push(`Dataset: "${dataset}"`);
+          errorDetails.push('(Note: This endpoint evaluates legacy Question records. If your dataset only contains T3 cases (L1/L2/L3), use the T3 evaluation endpoint instead.)');
+        } else {
+          errorDetails.push('(No dataset filter specified - searching all datasets)');
+        }
         if (batchId) errorDetails.push(`Generation batch: ${batchId}`);
         if (unverifiedOnly) errorDetails.push('Unverified only: true');
       } else if (evaluatedCount > 0) {
         errorDetails.push(`All ${initialCount} matching questions have already been evaluated`);
+        if (skipAlreadyEvaluated) {
+          errorDetails.push('(Set skipAlreadyEvaluated to false to re-evaluate existing questions)');
+        }
       }
       
       return NextResponse.json({
@@ -126,6 +146,9 @@ export async function POST(req: NextRequest) {
           evaluatedCount,
           remainingCount: questions.length,
           filters: { dataset, batchId, unverifiedOnly, skipAlreadyEvaluated },
+          suggestion: dataset && initialCount === 0 
+            ? 'This dataset may only contain T3 cases. Try using the T3 evaluation endpoint instead.'
+            : 'Check your filters or try selecting a different dataset.',
         },
       }, { status: 400 });
     }

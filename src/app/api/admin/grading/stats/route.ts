@@ -183,6 +183,50 @@ export async function GET(req: NextRequest) {
       }
     });
 
+    // Label distribution (by case type)
+    const labelDistribution: Record<string, Record<string, number>> = {
+      L1: { YES: 0, NO: 0, AMBIGUOUS: 0 },
+      L2: { NO: 0 },
+      L3: { VALID: 0, INVALID: 0, CONDITIONAL: 0 },
+      legacy: { YES: 0, NO: 0, AMBIGUOUS: 0, VALID: 0, INVALID: 0, CONDITIONAL: 0 },
+    };
+    evaluations.forEach(e => {
+      if (e.t3_case) {
+        const level = e.t3_case.pearl_level;
+        const label = e.t3_case.label;
+        if (level && labelDistribution[level] && labelDistribution[level][label] !== undefined) {
+          labelDistribution[level][label]++;
+        }
+      } else if (e.question) {
+        const gt = e.question.ground_truth;
+        if (gt && labelDistribution.legacy[gt] !== undefined) {
+          labelDistribution.legacy[gt]++;
+        }
+      }
+    });
+
+    // Trap type distribution (by case type)
+    const trapTypeDistribution: Record<string, Record<string, number>> = {
+      L1: {},
+      L2: {},
+      L3: {},
+      legacy: {},
+    };
+    evaluations.forEach(e => {
+      if (e.t3_case) {
+        const level = e.t3_case.pearl_level;
+        const trapType = e.t3_case.trap_type;
+        if (level && trapType) {
+          trapTypeDistribution[level][trapType] = (trapTypeDistribution[level][trapType] || 0) + 1;
+        }
+      } else if (e.question) {
+        const trapType = e.question.trap_type;
+        if (trapType) {
+          trapTypeDistribution.legacy[trapType] = (trapTypeDistribution.legacy[trapType] || 0) + 1;
+        }
+      }
+    });
+
     return NextResponse.json({
       total,
       verdictCounts,
@@ -206,6 +250,8 @@ export async function GET(req: NextRequest) {
       datasetCounts,
       timeSeries,
       batchCounts,
+      labelDistribution,
+      trapTypeDistribution,
     }, {
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',

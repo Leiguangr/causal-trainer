@@ -207,19 +207,30 @@ interface L1EvidenceSelection {
 
 // Select underrepresented trap type/subtype based on current distribution
 async function selectNextTrap(targetLevel?: PearlLevel): Promise<TrapSelection> {
-  // Get current distribution of trap types and subtypes
-  const existingQuestions = await prisma.question.findMany({
-    select: { pearl_level: true, trap_type: true, trap_subtype: true },
-  });
+  // Get current distribution of trap types and subtypes from BOTH Question and T3Case tables
+  const [existingQuestions, existingT3Cases] = await Promise.all([
+    prisma.question.findMany({
+      select: { pearl_level: true, trap_type: true, trap_subtype: true },
+    }),
+    prisma.t3Case.findMany({
+      select: { pearl_level: true, trap_type: true, trap_subtype: true },
+    }),
+  ]);
+
+  // Combine counts from both tables
+  const allCases = [
+    ...existingQuestions.map(q => ({ pearl_level: q.pearl_level, trap_type: q.trap_type, trap_subtype: q.trap_subtype })),
+    ...existingT3Cases.map(c => ({ pearl_level: c.pearl_level, trap_type: c.trap_type, trap_subtype: c.trap_subtype })),
+  ];
 
   // Count by level
   const levelCounts: Record<string, number> = { L1: 0, L2: 0, L3: 0 };
-  existingQuestions.forEach(q => {
-    if (q.pearl_level && levelCounts[q.pearl_level] !== undefined) {
-      levelCounts[q.pearl_level]++;
+  allCases.forEach(c => {
+    if (c.pearl_level && levelCounts[c.pearl_level] !== undefined) {
+      levelCounts[c.pearl_level]++;
     }
   });
-  const totalCount = existingQuestions.length || 1;
+  const totalCount = allCases.length || 1;
 
   // Determine which level to generate for
   let selectedLevel: PearlLevel;
@@ -238,14 +249,14 @@ async function selectNextTrap(targetLevel?: PearlLevel): Promise<TrapSelection> 
   // Get trap types valid for this level
   const validTrapTypes = getTrapTypesForLevel(selectedLevel);
 
-  // Count existing by trap type for this level
+  // Count existing by trap type for this level (from both tables)
   const trapTypeCounts: Record<string, number> = {};
   validTrapTypes.forEach(t => { trapTypeCounts[t.type] = 0; });
-  existingQuestions
-    .filter(q => q.pearl_level === selectedLevel)
-    .forEach(q => {
-      if (q.trap_type && trapTypeCounts[q.trap_type] !== undefined) {
-        trapTypeCounts[q.trap_type]++;
+  allCases
+    .filter(c => c.pearl_level === selectedLevel)
+    .forEach(c => {
+      if (c.trap_type && trapTypeCounts[c.trap_type] !== undefined) {
+        trapTypeCounts[c.trap_type]++;
       }
     });
 
@@ -272,14 +283,14 @@ async function selectNextTrap(targetLevel?: PearlLevel): Promise<TrapSelection> 
   // Get subtypes for this trap type and level
   const subtypes = getSubtypesForTypeAndLevel(selectedTrapType, selectedLevel);
 
-  // Count existing by subtype
+  // Count existing by subtype (from both tables)
   const subtypeCounts: Record<string, number> = {};
   subtypes.forEach(s => { subtypeCounts[s.name] = 0; });
-  existingQuestions
-    .filter(q => q.pearl_level === selectedLevel && q.trap_type === selectedTrapType)
-    .forEach(q => {
-      if (q.trap_subtype && subtypeCounts[q.trap_subtype] !== undefined) {
-        subtypeCounts[q.trap_subtype]++;
+  allCases
+    .filter(c => c.pearl_level === selectedLevel && c.trap_type === selectedTrapType)
+    .forEach(c => {
+      if (c.trap_subtype && subtypeCounts[c.trap_subtype] !== undefined) {
+        subtypeCounts[c.trap_subtype]++;
       }
     });
 
@@ -477,12 +488,39 @@ EVIDENCE TYPE (MUST FOLLOW EXACTLY - ALL FIELDS ARE MANDATORY):
 REQUIRED ELEMENTS (ALL must appear in your scenario):
 ${evidence.requiredElements.map(e => `  - ${e}`).join('\n')}
 
+${evidence.scenarioTemplate ? `SCENARIO TEMPLATE (follow this pattern with placeholders):
+${evidence.scenarioTemplate}
+` : ''}
+
 CANONICAL STRUCTURE (follow this narrative pattern):
 ${evidence.canonicalStructure.map(s => `  - ${s}`).join('\n')}
 
 DESIGN NOTES (critical guidance for implementation):
 ${evidence.designNotes.map(n => `  - ${n}`).join('\n')}
 ${evidence.keySignalWords?.length ? `- KEY SIGNAL WORDS to incorporate naturally: ${evidence.keySignalWords.join(', ')}` : ''}
+${evidence.keyPhrases?.length ? `- KEY PHRASES to include: ${evidence.keyPhrases.join(', ')}` : ''}
+
+${evidence.difficultyCalibration ? `DIFFICULTY CALIBRATION (use this to determine difficulty level):
+- Easy: ${evidence.difficultyCalibration.easy}
+- Medium: ${evidence.difficultyCalibration.medium}
+- Hard: ${evidence.difficultyCalibration.hard}
+` : ''}
+
+${evidence.validationChecklist ? `VALIDATION CHECKLIST (verify your generated case meets these criteria):
+${evidence.validationChecklist.map(q => `  - ${q}`).join('\n')}
+` : ''}
+
+${evidence.domainExamples?.length ? `DOMAIN EXAMPLES (for inspiration, adapt to your domain):
+${evidence.domainExamples.slice(0, 5).map(ex => `  - ${ex.domain}: ${ex.example}`).join('\n')}
+` : ''}
+
+${evidence.completeExample ? `COMPLETE EXAMPLE CASE (reference for structure and quality):
+Example: ${evidence.code}-${evidence.completeExample.difficulty || 'MEDIUM'}-001
+Scenario: ${evidence.completeExample.scenario}
+Claim: ${evidence.completeExample.claim}
+Ground Truth: ${evidence.completeExample.groundTruth}
+Explanation: ${evidence.completeExample.explanation}
+` : ''}
 
 IMPLIED GROUND TRUTH: ${evidence.impliedGroundTruth} (this evidence type maps to groundTruth="${evidence.impliedGroundTruth}")
 `
@@ -490,7 +528,9 @@ IMPLIED GROUND TRUTH: ${evidence.impliedGroundTruth} (this evidence type maps to
 EVIDENCE TYPE:
 - evidenceClass: NONE
 - evidenceType: null
-- This is an AMBIGUOUS case where the scenario lacks sufficient information to determine validity.
+- This is an AMBIGUOUS case where the causal graph structure is unclear.
+- CRITICAL: AMBIGUOUS does NOT mean there's a trap (traps → NO). AMBIGUOUS means the causal relationships themselves are ambiguous - different interpretations of what causes what could lead to different validities.
+- Example: If it's unclear whether X causes Y, Y causes X, or Z causes both, that's AMBIGUOUS. If there's a clear confounder Z that makes X→Y invalid, that's NO (with trap type W7/Confounding).
 `;
 
   const groundTruthRules = `GROUND TRUTH + EVIDENCE RULES (MUST OBEY):
@@ -576,7 +616,7 @@ REQUIRED FIELDS (ALL must be present in your JSON response, using snake_case):
    - Y: string or {name: string, role: string}
    - Z: array of strings (MUST be an array, even if empty: [])
 6. trap (object) - REQUIRED with structure:
-   - type: string (REQUIRED: W1-W10, S1-S8, or "A")
+   - type: string or null (REQUIRED: W1-W10 for NO cases, S1-S8 for YES cases, null for AMBIGUOUS cases)
    - type_name: string (optional but recommended)
    - subtype: string (optional)
    - subtype_name: string (optional)
@@ -596,8 +636,9 @@ OPTIONAL BUT RECOMMENDED FIELDS (using snake_case):
 
 CRITICAL REQUIREMENTS:
 - variables.Z MUST be an array: ["item1", "item2"] or [] if empty. NEVER a string or null.
-- label MUST match: "YES" for valid claims, "NO" for invalid claims, "AMBIGUOUS" for unclear
-- trap.type MUST be: W1-W10 for WOLF/NO cases, S1-S8 for SHEEP/YES cases, "A" for AMBIGUOUS
+- label MUST match: "YES" for valid claims, "NO" for invalid claims with identifiable traps, "AMBIGUOUS" for unclear causal graph structure
+- trap.type MUST be: W1-W10 for WOLF/NO cases, S1-S8 for SHEEP/YES cases, null for AMBIGUOUS (no trap type - the ambiguity is about causal structure, not a trap)
+- CRITICAL: If you can identify a specific trap type (confounding, selection bias, etc.), the case should be NO, not AMBIGUOUS. AMBIGUOUS is only for cases where the causal graph structure itself is unclear.
 - difficulty MUST be capitalized: "Easy", "Medium", or "Hard" (not "easy", "medium", "hard")
 - ⚠️ CRITICAL: causal_structure (string) - MANDATORY FOR ALL CASES. MUST be a natural language description in full sentences (NOT mathematical notation like "X -> Y"). Describe the causal relationships in plain English. Example: "X causes Y, but Z is a confounder that affects both X and Y" instead of "X -> Y, Z -> X, Z -> Y". This field CANNOT be empty or missing. Cases will be REJECTED if causal_structure is missing or empty.
 - claim MUST be present (not empty, not null)
@@ -627,7 +668,8 @@ function buildL2Prompt(
 
 3) VARIABLE HYGIENE:
    - X, Y, Z must be DISTINCT concepts and clearly labeled in-text.
-   - Z must be the ambiguous variable that drives the hidden question (not a duplicate of X).
+   - Z is REQUIRED in every L2 case: the ambiguous third variable that drives the hidden question (not a duplicate of X).
+   - variables.Z must be a non-empty array; never omit Z or use [].
 
 4) OUTPUT DISCIPLINE:
    - Return ONLY valid JSON with the exact keys in the specified output format.
@@ -673,35 +715,43 @@ COMMON PITFALLS TO AVOID (critical - do NOT make these mistakes):
 ${trapDef.commonPitfalls.map(p => `  - ${p}`).join('\n')}
 `;
 
+  const wiseRefusalTemplate = `WISE REFUSAL (4-part template - REQUIRED):
+1. Identify the specific causal ambiguity (due to [trap type]).
+2. State what information is missing (we cannot determine A vs B without knowing [hidden information]).
+3. Present both conditional interpretations ("If [A], then [interpretation A]. If [B], then [interpretation B].").
+4. Decline to endorse the causal claim ("Without this information, the causal claim is not justified.").
+Template: "The [claim] is ambiguous due to [trap type]. We cannot determine whether [A] or [B] without knowing [hidden information]. If [A], then [interpretation A]. If [B], then [interpretation B]. Without this information, the causal claim is not justified."`;
+
   return `You are generating ONE L2 causal reasoning case (revamped schema).
 
 MANDATORY SPECIFICATIONS:
-- Pearl Level: L2 (Intervention-level reasoning)
+- Pearl Level: L2 (causal disambiguation: classify trap type, identify pivotal question, give conditional interpretations, wise refusal)
 - Domain: ${domain}
 - REQUIRED Subdomain: ${subdomain} (YOU MUST set this scenario specifically in ${subdomain} - use subdomain-specific terminology, actors, and contexts)
 - Trap Type: ${trapType} (${trapDef.name})
-- Ground Truth: NO (INVALID) - The causal claim is INVALID due to the ${trapDef.name} trap
+- Ground Truth: NO (INVALID) - The causal claim is not justified; we refuse to endorse because hidden information is missing
 
 ${domainContext}
 
 ${globalGuardrails}
 
 L2 CASE STRUCTURE (Revamped):
-- Scenario: Narrative (3-6 sentences) describing a situation with X, Y, and optionally Z clearly labeled inline as (X), (Y), (Z)
-- Variables: X (exposure/intervention), Y (outcome), Z (ambiguous - could be confounder, mediator, collider, etc.)
-- Hidden Question: The critical question that must be asked to resolve the ambiguity (must align with "${trapDef.hiddenQuestionPattern}")
-- Answer if A: Interpretation when condition A is true (one coherent world where the claim is INVALID)
-- Answer if B: Interpretation when condition B is true (alternative coherent world where the claim is INVALID)
-- Wise Refusal: A refusal to answer definitively, explaining what information is missing and why it matters
+- Scenario: Narrative (3-6 sentences) describing an OBSERVED CORRELATION between X and Y, with Z present. Label X, Y, Z inline as (X), (Y), (Z). Z is REQUIRED.
+- Variables: X (exposure), Y (outcome), Z (ambiguous third variable - confounder, mediator, collider, etc.). All three required.
+- hidden_timestamp (Hidden Question): The temporal or structural question that would resolve the ambiguity (must align with "${trapDef.hiddenQuestionPattern}").
+- answer_if_condition_1 / answer_if_condition_2: Causal interpretation when condition A holds vs when B holds. The two interpretations must be MUTUALLY EXCLUSIVE and EXHAUSTIVE. Under one condition the claim may be invalid, under the other it may be valid; we refuse to endorse because we do not know which holds.
+- wise_refusal: Must follow the 4-part template below (identify ambiguity, state missing info, present both interpretations, decline to endorse).
+
+${wiseRefusalTemplate}
 
 CRITICAL REQUIREMENTS:
-1. The scenario must make the causal structure PLAUSIBLE but UNRESOLVED - the claim is INVALID (NO) regardless of which condition holds
-2. The hidden question MUST match the pattern: "${trapDef.hiddenQuestionPattern}"
-3. Answer if A and Answer if B must be MUTUALLY EXCLUSIVE and COHERENT - both should show the claim is INVALID, but for different reasons
-4. The wise refusal must be a REFUSAL (not a verdict) - it should explain what's missing to definitively identify the trap
-5. Variables X, Y, Z must be clearly labeled in the narrative using (X), (Y), (Z) notation
-6. The scenario must support TWO coherent conditional worlds (A and B) where the claim is INVALID
-7. Use domain-appropriate terminology from ${subdomain} to make the scenario feel authentic and grounded
+1. The scenario must describe an OBSERVED CORRELATION between X and Y, with Z present. Causal structure PLAUSIBLE but UNRESOLVED.
+2. The hidden question (hidden_timestamp) MUST match the pattern: "${trapDef.hiddenQuestionPattern}"
+3. answer_if_condition_1 and answer_if_condition_2 must be MUTUALLY EXCLUSIVE and EXHAUSTIVE. They give the causal interpretation under each possibility; we decline because we lack the hidden information (one branch may support the claim, one refute it).
+4. wise_refusal MUST follow the 4-part template: identify ambiguity, state missing info, present both interpretations, decline to endorse.
+5. Variables X, Y, Z must be clearly labeled in the narrative using (X), (Y), (Z). Z is REQUIRED (non-empty).
+6. The scenario must support TWO coherent conditional worlds (A and B) corresponding to the hidden question.
+7. Use domain-appropriate terminology from ${subdomain}. Prefer canonical subtypes for ${trapType} where applicable (e.g. per trap type: healthy user/volunteer/indication bias for T1; business survival/publication bias/attrition for T2; Berkson's paradox/M-bias for T3; etc.).
 
 ${trapBlock}
 
@@ -710,59 +760,60 @@ ${diversityBlock}
 
 OUTPUT FORMAT (Unified T3Case Schema - Table 9, valid JSON only, using snake_case for all field names):
 {
-  "scenario": "Description of the situation or problem (1-3 sentences) with X, Y, Z labeled inline as (X), (Y), (Z)",
+  "scenario": "Narrative describing OBSERVED CORRELATION between X and Y, with Z present (3-6 sentences). Label X, Y, Z inline as (X), (Y), (Z).",
   "claim": "The causal claim being evaluated (must be INVALID/NO)",
   "label": "NO (all L2 cases must be labeled NO)",
   "is_ambiguous": true,
   "variables": {
-    "X": "Exposure/intervention variable (string or {name: string, role: string})",
+    "X": "Exposure variable (string or {name: string, role: string})",
     "Y": "Outcome variable (string or {name: string, role: string})",
-    "Z": ["Array of strings describing confounders, mediators, colliders, or mechanisms"]
+    "Z": ["REQUIRED non-empty array - the ambiguous third variable (e.g. single string in array). Never []."]
   },
   "trap": {
     "type": "${trapType}",
     "type_name": "${trapDef.name}",
-    "subtype": "Optional trap subtype",
-    "subtype_name": "Optional human-readable subtype name"
+    "subtype": "Canonical subtype for this trap (e.g. per spec: healthy user/volunteer/indication for T1; Berkson's paradox/M-bias for T3; etc.)",
+    "subtype_name": "Human-readable subtype name"
   },
   "difficulty": "Easy|Medium|Hard",
-  "causal_structure": "Description of the causal graph structure in natural language (REQUIRED - use full sentences, NOT notation. Example: 'X causes Y, but Z is a confounder that affects both X and Y' instead of 'X -> Y, Z -> X, Z -> Y')",
+  "causal_structure": "Causal graph structure. Use natural language (required); you may also include arrow notation (→, ←, ↔) in addition. E.g. 'X causes Y, but Z is a confounder affecting both. (Z → X, Z → Y.)'",
   "key_insight": "One-line memorable takeaway",
-  "hidden_timestamp": "The critical question that must be asked (REQUIRED - must match pattern: ${trapDef.hiddenQuestionPattern})",
+  "hidden_timestamp": "The pivotal question that would resolve the ambiguity (REQUIRED - must match pattern: ${trapDef.hiddenQuestionPattern})",
   "conditional_answers": {
-    "answer_if_condition_1": "Complete interpretation when condition A is true (REQUIRED - one coherent world where claim is INVALID)",
-    "answer_if_condition_2": "Complete interpretation when condition B is true (REQUIRED - alternative coherent world where claim is INVALID)"
+    "answer_if_condition_1": "Causal interpretation when condition A holds (REQUIRED). Mutually exclusive and exhaustive with answer_if_condition_2.",
+    "answer_if_condition_2": "Causal interpretation when condition B holds (REQUIRED). One branch may support the claim, one refute it; we refuse because we lack hidden info."
   },
-  "wise_refusal": "A refusal explaining what information is missing and why it matters (NOT a verdict)",
-  "gold_rationale": "Complete explanation of why the claim is INVALID and what information is missing",
+  "wise_refusal": "MUST follow 4-part template: identify ambiguity, state missing info, present both interpretations, decline to endorse. See WISE REFUSAL above.",
+  "gold_rationale": "Complete explanation of why the claim is not justified and what information is missing",
   "domain": "${domain}",
   "subdomain": "${subdomain}"
 }
 
 REQUIRED FIELDS (ALL must be present in your JSON response, using snake_case):
-1. scenario (string) - REQUIRED
+1. scenario (string) - REQUIRED. Describe observed correlation between X, Y, with Z present.
 2. claim (string) - REQUIRED: The causal claim being evaluated (MUST be present for all L2 cases)
 3. label (string) - REQUIRED: MUST be "NO" for all L2 cases
 4. is_ambiguous (boolean) - REQUIRED: MUST be true (L2 cases are ambiguous by nature)
-5. variables (object) - REQUIRED with X, Y, Z where Z is an array
+5. variables (object) - REQUIRED with X, Y, Z. Z must be a NON-EMPTY array (never []).
 6. trap (object) - REQUIRED with type="${trapType}", type_name, subtype, subtype_name
 7. difficulty (string) - REQUIRED: "Easy", "Medium", or "Hard" (capitalized)
-8. causal_structure (string) - REQUIRED: Natural language description of the causal graph structure. Use full sentences, NOT mathematical notation. Example: "X causes Y, but Z is a confounder that affects both X and Y" instead of "X -> Y, Z -> X, Z -> Y"
-9. wise_refusal (string) - REQUIRED
+8. causal_structure (string) - REQUIRED: Causal graph in natural language (required). You may also include arrows (→, ←, ↔) in addition.
+9. wise_refusal (string) - REQUIRED. Must follow the 4-part template (identify ambiguity, state missing info, both interpretations, decline to endorse).
 10. gold_rationale (string) - REQUIRED: Complete explanation
-11. hidden_timestamp (string) - REQUIRED: The critical question that must be asked (must match pattern: ${trapDef.hiddenQuestionPattern})
-12. conditional_answers (object) - REQUIRED with answer_if_condition_1 and answer_if_condition_2
+11. hidden_timestamp (string) - REQUIRED: The pivotal question (must match pattern: ${trapDef.hiddenQuestionPattern})
+12. conditional_answers (object) - REQUIRED with answer_if_condition_1 and answer_if_condition_2. Mutually exclusive and exhaustive.
 
 CRITICAL REQUIREMENTS:
-- variables.Z MUST be an array: ["item"] or [] if empty. NEVER a string.
+- variables.Z MUST be a NON-EMPTY array (e.g. ["ambiguous variable"]). Never [] or omit. NEVER a string.
 - label MUST be "NO" (all L2 cases are invalid)
 - trap.type MUST be "${trapType}"
 - difficulty MUST be capitalized: "Easy", "Medium", or "Hard"
-- causal_structure MUST be a natural language description in full sentences (NOT mathematical notation like "X -> Y"). Describe the causal relationships in plain English.
+- causal_structure: Use natural language (required). You may include arrow notation (→, ←, ↔) in addition.
 - claim MUST be present (not empty, not null)
-- hidden_timestamp MUST be present (not empty, not null) - this is the critical question. MANDATORY for all L2 cases.
-- conditional_answers MUST be present with answer_if_condition_1 and answer_if_condition_2. MANDATORY for all L2 cases.
-- CRITICAL: Both hidden_timestamp AND conditional_answers are REQUIRED. Cases will be REJECTED if either is missing.
+- hidden_timestamp MUST be present (not empty, not null). MANDATORY for all L2 cases.
+- conditional_answers MUST be present with answer_if_condition_1 and answer_if_condition_2. Mutually exclusive and exhaustive. MANDATORY.
+- wise_refusal MUST follow the 4-part template. Cases will be REJECTED if wise_refusal omits any of: identify ambiguity, state missing info, present both interpretations, decline to endorse.
+- CRITICAL: hidden_timestamp, conditional_answers, and wise_refusal are REQUIRED. Cases will be REJECTED if any are missing.
 - All 12 required fields above MUST be present in your JSON
 
 Return ONLY valid JSON matching this exact structure with ALL required fields.`;
@@ -788,6 +839,7 @@ function buildL3Prompt(
 
 3) VARIABLE HYGIENE:
    - X (antecedent), Y (consequent), Z (mechanism/context) must be DISTINCT.
+   - X and Y must be SINGLE, identifiable variables (not conflated with multiple unrelated changes).
    - Make Z a concrete mechanism or constraint (e.g., order-book liquidity, contractual payout rule, margin constraints).
 
 4) OUTPUT DISCIPLINE:
@@ -837,6 +889,159 @@ ${familyDef.generatorHeuristic}
 TYPICAL MAJORITY LABEL: ${familyDef.typicalMajorityLabel} (but you are targeting ${l3GroundTruth})
 `;
 
+  // Build CONDITIONAL-specific requirements
+  const conditionalRequirements = l3GroundTruth === 'CONDITIONAL' ? `
+CRITICAL: CONDITIONAL LABEL REQUIREMENTS (Section 4.3 of spec):
+A case is labeled CONDITIONAL when the scenario and invariants do not determine a unique answer, 
+and at least two reasonable completions of missing invariants lead to different labels.
+
+YOU MUST:
+1. Explicitly list ALL missing invariants in the invariants array using format: "Not specified: [what is missing]"
+   Example: "Not specified: whether agent holds or sells during volatility"
+   Example: "Not specified: whether backup cause would have fired"
+
+2. In conditional_answers, show how different invariant completions lead to DIFFERENT labels:
+   - answer_if_condition_1: Show reasoning that leads to VALID (when one invariant completion is assumed)
+   - answer_if_condition_2: Show reasoning that leads to INVALID (when a different invariant completion is assumed)
+
+3. In hidden_timestamp, ask a question that would reveal the missing invariant information.
+
+4. In gold_rationale, explain why the case is CONDITIONAL by citing the missing invariants and showing 
+   how different completions yield different conclusions.
+
+EXAMPLE (from spec Appendix B.2):
+Scenario: "You did not buy Bitcoin in 2010 (X = 0). You claim: 'If I had bought $100 of Bitcoin, I would be a millionaire today.'"
+Invariants: ["Not specified: whether the agent holds or sells during volatility"]
+conditional_answers: {
+  "answer_if_condition_1": "VALID - If agent holds through volatility, the claim is correct",
+  "answer_if_condition_2": "INVALID - If agent sells during volatility, the claim is incorrect"
+}
+` : '';
+
+  // Key counterfactual concepts
+  const keyConcepts = `
+KEY COUNTERFACTUAL CONCEPTS (Section 2.3 of spec):
+
+1. BUT-FOR CAUSATION:
+   X is a but-for cause of Y if Y would not have occurred but for X.
+   Formally: Yx=0 = 0 when Yx=1 = 1.
+   Example: "If the dam hadn't been there, the flood would have destroyed the town" (valid if dam was only barrier)
+
+2. OVERDETERMINATION:
+   When multiple causes each suffice for Y, removing one does not prevent Y.
+   Example: Two assassins act independently; removing either still results in death.
+   This is central to Family F3.
+
+3. PREEMPTION:
+   An early cause brings about Y and blocks a backup cause. The early cause is the actual cause 
+   even though the backup would have sufficed.
+   Example: Assassin A fires first and kills victim; Assassin B's bullet arrives too late.
+   This distinguishes VALID from INVALID in F3 cases.
+
+4. INVARIANTS:
+   Variables held fixed across worlds. Different invariant choices can yield different counterfactual 
+   conclusions, so invariants must be stated explicitly in each case.
+   CRITICAL: The same scenario with different invariants can yield different labels.
+`;
+
+  // Deterministic vs Probabilistic guidance
+  const deterministicProbabilisticGuidance = `
+DETERMINISTIC VS PROBABILISTIC PHRASING (Section 2.2 of spec):
+
+Policy for stochastic scenarios:
+- If the counterfactual is worded DETERMINISTICALLY ("would", "would have"), then a purely stochastic 
+  link typically forces CONDITIONAL unless the scenario pins down a near-deterministic mechanism 
+  or an explicit probability threshold.
+
+- If the claim is PROBABILISTIC ("more likely", "reduces risk", "increases probability"), then 
+  VALID can be used when a material probability shift follows from stated mechanisms.
+
+MATCHING REQUIREMENT:
+- If your mechanism is deterministic (rule-based, necessary condition), use deterministic wording: "would have"
+- If your mechanism is probabilistic (background risk, stochastic), use probabilistic wording: "more likely", "reduces risk"
+- If you use deterministic wording with a stochastic mechanism, the label should typically be CONDITIONAL
+
+Examples:
+- Deterministic: "If the dam had not been built, the town would have flooded" (VALID if dam is only barrier)
+- Probabilistic: "If the dam had not been built, the town would have been more likely to flood" (VALID if dam materially reduces flood risk)
+- Mismatch: "If the dam had not been built, the town would have flooded" + stochastic mechanism = CONDITIONAL
+`;
+
+  // SCM Procedure requirements
+  const scmProcedure = `
+STRUCTURAL CAUSAL MODEL (SCM) PROCEDURE (Section 2.1 of spec):
+
+Every counterfactual must be evaluable via the three-step procedure:
+
+1. ABDUCTION: Infer the relevant latent state from observed evidence
+   - Your scenario must provide enough information to infer unobserved variables
+   - Example: From "Alice missed her flight by 5 minutes" and "boarding closes 10 minutes before departure", 
+     we can infer that arriving on time would have allowed boarding.
+
+2. ACTION: Modify the antecedent (set X ← x)
+   - The counterfactual claim explicitly states this modification
+   - Example: "If Alice had arrived on time" sets X = arrived_on_time
+
+3. PREDICTION: Propagate the change under declared invariants to obtain Yx
+   - Use the invariants to determine how the change propagates
+   - Example: Under invariant "boarding rules unchanged", arriving on time → boarding → death (if plane crashes)
+
+Your scenario must support all three steps. If abduction is impossible (insufficient information), 
+the case should be CONDITIONAL.
+`;
+
+  // Quality checklist
+  const qualityChecklist = `
+QUALITY CRITERIA CHECKLIST (Section 5.3 of spec):
+
+Each case must satisfy ALL of the following:
+
+✓ SELF-CONTAINED: Scenario includes all facts needed; no external knowledge required
+✓ CLARITY: X, Y, Z, and invariants are unambiguous and well-defined
+✓ CORRECTNESS: Label is defensible; gold_rationale (justification) is sound under stated invariants
+✓ FAMILY FIT: Case clearly tests the assigned counterfactual pattern (${familyDef.name})
+✓ NOVELTY: Not a trivial variant of an existing case
+✓ REALISM: Scenario is plausible (real-world or realistic hypothetical)
+✓ DETERMINACY: Label is defensible under normal reading and stable under reasonable paraphrases
+✓ ANNOTATION CORRECTNESS: Chosen family (${family}) matches the core reasoning challenge
+
+Before finalizing, verify each criterion is met.
+`;
+
+  // RCA structure guidance
+  const rcaStructure = `
+REGULATED CAUSAL ANCHORING (RCA) RUBRIC STRUCTURE (Appendix A of spec):
+
+Your wise_refusal and gold_rationale should follow the RCA structure:
+
+1. LABEL: State the verdict (VALID/INVALID/CONDITIONAL)
+2. GRAPH: Describe the causal structure in words
+3. INVARIANTS: State what is held fixed across worlds
+4. JUSTIFICATION: Explain how changing X affects Y (this is part of gold_rationale)
+5. EVIDENCE: Cite specific facts from the scenario text
+6. MISSING: If CONDITIONAL, state what information would resolve it
+
+${l3GroundTruth === 'CONDITIONAL' ? `
+For CONDITIONAL cases, the "MISSING" section is CRITICAL:
+- List the missing invariants explicitly
+- Explain how different completions lead to different labels
+- State what information would resolve the counterfactual
+` : ''}
+
+NOTE: The spec Section 4.1 mentions both "Justification" and "WiseResponse" as separate fields, but in practice:
+- gold_rationale serves as the justification (2-4 sentences grounded in Scenario + Invariants)
+- wise_refusal serves as the wise response (brief structured reasoning template)
+`;
+
+  // Distribution guidance (informational)
+  const distributionGuidance = `
+TARGET DISTRIBUTIONS (Section 5.2 of spec - for reference):
+- Ground truth: ~35% VALID, ~25% INVALID, ~40% CONDITIONAL
+- Difficulty: ~25% Easy, ~45% Medium, ~30% Hard
+
+These are batch-level targets; generate cases that match the assigned target label and difficulty.
+`;
+
   return `You are generating ONE T3-L3 counterfactual reasoning case.
 
 MANDATORY SPECIFICATIONS:
@@ -850,6 +1055,12 @@ ${domainContext}
 
 ${globalGuardrails}
 
+${keyConcepts}
+
+${deterministicProbabilisticGuidance}
+
+${scmProcedure}
+
 COUNTERFACTUAL-SPECIFIC DOMAIN GUIDANCE:
 When creating counterfactual scenarios in ${subdomain}, consider:
 - What mechanisms or rules govern causality in this subdomain?
@@ -859,50 +1070,62 @@ When creating counterfactual scenarios in ${subdomain}, consider:
 
 GLOBAL L3 DESIGN CONSTRAINTS (apply to all families):
 1. Explicit alternative world: Every case must be evaluable via:
-   - Abduction (infer latent state)
-   - Action (modify X)
-   - Prediction (propagate under invariants)
+   - Abduction (infer latent state from observed evidence)
+   - Action (modify the antecedent: set X ← x)
+   - Prediction (propagate the change under declared invariants to obtain Yx)
 
 2. Invariant sensitivity: Labels depend on whether stated invariants pin down the counterfactual mechanism.
+   CRITICAL: Different invariant choices can yield different counterfactual conclusions.
 
 3. Label semantics:
-   - VALID → X is counterfactually relevant to Y under stated invariants
-   - INVALID → Y is invariant to X under stated invariants
-   - CONDITIONAL → missing or ambiguous invariants permit multiple defensible answers
+   - VALID → X is counterfactually relevant to Y under stated invariants (changing X would change Y, or materially change the probability of Y)
+   - INVALID → Y is invariant to X under stated invariants (changing X would not change Y, e.g., due to overdetermination, spurious linkage, or causal independence)
+   - CONDITIONAL → missing or ambiguous invariants permit multiple defensible answers (at least two reasonable completions of missing invariants lead to different labels)
 
 Your generator should NEVER rely on external knowledge; all causal force must be internal to the scenario text.
 
 ${familyBlock}
 
-SCENARIO STRUCTURE (T3-L3):
+${conditionalRequirements}
+
+${qualityChecklist}
+
+${rcaStructure}
+
+${distributionGuidance}
+
+SCENARIO STRUCTURE (T3-L3 per Section 4.1 of spec):
 - Scenario: 2-5 sentences describing what happened in World A (use inline variable notation (X), (Y), (Z) in-text)
 - Counterfactual Claim: "If [X had been different], then [Y]." (explicit counterfactual language)
-- Variables: X (Antecedent), Y (Consequent), Z (Mechanism/Context)
-- Invariants: 1-3 bullets specifying what is held fixed across worlds (if unknown, state: "Not specified: ...")
+- Variables: X (Antecedent - single, identifiable), Y (Consequent - single, identifiable), Z (Mechanism/Context)
+- Invariants: 1-3 bullets specifying what is held fixed across worlds
+  * If unknown, MUST state explicitly: "Not specified: [what is missing]"
+  * For CONDITIONAL cases, ALL missing invariants must be listed
 - Ground Truth: VALID | INVALID | CONDITIONAL
-- Justification: 2-4 sentences grounded in Scenario + Invariants
-- Wise Response: Brief structured reasoning template
+- Gold Rationale: 2-4 sentences grounded in Scenario + Invariants (serves as both justification and gold rationale per spec Section 4.1)
+- Wise Response: Brief structured reasoning template following RCA rubric
 
 STYLE CONSTRAINTS:
 - Be concise (2-5 sentences for scenario)
-- Use explicit counterfactual language ("would have", "had X not occurred")
+- Use explicit counterfactual language matching mechanism determinism ("would have" for deterministic, "more likely" for probabilistic)
 - Clearly state invariants - they determine the label
 - All causal reasoning must be derivable from the scenario text
 - Use domain-appropriate terminology from ${subdomain} to make the scenario feel authentic and grounded
+- Ensure label is stable under reasonable paraphrases of the claim (determinacy requirement)
 
 ${promptNotes ? `ADDITIONAL INSTRUCTIONS:\n${promptNotes}\n` : ''}
 ${diversityBlock}
 
 OUTPUT FORMAT (valid JSON only, using snake_case for all field names):
 {
-  "case_id": "Optional case ID",
-  "scenario": "Description of the situation or problem (1-3 sentences) - what happened in World A (use inline (X), (Y), (Z) notation)",
+  "case_id": "Optional case ID (format: ${family}-D[domain]-[number] recommended)",
+  "scenario": "Description of the situation or problem (2-5 sentences) - what happened in World A (use inline (X), (Y), (Z) notation)",
   "counterfactual_claim": "If [X had been different], then [Y].",
   "label": "${l3GroundTruth}",
   "is_ambiguous": ${l3GroundTruth === 'CONDITIONAL' ? 'true' : 'false'},
   "variables": {
-    "X": "Antecedent variable (string or {name: string, role: string})",
-    "Y": "Consequent variable (string or {name: string, role: string})",
+    "X": "Antecedent variable (string or {name: string, role: string}) - MUST be single, identifiable variable",
+    "Y": "Consequent variable (string or {name: string, role: string}) - MUST be single, identifiable variable",
     "Z": ["Array of strings describing mechanisms, context, or constraints"]
   },
   "trap": {
@@ -914,16 +1137,17 @@ OUTPUT FORMAT (valid JSON only, using snake_case for all field names):
   "difficulty": "Easy|Medium|Hard",
   "causal_structure": "Description of the causal graph structure in natural language (REQUIRED - use full sentences, NOT notation. Example: 'X causes Y, but Z is a confounder that affects both X and Y' instead of 'X -> Y, Z -> X, Z -> Y')",
   "key_insight": "One-line memorable takeaway",
-  "hidden_timestamp": "Question that reveals temporal/causal ordering (REQUIRED if label is CONDITIONAL, otherwise omit)",
+  "hidden_timestamp": "Question that reveals temporal/causal ordering or missing invariant (REQUIRED if label is CONDITIONAL, otherwise omit)",
   "conditional_answers": {
-    "answer_if_condition_1": "Answer if condition 1 is true (REQUIRED if label is CONDITIONAL, otherwise omit)",
-    "answer_if_condition_2": "Answer if condition 2 is true (REQUIRED if label is CONDITIONAL, otherwise omit)"
+    "answer_if_condition_1": "Answer if condition 1 is true - show reasoning leading to VALID (REQUIRED if label is CONDITIONAL, otherwise omit)",
+    "answer_if_condition_2": "Answer if condition 2 is true - show reasoning leading to INVALID (REQUIRED if label is CONDITIONAL, otherwise omit)"
   },
-  "wise_refusal": "Brief structured reasoning template (response identifying missing information or biases)",
-  "gold_rationale": "Complete explanation of the correct reasoning (2-4 sentences grounded in Scenario + Invariants)",
+  "wise_refusal": "Brief structured reasoning template following RCA rubric (response identifying missing information or biases)",
+  "gold_rationale": "Complete explanation of the correct reasoning (2-4 sentences grounded in Scenario + Invariants) following RCA structure. This serves as both the justification and gold rationale per spec Section 4.1.",
   "invariants": [
     "1-3 bullets; what is held fixed across worlds",
-    "If unknown, state: 'Not specified: ...'"
+    "If unknown, MUST state: 'Not specified: [what is missing]'",
+    "${l3GroundTruth === 'CONDITIONAL' ? 'For CONDITIONAL: ALL missing invariants must be explicitly listed' : ''}"
   ],
   "domain": "${domain}",
   "subdomain": "${subdomain}"
@@ -934,34 +1158,43 @@ REQUIRED FIELDS (ALL must be present in your JSON response, using snake_case):
 2. counterfactual_claim (string) - REQUIRED: The counterfactual claim being evaluated (MUST be present for all L3 cases)
 3. label (string) - REQUIRED: "${l3GroundTruth}" (VALID, INVALID, or CONDITIONAL)
 4. is_ambiguous (boolean) - REQUIRED: true only if label is "CONDITIONAL"
-5. variables (object) - REQUIRED with X, Y, Z where Z is an array
+5. variables (object) - REQUIRED with X, Y, Z where Z is an array. X and Y must be single, identifiable variables.
 6. trap (object) - REQUIRED with type="${family}", type_name, subtype, subtype_name
 7. difficulty (string) - REQUIRED: "Easy", "Medium", or "Hard" (capitalized)
 8. causal_structure (string) - REQUIRED: Natural language description of the causal graph structure. Use full sentences, NOT mathematical notation. Example: "X causes Y, but Z is a confounder that affects both X and Y" instead of "X -> Y, Z -> X, Z -> Y"
-9. wise_refusal (string) - REQUIRED
-10. gold_rationale (string) - REQUIRED: Complete explanation (2-4 sentences)
-11. invariants (array) - REQUIRED: Array of invariant strings
+9. wise_refusal (string) - REQUIRED: Follow RCA rubric structure
+10. gold_rationale (string) - REQUIRED: Complete explanation (2-4 sentences grounded in Scenario + Invariants) following RCA structure. This serves as both the justification and gold rationale per spec Section 4.1.
+11. invariants (array) - REQUIRED: Array of invariant strings. If unknown, use "Not specified: [what is missing]" format.
 
 CONDITIONAL REQUIREMENTS (using snake_case):
 - If label is "CONDITIONAL" (is_ambiguous is true):
-  - hidden_timestamp (string) - MANDATORY: Question that reveals temporal/causal ordering. MUST be present and non-empty.
-  - conditional_answers (object) - MANDATORY: Object with answer_if_condition_1 and answer_if_condition_2. Both keys MUST be present and non-empty.
-  - CRITICAL: Both hidden_timestamp AND conditional_answers MUST be generated together. Cases will be REJECTED if either is missing.
+  - hidden_timestamp (string) - MANDATORY: Question that reveals missing invariant information. MUST be present and non-empty.
+  - conditional_answers (object) - MANDATORY: Object with answer_if_condition_1 and answer_if_condition_2. 
+    * answer_if_condition_1: Show reasoning that leads to VALID when one invariant completion is assumed
+    * answer_if_condition_2: Show reasoning that leads to INVALID when a different invariant completion is assumed
+    * Both keys MUST be present and non-empty.
+  - invariants array - MANDATORY: MUST explicitly list ALL missing invariants using "Not specified: [what is missing]" format
+  - gold_rationale - MANDATORY: MUST explain why case is CONDITIONAL by citing missing invariants and showing how different completions yield different conclusions
+  - CRITICAL: All of the above MUST be generated together. Cases will be REJECTED if any are missing.
 
 OPTIONAL FIELDS (using snake_case):
 - key_insight (string)
+- case_id (string)
 
 CRITICAL REQUIREMENTS:
 - variables.Z MUST be an array: ["item"] or [] if empty. NEVER a string.
+- variables.X and variables.Y MUST be single, identifiable variables (not conflated with multiple unrelated changes)
 - label MUST be "${l3GroundTruth}"
 - trap.type MUST be "${family}" (F1-F8)
 - causal_structure MUST be a natural language description in full sentences (NOT mathematical notation like "X -> Y"). Describe the causal relationships in plain English.
-- counterfactual_claim MUST be present (not empty, not null)
-- FOR CONDITIONAL CASES: hidden_timestamp AND conditional_answers are MANDATORY. Both MUST be generated. Cases will be REJECTED if either is missing.
+- counterfactual_claim MUST be present (not empty, not null) and match mechanism determinism (deterministic vs probabilistic wording)
+- invariants MUST be a non-empty array. If any invariant is unknown, MUST use "Not specified: [what is missing]" format.
+- FOR CONDITIONAL CASES: hidden_timestamp, conditional_answers, and explicit missing invariants are MANDATORY. All MUST be generated. Cases will be REJECTED if any are missing.
 - All 11 required fields above MUST be present in your JSON
 - difficulty MUST be capitalized: "Easy", "Medium", or "Hard"
-- invariants MUST be a non-empty array
-- All 10 required fields above MUST be present
+- Label must be defensible under normal reading and stable under reasonable paraphrases (determinacy requirement)
+- Case must clearly test the assigned counterfactual pattern (family fit requirement)
+- Scenario must be plausible and not a trivial variant of existing cases (novelty and realism requirements)
 
 Return ONLY valid JSON matching this exact structure with ALL required fields.`;
 }
@@ -1309,34 +1542,37 @@ ${promptNotes ? `\nADDITIONAL INSTRUCTIONS:\n${promptNotes}\n` : ''}
 ${diversityBlock}
 
 AMBIGUOUS CASES REQUIRE TWO ADDITIONAL FIELDS (MANDATORY):
-1. "hidden_timestamp": A question that would reveal temporal/causal ordering to disambiguate the case.
-   Example: "Did sales lag throughout the quarter (tX effect), or only during the storm window (tZ effect)?"
-2. "conditional_answers": JSON object with "answer_if_condition_1" and "answer_if_condition_2" keys.
+CRITICAL: AMBIGUOUS cases are about UNCLEAR CAUSAL GRAPH STRUCTURE, not traps. If you can identify a specific trap type (confounding, selection bias, etc.), the case should be NO, not AMBIGUOUS.
+
+1. "hidden_timestamp": A question that would reveal the causal graph structure to disambiguate the case.
+   Example: "Did X occur before Y, or did Y occur before X?" (for reverse causation ambiguity)
+   Example: "Is Z a confounder affecting both X and Y, or is Z a mediator between X and Y?" (for structural ambiguity)
+2. "conditional_answers": JSON object with "answer_if_condition_1" and "answer_if_condition_2" keys showing how different causal graph interpretations lead to different validities.
    Example: {
-     "answer_if_condition_1": "Answer if tZ dominates (storm drove results): The storm (Z) prevented shoppers...",
-     "answer_if_condition_2": "Answer if tX dominates (sales lagged before storm): Sales were bad (Y) due to mix (X)..."
+     "answer_if_condition_1": "Answer if X→Y (direct causation): YES - X directly causes Y...",
+     "answer_if_condition_2": "Answer if Z→X and Z→Y (confounding): NO - Z is a confounder making X→Y invalid..."
    }
 
 OUTPUT FORMAT (valid JSON only, using snake_case for all field names):
 {
-  "scenario": "CONCISE scenario (2-3 sentences, 40-80 words) using inline (X), (Y), (Z) notation. Present facts without enough info to determine validity.",
+  "scenario": "CONCISE scenario (2-3 sentences, 40-80 words) using inline (X), (Y), (Z) notation. Present facts where the causal graph structure is unclear - multiple plausible causal interpretations exist.",
   "claim": "The claim to evaluate - language MUST match Pearl level.",
   "variables": {
     "X": "Primary treatment/cause variable",
     "Y": "Outcome variable",
-    "Z": ["Ambiguous variable (timing unclear, role uncertain)"]
+    "Z": ["Variable with unclear causal role (could be confounder, mediator, collider, or independent cause)"]
   },
   "label": "AMBIGUOUS",
   "is_ambiguous": true,
   "trap": {
-    "type": "A",
+    "type": null,
     "subtype": null
   },
   "difficulty": "Medium",
-  "causal_structure": "MANDATORY - Natural language description of causal relationships in full sentences, NOT mathematical notation. Example: 'X may cause Y, but the timing of Z relative to X and Y is unclear' or 'X and Y are correlated, but it is unclear whether X causes Y, Y causes X, or Z causes both'. DO NOT use notation like 'X -> Y'.",
-  "key_insight": "One-line key takeaway about what information is missing",
-  "wise_refusal": "Complete answer starting with 'AMBIGUOUS - cannot definitively evaluate.' followed by clear reasoning about what information is missing and what would be needed to resolve it.",
-  "gold_rationale": "Explanation (50-100 words) of what information is MISSING and why we cannot definitively evaluate the claim.",
+  "causal_structure": "MANDATORY - Natural language description showing the AMBIGUITY in causal relationships. Describe multiple plausible causal graph interpretations. Example: 'It is unclear whether X causes Y directly, Y causes X (reverse causation), or Z causes both X and Y (confounding). The available information does not distinguish between these causal structures.' DO NOT use notation like 'X -> Y'.",
+  "key_insight": "One-line key takeaway about what causal graph structure is ambiguous",
+  "wise_refusal": "Complete answer starting with 'AMBIGUOUS - the causal graph structure is unclear.' followed by clear reasoning about which causal relationships are ambiguous and how different interpretations would lead to different validities.",
+  "gold_rationale": "Explanation (50-100 words) of why the causal graph structure is ambiguous - what causal relationships are unclear and how different interpretations (e.g., X→Y vs Y→X vs Z→X and Z→Y) could lead to different validities.",
   "hidden_timestamp": "A question that reveals temporal/causal ordering needed to resolve ambiguity.",
   "conditional_answers": {
     "answer_if_condition_1": "Answer if [condition A]: [reasoning under that assumption]...",
@@ -1536,7 +1772,7 @@ interface GeneratedT3Case {
   hidden_timestamp?: string | object;
   conditional_answers?: object | { answer_if_condition_1?: string; answer_if_condition_2?: string };
   wise_refusal?: string;
-  gold_rationale?: string;
+  gold_rationale?: string; // For L3: Complete explanation (2-4 sentences) grounded in Scenario + Invariants. Serves as both justification and gold rationale per spec.
   invariants?: string[]; // For L3
   domain?: string;
   subdomain?: string;
@@ -1859,7 +2095,8 @@ async function processBatchGenerationResult(
       if (expectedClass === 'SHEEP' && !generated.trap.type.match(/^S[1-8]$/)) {
         return { success: false };
       }
-      if (expectedClass === 'NONE' && generated.trap.type !== 'A' && generated.label !== 'AMBIGUOUS') {
+      if (expectedClass === 'NONE' && generated.trap.type !== null && generated.trap.type !== '' && generated.label === 'AMBIGUOUS') {
+        // AMBIGUOUS cases should not have a trap type (null or empty)
         return { success: false };
       }
       if (meta.evidenceSelection?.evidence.code && generated.trap.type !== meta.evidenceSelection.evidence.code) {
@@ -2678,8 +2915,8 @@ async function runBackgroundGeneration(
             errorCount++;
             continue;
           }
-          if (expectedClass === 'NONE' && generated.trap.type !== 'A' && generated.label !== 'AMBIGUOUS') {
-            console.log(`[Batch ${batchId}] Skipping: AMBIGUOUS case must have trap type A, got ${generated.trap.type}`);
+          if (expectedClass === 'NONE' && generated.label === 'AMBIGUOUS' && generated.trap.type !== null && generated.trap.type !== '' && generated.trap.type !== 'A') {
+            console.log(`[Batch ${batchId}] Skipping: AMBIGUOUS case must have trap type null (not set), got ${generated.trap.type}`);
             errorCount++;
             continue;
           }
@@ -2784,7 +3021,7 @@ async function runBackgroundGeneration(
               {
                 role: 'system',
                 content:
-                  'You generate high-quality L2 causal reasoning cases with hidden questions and conditional answers. Follow the specifications EXACTLY. Return only valid JSON.',
+                  'You generate high-quality L2 causal disambiguation cases. Include: trap type, pivotal hidden question (hidden_timestamp), mutually exclusive and exhaustive conditional answers, and a 4-part wise refusal (identify ambiguity, state missing info, both interpretations, decline to endorse). Z is required in every case (non-empty array). Follow the specifications EXACTLY. Return only valid JSON.',
               },
               { role: 'user', content: prompt },
             ],
@@ -2905,6 +3142,12 @@ async function runBackgroundGeneration(
             errorCount++;
             continue;
           }
+          const zArr = Array.isArray(generated.variables.Z) ? generated.variables.Z : (generated.variables.Z ? [String(generated.variables.Z)] : []);
+          if (!zArr.length) {
+            console.log(`[Batch ${batchId}] Skipping: L2 case must have non-empty variables.Z (spec requires Z in every L2 case)`);
+            errorCount++;
+            continue;
+          }
 
           // Validate hidden_timestamp and conditional_answers are both present for L2
           const hasHiddenTimestamp = generated.hidden_timestamp && 
@@ -2926,11 +3169,12 @@ async function runBackgroundGeneration(
           const difficultyRaw = (generated.difficulty?.toLowerCase() as 'easy' | 'medium' | 'hard' | undefined) || 'medium';
           const difficulty = difficultyRaw.charAt(0).toUpperCase() + difficultyRaw.slice(1); // "Easy", "Medium", "Hard"
 
-          // Ensure variables.Z is always an array
+          // Ensure variables.Z is always an array (already validated non-empty above)
           const variables = generated.variables || { X: '', Y: '', Z: [] };
           if (!Array.isArray(variables.Z)) {
-            variables.Z = variables.Z ? [String(variables.Z)] : [];
+            variables.Z = variables.Z ? [String(variables.Z)] : zArr;
           }
+          if (!variables.Z.length) variables.Z = zArr;
 
           // Prepare conditional answers from unified format
           let conditional_answers: string | null = null;

@@ -64,16 +64,47 @@ export default function EvaluatePage() {
   useEffect(() => {
     if (currentBatch?.status === 'running') {
       const interval = setInterval(async () => {
-        const res = await fetch(`/api/admin/evaluate?batchId=${currentBatch.id}`, { cache: 'no-store' });
+        // Try both endpoints to support both legacy and T3 evaluations
+        let res = await fetch(`/api/admin/evaluate?batchId=${currentBatch.id}`, { cache: 'no-store' });
+        let data;
+        
         if (res.ok) {
-          const data = await res.json();
-          setCurrentBatch(data.batch);
-          if (data.batch.status === 'completed') {
-            fetchBatches();
-            setEvaluations(data.batch.evaluations);
+          data = await res.json();
+          if (data.error) {
+            // Try T3 endpoint if legacy returns error
+            res = await fetch(`/api/admin/evaluate-t3-cases?batchId=${currentBatch.id}`, { cache: 'no-store' });
+            if (res.ok) {
+              data = await res.json();
+            }
+          }
+        } else {
+          // Try T3 endpoint if legacy fails
+          res = await fetch(`/api/admin/evaluate-t3-cases?batchId=${currentBatch.id}`, { cache: 'no-store' });
+          if (res.ok) {
+            data = await res.json();
           }
         }
-      }, 3000);
+        
+        if (res.ok && data?.batch) {
+          setCurrentBatch(data.batch);
+          if (data.batch.status === 'completed' || data.batch.status === 'failed') {
+            fetchBatches();
+            if (data.batch.evaluations) {
+              setEvaluations(data.batch.evaluations);
+            }
+            // Auto-close modal after a brief delay
+            setTimeout(() => {
+              setCurrentBatch(null);
+              // Show completion message
+              if (data.batch.status === 'completed') {
+                alert(`Evaluation completed! ${data.batch.completed_count} cases evaluated.`);
+              } else if (data.batch.status === 'failed') {
+                alert(`Evaluation failed: ${data.batch.error_message || 'Unknown error'}`);
+              }
+            }, 1000);
+          }
+        }
+      }, 2000); // Poll every 2 seconds for more responsive updates
       return () => clearInterval(interval);
     }
   }, [currentBatch]);
@@ -281,12 +312,95 @@ export default function EvaluatePage() {
             </button>
           </div>
         </div>
-        {currentBatch?.status === 'running' && (
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold text-purple-900 mb-2">Evaluation in Progress...</h2>
-            <div className="flex items-center gap-4">
-              <div className="flex-1 bg-purple-200 rounded-full h-4"><div className="bg-purple-600 h-4 rounded-full" style={{ width: `${(currentBatch.completed_count / currentBatch.total_count) * 100}%` }} /></div>
-              <span className="text-purple-900 font-mono">{currentBatch.completed_count}/{currentBatch.total_count}</span>
+        {/* Evaluation Progress Modal */}
+        {(currentBatch?.status === 'running' || currentBatch?.status === 'pending') && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full mx-4">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold text-gray-900">Evaluating Cases</h2>
+                <button
+                  onClick={() => setCurrentBatch(null)}
+                  className="text-gray-400 hover:text-gray-600 text-xl font-bold"
+                  title="Close (evaluation will continue in background)"
+                >
+                  ×
+                </button>
+              </div>
+              
+              {/* Progress Bar */}
+              <div className="mb-4">
+                <div className="flex justify-between text-sm text-gray-600 mb-2">
+                  <span>
+                    {currentBatch.completed_count} / {currentBatch.total_count} evaluated
+                  </span>
+                  <span>
+                    {currentBatch.total_count > 0 
+                      ? Math.round((currentBatch.completed_count / currentBatch.total_count) * 100) 
+                      : 0}%
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                  <div
+                    className="bg-purple-600 h-4 rounded-full transition-all duration-300"
+                    style={{
+                      width: currentBatch.total_count > 0 
+                        ? `${(currentBatch.completed_count / currentBatch.total_count) * 100}%` 
+                        : '0%',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Status */}
+              <div className="mb-4">
+                <p className="text-sm text-gray-700 font-medium mb-2">Status:</p>
+                <p className="text-sm text-gray-600">
+                  {currentBatch.completed_count === 0 
+                    ? 'Starting evaluation...' 
+                    : currentBatch.completed_count < currentBatch.total_count
+                    ? `Evaluating case ${currentBatch.completed_count + 1} of ${currentBatch.total_count}...`
+                    : 'Finalizing evaluation...'}
+                </p>
+              </div>
+
+              {/* Batch Info */}
+              <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">Dataset:</span>
+                    <span className="ml-2 font-medium">{currentBatch.dataset || 'All datasets'}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Started:</span>
+                    <span className="ml-2 font-medium">
+                      {new Date(currentBatch.created_at).toLocaleTimeString()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Loading indicator */}
+              {currentBatch.status === 'running' && (
+                <div className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600"></div>
+                  <span className="ml-2 text-sm text-gray-600">Processing...</span>
+                </div>
+              )}
+
+              {/* Pending status */}
+              {currentBatch.status === 'pending' && (
+                <div className="flex items-center justify-center">
+                  <div className="animate-pulse text-purple-600">⏳</div>
+                  <span className="ml-2 text-sm text-gray-600">Initializing evaluation...</span>
+                </div>
+              )}
+
+              {/* Note */}
+              <p className="text-xs text-gray-500 mt-4 text-center">
+                {currentBatch.status === 'pending' 
+                  ? 'Evaluation is being prepared...'
+                  : 'You can close this window - evaluation will continue in the background'}
+              </p>
             </div>
           </div>
         )}

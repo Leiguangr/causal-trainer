@@ -75,13 +75,60 @@ export async function PATCH(
     }
 
     // Handle trap structure
+    let trapType: string | undefined;
     if (body.trap) {
-      updateData.trap_type = body.trap.type || body.trap_type;
+      trapType = body.trap.type || body.trap_type;
       updateData.trap_type_name = body.trap.type_name ?? null;
       updateData.trap_subtype = body.trap.subtype ?? null;
       updateData.trap_subtype_name = body.trap.subtype_name ?? null;
     } else if (body.trap_type) {
-      updateData.trap_type = body.trap_type;
+      trapType = body.trap_type;
+    }
+
+    // Validate case consistency: label must match trap_type
+    if (updateData.label && trapType !== undefined) {
+      const label = updateData.label;
+      const existingCase = await prisma.t3Case.findUnique({ 
+        where: { id },
+        select: { pearl_level: true, label: true, trap_type: true }
+      });
+      
+      if (existingCase?.pearl_level === 'L1') {
+        // For L1 cases, validate label matches trap_type
+        if (label === 'AMBIGUOUS' && trapType !== null && trapType !== '') {
+          return NextResponse.json(
+            { error: 'AMBIGUOUS cases must have trap_type null (not set)' },
+            { status: 400 }
+          );
+        } else if (label === 'YES' && (!trapType || !trapType.match(/^S[0-9]+/))) {
+          return NextResponse.json(
+            { error: 'YES cases must have SHEEP trap types (S1-S8)' },
+            { status: 400 }
+          );
+        } else if (label === 'NO' && (!trapType || !trapType.match(/^W[0-9]+/))) {
+          return NextResponse.json(
+            { error: 'NO cases must have WOLF trap types (W1-W10)' },
+            { status: 400 }
+          );
+        }
+      } else if (existingCase?.pearl_level === 'L3') {
+        // For L3 cases, CONDITIONAL should not have trap_type (family) set
+        if (label === 'CONDITIONAL' && trapType !== null && trapType !== '') {
+          return NextResponse.json(
+            { error: 'CONDITIONAL cases must have trap_type null (not set)' },
+            { status: 400 }
+          );
+        } else if ((label === 'VALID' || label === 'INVALID') && (!trapType || !trapType.match(/^F[0-9]+/))) {
+          return NextResponse.json(
+            { error: 'VALID/INVALID cases must have family trap types (F1-F8)' },
+            { status: 400 }
+          );
+        }
+      }
+    }
+
+    if (trapType !== undefined) {
+      updateData.trap_type = trapType;
     }
 
     // Handle hidden_timestamp
