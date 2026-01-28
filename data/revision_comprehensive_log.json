@@ -1,0 +1,261 @@
+{
+  "summary": {
+    "total_revised": 26,
+    "accepted_after_revision": 21,
+    "success_rate": "80.8%",
+    "avg_improvement": "+2.14"
+  },
+  "by_category": {
+    "L1_L2_confusion": {
+      "accepted": 13,
+      "revision": 0,
+      "rejected": 0
+    },
+    "variable_unclear": {
+      "accepted": 2,
+      "revision": 2,
+      "rejected": 1
+    },
+    "trap_mismatch": {
+      "accepted": 6,
+      "revision": 2,
+      "rejected": 0
+    }
+  },
+  "cases": [
+    {
+      "case_id": "cmkw971k5000t9soc9im...",
+      "category": "L1_L2_confusion",
+      "reason": "L1 case used L2-style causal identification",
+      "old_score": 6.5,
+      "new_score": 9.5,
+      "change": "+3.0",
+      "status": "scored"
+    },
+    {
+      "case_id": "cmkw971ke000u9soc6ds...",
+      "category": "L1_L2_confusion",
+      "reason": "L1 case used L2-style causal identification",
+      "old_score": 6.0,
+      "new_score": 9.5,
+      "change": "+3.5",
+      "status": "scored"
+    },
+    {
+      "case_id": "cmkw971kp000v9socvwm...",
+      "category": "L1_L2_confusion",
+      "reason": "L1 case used L2-style causal identification",
+      "old_score": 6.5,
+      "new_score": 9.5,
+      "change": "+3.0",
+      "status": "scored"
+    },
+    {
+      "case_id": "cmkw971mb00129socqzx...",
+      "category": "L1_L2_confusion",
+      "reason": "L1 case used L2-style causal identification",
+      "old_score": 6.0,
+      "new_score": 9.5,
+      "change": "+3.5",
+      "status": "scored"
+    },
+    {
+      "case_id": "cmkw971mm00139socvcd...",
+      "category": "L1_L2_confusion",
+      "reason": "L1 case used L2-style causal identification",
+      "old_score": 7.0,
+      "new_score": 9.6,
+      "change": "+2.6",
+      "status": "scored"
+    },
+    {
+      "case_id": "cmkw971nf00169socyxr...",
+      "category": "L1_L2_confusion",
+      "reason": "L1 case used L2-style causal identification",
+      "old_score": 6.5,
+      "new_score": 9.5,
+      "change": "+3.0",
+      "status": "scored"
+    },
+    {
+      "case_id": "cmkw971np00179socb24...",
+      "category": "L1_L2_confusion",
+      "reason": "L1 case used L2-style causal identification",
+      "old_score": 6.5,
+      "new_score": 9.5,
+      "change": "+3.0",
+      "status": "scored"
+    },
+    {
+      "case_id": "cmkw971nz00189socu8k...",
+      "category": "L1_L2_confusion",
+      "reason": "L1 case used L2-style causal identification",
+      "old_score": 7.5,
+      "new_score": 9.5,
+      "change": "+2.0",
+      "status": "scored"
+    },
+    {
+      "case_id": "cmkw971o800199socs1k...",
+      "category": "L1_L2_confusion",
+      "reason": "L1 case used L2-style causal identification",
+      "old_score": 6.5,
+      "new_score": 9.5,
+      "change": "+3.0",
+      "status": "scored"
+    },
+    {
+      "case_id": "cmkw971of001a9soc0bb...",
+      "category": "L1_L2_confusion",
+      "reason": "L1 case used L2-style causal identification",
+      "old_score": 7.0,
+      "new_score": 9.5,
+      "change": "+2.5",
+      "status": "scored"
+    },
+    {
+      "case_id": "cmkw971om001b9socn6t...",
+      "category": "L1_L2_confusion",
+      "reason": "L1 case used L2-style causal identification",
+      "old_score": 7.5,
+      "new_score": 9.5,
+      "change": "+2.0",
+      "status": "scored"
+    },
+    {
+      "case_id": "cmkw97lrf009311cs0zr...",
+      "category": "L1_L2_confusion",
+      "reason": "L1 case used L2-style causal identification",
+      "old_score": 6.0,
+      "new_score": 9.5,
+      "change": "+3.5",
+      "status": "scored"
+    },
+    {
+      "case_id": "cmkw97lsw009911cseqb...",
+      "category": "L1_L2_confusion",
+      "reason": "L1 case used L2-style causal identification",
+      "old_score": 6.5,
+      "new_score": 8.5,
+      "change": "+2.0",
+      "status": "scored"
+    },
+    {
+      "case_id": "cmkw97lyt009w11cswlq...",
+      "category": "variable_unclear",
+      "reason": "Variable definitions were unclear or muddled",
+      "old_score": 7.5,
+      "new_score": 8.5,
+      "change": "+1.0",
+      "status": "scored"
+    },
+    {
+      "case_id": "cmkw97mb900b811cs0wa...",
+      "category": "variable_unclear",
+      "reason": "Variable definitions were unclear or muddled",
+      "old_score": 6.8,
+      "new_score": 8.5,
+      "change": "+1.7",
+      "status": "scored"
+    },
+    {
+      "case_id": "cmkw97mfy00bp11cs7gp...",
+      "category": "variable_unclear",
+      "reason": "Variable definitions were unclear or muddled",
+      "old_score": 7.0,
+      "new_score": 6.5,
+      "change": "-0.5",
+      "status": "needs_revision"
+    },
+    {
+      "case_id": "cmkw97mgj00br11csobp...",
+      "category": "variable_unclear",
+      "reason": "Variable definitions were unclear or muddled",
+      "old_score": 6.0,
+      "new_score": 5.5,
+      "change": "-0.5",
+      "status": "rejected"
+    },
+    {
+      "case_id": "cmkw97mmw00ce11csvu6...",
+      "category": "variable_unclear",
+      "reason": "Variable definitions were unclear or muddled",
+      "old_score": 7.0,
+      "new_score": 7.5,
+      "change": "+0.5",
+      "status": "needs_revision"
+    },
+    {
+      "case_id": "cmkw971k5000t9soc9im...",
+      "category": "trap_mismatch",
+      "reason": "Trap type was misclassified",
+      "old_score": 6.5,
+      "new_score": 9.5,
+      "change": "+3.0",
+      "status": "scored"
+    },
+    {
+      "case_id": "cmkw971mb00129socqzx...",
+      "category": "trap_mismatch",
+      "reason": "Trap type was misclassified",
+      "old_score": 6.0,
+      "new_score": 9.5,
+      "change": "+3.5",
+      "status": "scored"
+    },
+    {
+      "case_id": "cmkw971nf00169socyxr...",
+      "category": "trap_mismatch",
+      "reason": "Trap type was misclassified",
+      "old_score": 6.5,
+      "new_score": 9.5,
+      "change": "+3.0",
+      "status": "scored"
+    },
+    {
+      "case_id": "cmkw971om001b9socn6t...",
+      "category": "trap_mismatch",
+      "reason": "Trap type was misclassified",
+      "old_score": 7.5,
+      "new_score": 9.5,
+      "change": "+2.0",
+      "status": "scored"
+    },
+    {
+      "case_id": "cmkw9740q009v9soc9rm...",
+      "category": "trap_mismatch",
+      "reason": "Trap type was misclassified",
+      "old_score": 6.5,
+      "new_score": 8.9,
+      "change": "+2.4",
+      "status": "scored"
+    },
+    {
+      "case_id": "cmkw97lws009o11cshaq...",
+      "category": "trap_mismatch",
+      "reason": "Trap type was misclassified",
+      "old_score": 7.5,
+      "new_score": 9.5,
+      "change": "+2.0",
+      "status": "scored"
+    },
+    {
+      "case_id": "cmkw97m3f00ad11csyql...",
+      "category": "trap_mismatch",
+      "reason": "Trap type was misclassified",
+      "old_score": 6.0,
+      "new_score": 7.5,
+      "change": "+1.5",
+      "status": "needs_revision"
+    },
+    {
+      "case_id": "cmkw97mfy00bp11cs7gp...",
+      "category": "trap_mismatch",
+      "reason": "Trap type was misclassified",
+      "old_score": 7.0,
+      "new_score": 6.5,
+      "change": "-0.5",
+      "status": "needs_revision"
+    }
+  ]
+}

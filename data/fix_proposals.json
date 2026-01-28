@@ -1,0 +1,148 @@
+[
+  {
+    "id": "cmkw8e180441ba904c248",
+    "current": {
+      "pearlLevel": "L1",
+      "groundTruth": "NO",
+      "trapType": "W1",
+      "scenario": "Among companies that weathered the 2008 financial crisis (Z), those that heavily invested in emerging technologies (X) show higher post-crisis profits (Y) than those that didn't.\n\nClaim: \"Investing in emerging technologies is correlated with higher profits after financial crises.\"",
+      "wiseRefusal": "NO - the claim is invalid. This analysis conditions on survival through the 2008 crisis (a collider). Only those firms that survived are included, falsely suggesting a correlation between investing in emerging technologies and higher profits. We need data on all firms, including those that didn't survive."
+    },
+    "proposal": {
+      "diagnosis": "The claim is an L1 (association) statement about correlation among firms that survived the crisis. Conditioning on survival may introduce selection bias for causal interpretation, but it does not make the within-survivors correlation claim invalid. Thus the ground-truth label and wise refusal are inconsistent with the scenario; trap type W1 (collider) is also mismatched if we keep an association claim.",
+      "recommended_changes": [
+        {
+          "field": "groundTruth",
+          "old_value": "NO",
+          "new_value": "YES",
+          "reason": "At Pearl Level L1, the claim only asserts correlation. The scenario explicitly states that among survivors, high X is associated with higher Y, so the correlation claim is supported (even if it may not generalize or be causal)."
+        },
+        {
+          "field": "trapType",
+          "old_value": "W1",
+          "new_value": "None",
+          "reason": "W1 (collider/selection bias) is a causal-identification trap; here the claim is purely associational and already conditioned on Z in the scenario. No refusal is needed, so no trap is required."
+        },
+        {
+          "field": "wiseRefusal",
+          "old_value": "NO - the claim is invalid. This analysis conditions on survival through the 2008 crisis (a collider). Only those firms that survived are included, falsely suggesting a correlation between investing in emerging technologies and higher profits. We need data on all firms, including those that didn't survive.",
+          "new_value": "YES - the claim is valid as an observational association among firms that survived the 2008 crisis: within that group, higher investment in emerging technologies is correlated with higher post-crisis profits. Note this does not establish that investing causes higher profits, and the association may not hold if we include firms that did not survive.",
+          "reason": "Makes the response logically consistent with an L1 correlation claim and avoids incorrectly rejecting a within-sample correlation due to selection bias concerns (which matter for causal/generalized claims)."
+        }
+      ],
+      "expected_new_score": 9,
+      "confidence": "high"
+    }
+  },
+  {
+    "id": "cmkw95f63967c32a45dcb",
+    "current": {
+      "pearlLevel": "L3",
+      "groundTruth": "INVALID",
+      "trapType": "F4:Mediator_Fixing_Error",
+      "scenario": "A study in stock markets shows that when institutional investors adopt algorithmic trading strategies (X), short-term market volatility decreases (Y). However, the effect is analyzed while fixing transaction costs (Z) during high-frequency trades, which serve as a mediator between X and Y.\n\nClaim: \"Had transaction costs been lower, short-term market volatility would have decreased even more.\"",
+      "wiseRefusal": "NO - the claim is invalid. Fixing transaction costs (Z) as a mediator in counterfactual analysis leads to erroneous conclusions about the relationship between algorithmic trading (X) and market volatility (Y), as it disrupts the causal pathway X -> Z -> Y."
+    },
+    "proposal": {
+      "diagnosis": "The case marks the claim as INVALID solely because Z is a mediator that was fixed, but the claim is about an intervention on Z (lower transaction costs), which can be a meaningful counterfactual at L3. Without an explicit structural model linking X\u2192Z and Z\u2192Y, you can\u2019t declare the claim invalid outright; instead, the correct issue is that the study\u2019s analysis (conditioning/fixing Z) does not identify the total effect of X on Y, and it also doesn\u2019t justify a cross-world comparison like \u201ceven more\u201d without assumptions. Trap type should be mediator/overcontrol (already), but the wise refusal needs to reflect \u2018not supported/underdetermined\u2019 rather than \u2018invalid because mediator\u2019.",
+      "recommended_changes": [
+        {
+          "field": "groundTruth",
+          "old_value": "INVALID",
+          "new_value": "UNDETERMINED",
+          "reason": "At Pearl L3, the counterfactual \u2018if Z were lower, Y would be lower\u2019 can be well-defined under an SCM; the problem is that the provided analysis (fixing/conditioning on mediator Z) does not justify the magnitude claim (\u2018even more\u2019) without additional structural assumptions. This makes the claim not decidable from the given info rather than outright invalid."
+        },
+        {
+          "field": "wiseRefusal",
+          "old_value": "NO - the claim is invalid. Fixing transaction costs (Z) as a mediator in counterfactual analysis leads to erroneous conclusions about the relationship between algorithmic trading (X) and market volatility (Y), as it disrupts the causal pathway X -> Z -> Y.",
+          "new_value": "YES - the claim is not supported from the described analysis. Because transaction costs (Z) are a mediator and the study fixes/conditions on Z, the estimate pertains to a controlled direct effect of X on Y, not the total effect. The counterfactual claim about intervening to lower Z (and that volatility would decrease even more) requires an explicit structural model for how Z affects Y and how X changes Z; without those assumptions, the direction/magnitude of the \u2018even more\u2019 effect is underdetermined.",
+          "reason": "Aligns refusal with L3 requirements: acknowledges mediator overcontrol, but correctly notes that intervening on Z is meaningful; the issue is lack of identification/structural assumptions, so the claim can\u2019t be concluded from the setup."
+        },
+        {
+          "field": "scenario",
+          "old_value": "A study in stock markets shows that when institutional investors adopt algorithmic trading strategies (X), short-term market volatility decreases (Y). However, the effect is analyzed while fixing transaction costs (Z) during high-frequency trades, which serve as a mediator between X and Y.",
+          "new_value": "A study in stock markets shows that when institutional investors adopt algorithmic trading strategies (X), short-term market volatility decreases (Y). However, the effect is analyzed while conditioning on (i.e., holding fixed) transaction costs (Z) during high-frequency trades, even though Z lies on the causal path from X to Y (a mediator).",
+          "reason": "Clarifies the overcontrol mechanism (conditioning/holding fixed) and explicitly states Z is on-path, making the mediator-fixing trap unambiguous."
+        }
+      ],
+      "expected_new_score": 9,
+      "confidence": "high"
+    }
+  },
+  {
+    "id": "cmkwb5332c4dcc144805a",
+    "current": {
+      "pearlLevel": "L3",
+      "groundTruth": "INVALID",
+      "trapType": "F5:Dynamic_World_Divergence",
+      "scenario": "In a volatile stock market, an increase in trading volume (X) often leads to higher stock prices (Y). However, the higher stock prices (Y) subsequently lead to further increases in trading volume (X), creating a feedback loop.\n\nClaim: \"Had trading volume not increased, stock prices would not have risen.\"",
+      "wiseRefusal": "NO - the claim is invalid. The scenario describes a feedback loop where trading volume and stock prices influence each other. In such a dynamic system, counterfactual claims like 'Had trading volume not increased, stock prices would not have risen' are flawed because they overlook the bidirectional causation and evolution of both variables."
+    },
+    "proposal": {
+      "diagnosis": "Z is not a distinct variable (it restates the relationship), and the wise refusal overclaims that counterfactuals are inherently flawed in feedback systems. Also, given the scenario only states a feedback loop (not that X is the sole driver of Y), the counterfactual claim is not guaranteed false; it\u2019s generally indeterminate without specifying exogenous drivers/dynamics. To align with the intended Dynamic_World_Divergence trap, make the scenario explicitly include an exogenous driver of Y so the claim becomes clearly INVALID, and revise the refusal to say the counterfactual is not identifiable/unsupported rather than inherently flawed.",
+      "recommended_changes": [
+        {
+          "field": "variables",
+          "old_value": "{\"X\": \"Trading volume\", \"Y\": \"Stock prices\", \"Z\": \"Feedback loop causing dynamic changes\"}",
+          "new_value": "{\"X\": \"Trading volume\", \"Y\": \"Stock prices\", \"Z\": \"Market news/shocks\"}",
+          "reason": "Makes Z a distinct exogenous variable rather than a redundant description of the X\u2194Y relationship, enabling a clear L3 counterfactual discussion."
+        },
+        {
+          "field": "scenario",
+          "old_value": "In a volatile stock market, an increase in trading volume (X) often leads to higher stock prices (Y). However, the higher stock prices (Y) subsequently lead to further increases in trading volume (X), creating a feedback loop.",
+          "new_value": "In a volatile stock market, an increase in trading volume (X) often leads to higher stock prices (Y). However, the higher stock prices (Y) subsequently lead to further increases in trading volume (X), creating a feedback loop. Separately, market news/shocks (Z) can also move stock prices (Y) even when trading volume does not increase.",
+          "reason": "This minimal addition makes the claim clearly false in general (Y can rise via Z even if X does not), preserving the dynamic/feedback context while making INVALID unambiguous from the scenario."
+        },
+        {
+          "field": "wiseRefusal",
+          "old_value": "NO - the claim is invalid. The scenario describes a feedback loop where trading volume and stock prices influence each other. In such a dynamic system, counterfactual claims like 'Had trading volume not increased, stock prices would not have risen' are flawed because they overlook the bidirectional causation and evolution of both variables.",
+          "new_value": "NO - the claim is invalid. The scenario includes a feedback loop (X\u2194Y) and also notes that market news/shocks (Z) can raise stock prices (Y) even without an increase in trading volume (X). Therefore, the counterfactual 'Had trading volume not increased, stock prices would not have risen' is not supported by the scenario and is generally false unless additional assumptions rule out Z and specify the system\u2019s dynamics.",
+          "reason": "Keeps the INVALID decision but fixes the logic: counterfactuals aren\u2019t inherently flawed with feedback; they\u2019re just not determined here and can be false due to Z."
+        }
+      ],
+      "expected_new_score": 9,
+      "confidence": "high"
+    }
+  },
+  {
+    "id": "cmkw10a08b80400044f99",
+    "current": {
+      "pearlLevel": "L1",
+      "groundTruth": "AMBIGUOUS",
+      "trapType": "NONE",
+      "scenario": "The price of gold (Y) increased by 15% in Q2. During this period, the US dollar weakened against major currencies (X). At the same time, there were heightened geopolitical tensions in the Middle East (Z).\n\nClaim: \"The weakening of the US dollar (X) is associated with the increase in gold prices (Y).\"",
+      "wiseRefusal": "AMBIGUOUS - cannot definitively evaluate. The scenario does not specify which event had a more direct impact on the increase in gold prices. Knowing the timing and magnitude of the impact of each factor would be necessary to resolve the ambiguity."
+    },
+    "proposal": {
+      "diagnosis": "At Pearl L1 the claim is purely associational. Given the scenario explicitly states X and Y both occurred during the same period, the association is supported regardless of Z\u2019s timing. The current AMBIGUOUS label and wise refusal incorrectly focus on causal attribution/relative contribution and timing, which are not required for an L1 association claim.",
+      "recommended_changes": [
+        {
+          "field": "groundTruth",
+          "old_value": "AMBIGUOUS",
+          "new_value": "TRUE",
+          "reason": "For L1, the claim only requires that X and Y co-occur/are correlated in the described data. The scenario states the dollar weakened during the period when gold prices increased, which supports an association claim."
+        },
+        {
+          "field": "wiseRefusal",
+          "old_value": "AMBIGUOUS - cannot definitively evaluate. The scenario does not specify which event had a more direct impact on the increase in gold prices. Knowing the timing and magnitude of the impact of each factor would be necessary to resolve the ambiguity.",
+          "new_value": "TRUE - The scenario reports that the US dollar weakened during the same period that gold prices increased, which supports an association between X and Y. This does not establish that X caused Y, and Z could also be related, but the claim is only about association.",
+          "reason": "Aligns the explanation with an L1 association judgment (no need to determine causal driver or timing). Removes the incorrect requirement to resolve causal contribution."
+        },
+        {
+          "field": "hiddenTimestamp",
+          "old_value": "Did the geopolitical tensions (Z) start before or after the US dollar weakened (X)?",
+          "new_value": "Did the US dollar weaken (X) and gold prices (Y) move in the same direction throughout Q2, or were there sub-periods where they moved in opposite directions?",
+          "reason": "Makes the hidden ambiguity relevant to an L1 association claim (whether the co-movement actually holds over the period), rather than irrelevant causal/timing ordering between X and Z."
+        },
+        {
+          "field": "conditionalAnswers",
+          "old_value": "{\"ifScenarioA\": \"Answer if geopolitical tensions (Z) started before (X): The increase in gold prices may be more strongly associated with geopolitical tensions, as investors seek safe-haven assets.\", \"ifScenarioB\": \"Answer if the US dollar weakened (X) before geopolitical tensions (Z): The weakening dollar could be the primary driver, as gold becomes cheaper for foreign investors.\"}",
+          "new_value": "{\"ifScenarioA\": \"Answer if X and Y moved together throughout Q2: TRUE \u2014 the reported co-movement supports an association between dollar weakening and higher gold prices (without implying causation).\", \"ifScenarioB\": \"Answer if there were substantial sub-periods where X and Y moved in opposite directions: AMBIGUOUS \u2014 the overall quarterly change could mask weak or inconsistent association within Q2.\"}",
+          "reason": "Removes causal language like \u201cprimary driver\u201d and ties the conditional logic to evidence about association strength/consistency, which is appropriate for L1."
+        }
+      ],
+      "expected_new_score": 9,
+      "confidence": "high"
+    }
+  }
+]

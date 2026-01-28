@@ -1,0 +1,170 @@
+[
+  {
+    "id": "cmkw971k5000t9soc9imq5sky",
+    "pearl": "L1",
+    "old_score": 6.5,
+    "new_score": 9.5,
+    "status": "scored",
+    "change": 3.0
+  },
+  {
+    "id": "cmkw971ke000u9soc6dsjgfap",
+    "pearl": "L1",
+    "old_score": 6.0,
+    "new_score": 9.5,
+    "status": "scored",
+    "change": 3.5
+  },
+  {
+    "id": "cmkw971kp000v9socvwmdeuor",
+    "pearl": "L1",
+    "old_score": 6.5,
+    "new_score": 9.5,
+    "status": "scored",
+    "change": 3.0
+  },
+  {
+    "id": "cmkw971mb00129socqzx6uuuh",
+    "pearl": "L1",
+    "old_score": 6.0,
+    "new_score": 9.5,
+    "status": "scored",
+    "change": 3.5
+  },
+  {
+    "id": "cmkw971mm00139socvcdx81de",
+    "pearl": "L1",
+    "old_score": 7.0,
+    "new_score": 9.6,
+    "status": "scored",
+    "change": 2.5999999999999996
+  },
+  {
+    "id": "cmkw971nf00169socyxroasxa",
+    "pearl": "L1",
+    "old_score": 6.5,
+    "new_score": 9.5,
+    "status": "scored",
+    "change": 3.0
+  },
+  {
+    "id": "cmkw971np00179socb24rbtpy",
+    "pearl": "L1",
+    "old_score": 6.5,
+    "new_score": 9.5,
+    "status": "scored",
+    "change": 3.0
+  },
+  {
+    "id": "cmkw971nz00189socu8k18zkv",
+    "pearl": "L1",
+    "old_score": 7.5,
+    "new_score": 9.5,
+    "status": "scored",
+    "change": 2.0
+  },
+  {
+    "id": "cmkw971o800199socs1klrmmy",
+    "pearl": "L1",
+    "old_score": 6.5,
+    "new_score": 9.5,
+    "status": "scored",
+    "change": 3.0
+  },
+  {
+    "id": "cmkw971of001a9soc0bbiv21j",
+    "pearl": "L1",
+    "old_score": 7.0,
+    "new_score": 9.5,
+    "status": "scored",
+    "change": 2.5
+  },
+  {
+    "id": "cmkw971om001b9socn6tb51ro",
+    "pearl": "L1",
+    "old_score": 7.5,
+    "new_score": 9.5,
+    "status": "scored",
+    "change": 2.0
+  },
+  {
+    "id": "cmkw9740q009v9soc9rmhgt2q",
+    "pearl": "L3",
+    "old_score": 6.5,
+    "new_score": 8.9,
+    "status": "scored",
+    "change": 2.4000000000000004
+  },
+  {
+    "id": "cmkw97lrf009311cs0zrm1peb",
+    "pearl": "L1",
+    "old_score": 6.0,
+    "new_score": 9.5,
+    "status": "scored",
+    "change": 3.5
+  },
+  {
+    "id": "cmkw97lsw009911cseqb1f6mv",
+    "pearl": "L1",
+    "old_score": 6.5,
+    "new_score": 8.5,
+    "status": "scored",
+    "change": 2.0
+  },
+  {
+    "id": "cmkw97lws009o11cshaqgd8pl",
+    "pearl": "L2",
+    "old_score": 7.5,
+    "new_score": 9.5,
+    "status": "scored",
+    "change": 2.0
+  },
+  {
+    "id": "cmkw97lyt009w11cswlq979zx",
+    "pearl": "L2",
+    "old_score": 7.5,
+    "new_score": 8.5,
+    "status": "scored",
+    "change": 1.0
+  },
+  {
+    "id": "cmkw97m3f00ad11csyql9u4qq",
+    "pearl": "L2",
+    "old_score": 6.0,
+    "new_score": 7.5,
+    "status": "needs_revision",
+    "change": 1.5
+  },
+  {
+    "id": "cmkw97mb900b811cs0wat4li3",
+    "pearl": "L2",
+    "old_score": 6.8,
+    "new_score": 8.5,
+    "status": "scored",
+    "change": 1.7000000000000002
+  },
+  {
+    "id": "cmkw97mfy00bp11cs7gp8zhzm",
+    "pearl": "L2",
+    "old_score": 7.0,
+    "new_score": 6.5,
+    "status": "needs_revision",
+    "change": -0.5
+  },
+  {
+    "id": "cmkw97mgj00br11csobpbnlwb",
+    "pearl": "L3",
+    "old_score": 6.0,
+    "new_score": 5.5,
+    "status": "rejected",
+    "change": -0.5
+  },
+  {
+    "id": "cmkw97mmw00ce11csvu6jbho6",
+    "pearl": "L3",
+    "old_score": 7.0,
+    "new_score": 7.5,
+    "status": "needs_revision",
+    "change": 0.5
+  }
+]

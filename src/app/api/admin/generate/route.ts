@@ -937,6 +937,9 @@ async function runBackgroundGeneration(
             isVerified: false,
             generationBatchId: batchId,
             dataset: dataset,
+            // Validation workflow fields - auto-add to validation queue
+            initialAuthor: 'lgren007@stanford.edu',
+            validationStatus: 'pending',
           },
         });
 

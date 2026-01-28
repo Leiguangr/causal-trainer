@@ -6,6 +6,7 @@ node_modules/
 out/
 build/
 dist/
+local/
 
 # Database
 *.db
@@ -42,3 +43,29 @@ Thumbs.db
 
 # Personal research notes
 RESEARCH_NOTES.md
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+
+# Assignment submission outputs (data files)
+data/groupG_*.json
+data/selected_ids.json
+
+# Report outputs folder
+output/
+
+# LaTeX auxiliary files
+*.aux
+*.log
+*.out
+*.toc
+*.synctex.gz
+
+# Notebooks output
+notebooks/*.pdf
+notebooks/*.png
+notebooks/images/

@@ -1,0 +1,67 @@
+{
+  "error_categories": [
+    {
+      "name": "Pearl Level\u2013Claim Mismatch (L1 vs L2 identification)",
+      "description": "Cases are tagged as L1 (association) but the claim/evidence is explicitly causal and relies on quasi-experimental identification logic (DiD/RD/rollout). Validators flag that such designs require untestable assumptions, so L1 ground-truth labels like YES become inappropriate.",
+      "estimated_percentage": 10,
+      "example_notes": [
+        "\u201cat Pearl L1 (association), a causal claim from observational DiD is not identifiable without the parallel-trends assumption\u2026 thus the ground-truth YES label is inappropriate for L1\u201d",
+        "\u201cframed as L1 (association), yet the claim and explanation rely on an L2-style causal identification argument (regression discontinuity)\u201d"
+      ]
+    },
+    {
+      "name": "Rubric/Schema Violation: L2 Must Be Traps (NO label; no NONE trap type)",
+      "description": "Many L2 items are written as valid RCTs or otherwise non-traps and labeled YES/AMBIGUOUS, but the benchmark requires all L2 items to be labeled NO and to have a non-NONE trap type. This is a systematic format/constraint violation independent of causal reasoning quality.",
+      "estimated_percentage": 30,
+      "example_notes": [
+        "\u201cper rubric constraints, all L2 items must be labeled NO (trap), so the provided YES label is invalid, and trap type cannot be NONE for L2.\u201d",
+        "\u201cfor L2 the label must be NO per rubric, so AMBIGUOUS is invalid. Trap type cannot be NONE for L2.\u201d"
+      ]
+    },
+    {
+      "name": "L3 Overcertainty (VALID when only CONDITIONAL/INVALID is supported)",
+      "description": "For counterfactual (L3) items, the scenario doesn\u2019t entail the strong counterfactual conclusion; the writeup/wiser refusal uses absolute language (\u201cwould not have\u2026\u201d, \u201cguaranteed\u201d) despite missing structural assumptions, alternative pathways, nonlinear payoffs, timing, or sufficiency. Validators repeatedly say the correct label should be CONDITIONAL (or sometimes INVALID).",
+      "estimated_percentage": 50,
+      "example_notes": [
+        "\u201cthe counterfactual \u2018would not have dropped 12%\u2019 is too strong\u2026 thus the case is better labeled CONDITIONAL, not VALID.\u201d",
+        "\u201crating>=A- removes the block yet does not guarantee execution\u2026 so the counterfactual should be CONDITIONAL, not VALID.\u201d"
+      ]
+    },
+    {
+      "name": "Variable Definition / Internal Inconsistency (X/Y/Z muddled or mismatched)",
+      "description": "Failures occur when Z\u2019s role changes between the scenario and explanation (e.g., exogenous vs collider), Y doesn\u2019t match the claim, or the causal story contradicts itself (timing/order of events). This makes the intended graph/trap unclear and can invalidate the reasoning even if the topic is right.",
+      "estimated_percentage": 15,
+      "example_notes": [
+        "\u201cZ is muddled\u2026 described as an exogenous dividend-announcement window, yet the explanation treats Z as a selection label influenced by both X and Y.\u201d",
+        "\u201cY is defined as rapid inflation (outcome) while the claim is about market stabilization; the outcome variable doesn\u2019t match the claim.\u201d"
+      ]
+    },
+    {
+      "name": "Trap Type Misclassification / Wrong Taxonomy for Level",
+      "description": "The assigned trap type often doesn\u2019t match the described pattern (e.g., time-varying confounding vs plain confounding; conditioning-on-compliance vs collider) or uses an invalid family for that Pearl level (e.g., L3 using non\u2013F-family labels; L2 marked NONE).",
+      "estimated_percentage": 25,
+      "example_notes": [
+        "\u201cTrap type is misclassified: described trap is standard confounding, not time-varying confounding.\u201d",
+        "\u201cTrap type is mis-specified: L3 should use an F-family, not an L2-style trap label.\u201d"
+      ]
+    },
+    {
+      "name": "L1 Association vs Causation Confusion (confounding doesn\u2019t negate correlation)",
+      "description": "Some L1 items are evaluated as if they were causal: the refusal/label treats confounding as invalidating an association statement. Validators note that for L1, an observed association can still be true even if it\u2019s non-causal.",
+      "estimated_percentage": 2,
+      "example_notes": [
+        "\u201cfor an L1 (association) claim, the statement \u2018X is observed to be associated with Y\u2019 remains true even if confounded; the correct label should be YES (association exists), not NO.\u201d"
+      ]
+    }
+  ],
+  "key_insights": [
+    "The biggest single driver is structural rubric noncompliance at L2 (must be NO + must not be NONE), even when the causal reasoning is otherwise correct.",
+    "At L3, the dominant failure mode is overstating counterfactual certainty\u2014many scenarios support only a conditional claim because key assumptions (sufficiency, exclusivity, stability, timing, alternative causes) are not stated.",
+    "A smaller but recurring issue is mismatch between Pearl level and the kind of evidence invoked (e.g., DiD/RD/rollouts inside L1), plus muddled variable roles that break the intended causal graph."
+  ],
+  "prompt_recommendations": [
+    "Add hard validation rules to generation: (a) if Pearl=L2 then label must be NO and trap_type must not be NONE; (b) if Pearl=L3 then trap_type must be one of the allowed F-families.",
+    "Force explicit assumption checks before allowing YES/VALID language: for DiD require parallel trends/no spillovers; for RD require no manipulation + continuity; for L3 require explicit sufficiency/exclusivity/timing and otherwise default to CONDITIONAL.",
+    "Add a \u201cvariable alignment\u201d step: require that the claim references exactly Y, that Z has a single causal role, and that timing/order is consistent; reject or rewrite cases where X/Y/Z definitions drift between scenario and explanation."
+  ]
+}

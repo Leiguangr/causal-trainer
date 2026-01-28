@@ -1,0 +1,249 @@
+[
+  {
+    "case_id": "cmkw971k5000t9soc9imq5sky",
+    "category": "L1_L2_confusion",
+    "changes": {
+      "wiseRefusal": "YES - the association is observed in the data. This is an L1 (association) claim: X and Y co-occur. ...",
+      "trapType": "S1",
+      "trapSubtype": "Observed_Association",
+      "validatorNotes": "[Batch-scored] X/Y/Z are clearly defined and the scenario is concise and understandable. However, fo..."
+    },
+    "reason": "L1 case used L2-style causal identification"
+  },
+  {
+    "case_id": "cmkw971ke000u9soc6dsjgfap",
+    "category": "L1_L2_confusion",
+    "changes": {
+      "wiseRefusal": "YES - the association is observed in the data. This is an L1 (association) claim: X and Y co-occur. ...",
+      "trapType": "S1",
+      "trapSubtype": "Observed_Association",
+      "validatorNotes": "[Batch-scored] X and Y are clear, but Z mixes causes, grouping, and macro regime; scenario is longer..."
+    },
+    "reason": "L1 case used L2-style causal identification"
+  },
+  {
+    "case_id": "cmkw971kp000v9socvwmdeuor",
+    "category": "L1_L2_confusion",
+    "changes": {
+      "wiseRefusal": "YES - the association is observed in the data. This is an L1 (association) claim: X and Y co-occur. ...",
+      "trapType": "S1",
+      "trapSubtype": "Observed_Association",
+      "validatorNotes": "[Batch-scored] Variables X/Y/Z are defined, but the scenario is longer than the suggested 40\u201380 word..."
+    },
+    "reason": "L1 case used L2-style causal identification"
+  },
+  {
+    "case_id": "cmkw971mb00129socqzx6uuuh",
+    "category": "L1_L2_confusion",
+    "changes": {
+      "wiseRefusal": "YES - the association is observed in the data. This is an L1 (association) claim: X and Y co-occur. ...",
+      "trapType": "S1",
+      "trapSubtype": "Observed_Association",
+      "validatorNotes": "[Batch-scored] X/Y/Z are distinguishable, but the scenario is overly long and includes extraneous co..."
+    },
+    "reason": "L1 case used L2-style causal identification"
+  },
+  {
+    "case_id": "cmkw971mm00139socvcdx81de",
+    "category": "L1_L2_confusion",
+    "changes": {
+      "wiseRefusal": "YES - the association is observed in the data. This is an L1 (association) claim: X and Y co-occur. ...",
+      "trapType": "S1",
+      "trapSubtype": "Observed_Association",
+      "validatorNotes": "[Batch-scored] X/Y/Z are clearly defined and the scenario is concise. However, at Pearl L1 the task ..."
+    },
+    "reason": "L1 case used L2-style causal identification"
+  },
+  {
+    "case_id": "cmkw971nf00169socyxroasxa",
+    "category": "L1_L2_confusion",
+    "changes": {
+      "wiseRefusal": "YES - the association is observed in the data. This is an L1 (association) claim: X and Y co-occur. ...",
+      "trapType": "S1",
+      "trapSubtype": "Observed_Association",
+      "validatorNotes": "[Batch-scored] X/Y/Z are defined, but the scenario is verbose and mixes IV/L2-style identification i..."
+    },
+    "reason": "L1 case used L2-style causal identification"
+  },
+  {
+    "case_id": "cmkw971np00179socb24rbtpy",
+    "category": "L1_L2_confusion",
+    "changes": {
+      "wiseRefusal": "YES - the association is observed in the data. This is an L1 (association) claim: X and Y co-occur. ...",
+      "trapType": "S1",
+      "trapSubtype": "Observed_Association",
+      "validatorNotes": "[Batch-scored] X/Y/Z are defined, but the scenario is longer than the target and mixes two mechanism..."
+    },
+    "reason": "L1 case used L2-style causal identification"
+  },
+  {
+    "case_id": "cmkw971nz00189socu8k18zkv",
+    "category": "L1_L2_confusion",
+    "changes": {
+      "wiseRefusal": "YES - the association is observed in the data. This is an L1 (association) claim: X and Y co-occur. ...",
+      "trapType": "S1",
+      "trapSubtype": "Observed_Association",
+      "validatorNotes": "[Batch-scored] Variables and DiD numbers are clear and the setup is concise. However, at Pearl L1 (a..."
+    },
+    "reason": "L1 case used L2-style causal identification"
+  },
+  {
+    "case_id": "cmkw971o800199socs1klrmmy",
+    "category": "L1_L2_confusion",
+    "changes": {
+      "wiseRefusal": "YES - the association is observed in the data. This is an L1 (association) claim: X and Y co-occur. ...",
+      "trapType": "S1",
+      "trapSubtype": "Observed_Association",
+      "validatorNotes": "[Batch-scored] X/Y/Z are defined, but the scenario is longer than the target and mixes identificatio..."
+    },
+    "reason": "L1 case used L2-style causal identification"
+  },
+  {
+    "case_id": "cmkw971of001a9soc0bbiv21j",
+    "category": "L1_L2_confusion",
+    "changes": {
+      "wiseRefusal": "YES - the association is observed in the data. This is an L1 (association) claim: X and Y co-occur. ...",
+      "trapType": "S1",
+      "trapSubtype": "Observed_Association",
+      "validatorNotes": "[Batch-scored] X/Y/Z are clearly specified and the setup is concise. However, labeling this L1 case ..."
+    },
+    "reason": "L1 case used L2-style causal identification"
+  },
+  {
+    "case_id": "cmkw971om001b9socn6tb51ro",
+    "category": "L1_L2_confusion",
+    "changes": {
+      "wiseRefusal": "YES - the association is observed in the data. This is an L1 (association) claim: X and Y co-occur. ...",
+      "trapType": "S1",
+      "trapSubtype": "Observed_Association",
+      "validatorNotes": "[Batch-scored] X/Y/Z are clearly defined and the setup is concise. However, this is framed as L1 (as..."
+    },
+    "reason": "L1 case used L2-style causal identification"
+  },
+  {
+    "case_id": "cmkw97lrf009311cs0zrm1peb",
+    "category": "L1_L2_confusion",
+    "changes": {
+      "wiseRefusal": "NO - the claim is invalid. The correlation between bond purchases (X) and recessions (Y) is due to r...",
+      "trapType": "W9:Policy_Endogeneity",
+      "trapSubtype": "Policy_Endogeneity",
+      "validatorNotes": "[Batch-scored] X and Y are clear, but Z is awkwardly specified (it repeats Y as \u201crecession onset\u201d) a..."
+    },
+    "reason": "L1 case used L2-style causal identification"
+  },
+  {
+    "case_id": "cmkw97lsw009911cseqb1f6mv",
+    "category": "L1_L2_confusion",
+    "changes": {
+      "wiseRefusal": "NO - the claim is invalid. The observed correlation between social media hype (X) and cryptocurrency...",
+      "trapType": "W9:Outcome-driven_Selection",
+      "trapSubtype": "Outcome-driven_Selection",
+      "validatorNotes": "[Batch-scored] X and Y are clear, but Z is described as \u201chigh-profile price rallies\u201d while Y is \u201cpri..."
+    },
+    "reason": "L1 case used L2-style causal identification"
+  },
+  {
+    "case_id": "cmkw97lyt009w11cswlq979zx",
+    "category": "variable_unclear",
+    "changes": {
+      "validatorNotes": "[Batch-scored] Variables are somewhat unclear: Z is used both as \u201csuccessful stock traders\u201d and \u201ccom..."
+    },
+    "reason": "Variable definitions were unclear or muddled"
+  },
+  {
+    "case_id": "cmkw97mb900b811cs0wat4li3",
+    "category": "variable_unclear",
+    "changes": {
+      "validatorNotes": "[Batch-scored] Clear X/Y/Z and concise scenario. Hidden question directly targets the key missing in..."
+    },
+    "reason": "Variable definitions were unclear or muddled"
+  },
+  {
+    "case_id": "cmkw97mfy00bp11cs7gp8zhzm",
+    "category": "variable_unclear",
+    "changes": {
+      "validatorNotes": "[Batch-scored] Variables are named, but the narrative is muddled: it mixes traders\u2019 selection behavi..."
+    },
+    "reason": "Variable definitions were unclear or muddled"
+  },
+  {
+    "case_id": "cmkw97mgj00br11csobpbnlwb",
+    "category": "variable_unclear",
+    "changes": {
+      "validatorNotes": "[Batch-scored] Variables are named, but roles are muddled: Y is called the outcome yet used as the p..."
+    },
+    "reason": "Variable definitions were unclear or muddled"
+  },
+  {
+    "case_id": "cmkw97mmw00ce11csvu6jbho6",
+    "category": "variable_unclear",
+    "changes": {
+      "validatorNotes": "[Batch-scored] Scenario is understandable but Z is described as a method rather than a variable, and..."
+    },
+    "reason": "Variable definitions were unclear or muddled"
+  },
+  {
+    "case_id": "cmkw971k5000t9soc9imq5sky",
+    "category": "trap_mismatch",
+    "changes": {
+      "validatorNotes": "[Batch-scored] X/Y/Z are clearly defined and the scenario is concise and understandable. However, fo..."
+    },
+    "reason": "Trap type was misclassified"
+  },
+  {
+    "case_id": "cmkw971mb00129socqzx6uuuh",
+    "category": "trap_mismatch",
+    "changes": {
+      "validatorNotes": "[Batch-scored] X/Y/Z are distinguishable, but the scenario is overly long and includes extraneous co..."
+    },
+    "reason": "Trap type was misclassified"
+  },
+  {
+    "case_id": "cmkw971nf00169socyxroasxa",
+    "category": "trap_mismatch",
+    "changes": {
+      "validatorNotes": "[Batch-scored] X/Y/Z are defined, but the scenario is verbose and mixes IV/L2-style identification i..."
+    },
+    "reason": "Trap type was misclassified"
+  },
+  {
+    "case_id": "cmkw971om001b9socn6tb51ro",
+    "category": "trap_mismatch",
+    "changes": {
+      "validatorNotes": "[Batch-scored] X/Y/Z are clearly defined and the setup is concise. However, this is framed as L1 (as..."
+    },
+    "reason": "Trap type was misclassified"
+  },
+  {
+    "case_id": "cmkw9740q009v9soc9rmhgt2q",
+    "category": "trap_mismatch",
+    "changes": {
+      "validatorNotes": "[Batch-scored] Variables are mostly distinguishable, but the scenario is longer than the target and ..."
+    },
+    "reason": "Trap type was misclassified"
+  },
+  {
+    "case_id": "cmkw97lws009o11cshaqgd8pl",
+    "category": "trap_mismatch",
+    "changes": {
+      "validatorNotes": "[Batch-scored] X (buybacks), Y (price surges), and Z (speculation) are distinguishable, but the scen..."
+    },
+    "reason": "Trap type was misclassified"
+  },
+  {
+    "case_id": "cmkw97m3f00ad11csyql9u4qq",
+    "category": "trap_mismatch",
+    "changes": {
+      "validatorNotes": "[Batch-scored] X, Y, Z are named, but the causal roles are muddled: Z is described as a mediator, ye..."
+    },
+    "reason": "Trap type was misclassified"
+  },
+  {
+    "case_id": "cmkw97mfy00bp11cs7gp8zhzm",
+    "category": "trap_mismatch",
+    "changes": {
+      "validatorNotes": "[Batch-scored] Variables are named, but the narrative is muddled: it mixes traders\u2019 selection behavi..."
+    },
+    "reason": "Trap type was misclassified"
+  }
+]

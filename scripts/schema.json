@@ -1,0 +1,334 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://cs372.stanford.edu/t3-benchmark/schema.json",
+  "title": "T³ Causal Reasoning Benchmark Schema",
+  "description": "JSON Schema for CS372 Assignment 2 - T³ (Trap, Trick, and Trace) Causal Reasoning Validation Dataset. This schema validates the structure of benchmark cases designed to test LLM causal reasoning across Pearl's Ladder of Causation.",
+  "version": "3.0.0",
+
+  "definitions": {
+    "pearl_level": {
+      "type": "string",
+      "enum": ["L1", "L2", "L3"],
+      "description": "Pearl's Ladder of Causation level: L1=Association (observational), L2=Intervention (do-calculus), L3=Counterfactual (what-if)"
+    },
+    "l1_label": {
+      "type": "string",
+      "enum": ["YES", "NO", "AMBIGUOUS"],
+      "description": "L1 Association labels: YES (valid association), NO (spurious/trap), AMBIGUOUS (missing info)"
+    },
+    "l2_label": {
+      "type": "string",
+      "enum": ["NO"],
+      "description": "L2 Intervention labels: All L2 cases MUST be NO (cannot conclude causation without intervention)"
+    },
+    "l3_label": {
+      "type": "string",
+      "enum": ["VALID", "INVALID", "CONDITIONAL"],
+      "description": "L3 Counterfactual labels: VALID (counterfactual holds), INVALID (counterfactual fails), CONDITIONAL (depends on assumptions)"
+    },
+    "difficulty": {
+      "type": "string",
+      "enum": ["Easy", "Medium", "Hard"],
+      "description": "Case difficulty: Easy (obvious trap), Medium (subtle), Hard (expert knowledge required)"
+    },
+    "l1_trap_type": {
+      "type": "string",
+      "enum": ["W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9", "W10", "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "A", "NONE"],
+      "description": "L1 trap codes: W1-W10 (Wolf/invalid traps), S1-S8 (Sheep/valid patterns), A (Ambiguous), NONE"
+    },
+    "l2_trap_type": {
+      "type": "string",
+      "enum": ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11", "T12", "T13", "T14", "T15", "T16", "T17"],
+      "description": "L2 trap codes: T1-T17 across 6 families (Selection, Statistical, Confounding, Direction, Information, Mechanism)"
+    },
+    "l3_family": {
+      "type": "string",
+      "enum": ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "NONE"],
+      "description": "L3 family codes: F1=Deterministic, F2=Probabilistic, F3=Overdetermination, F4=Structural, F5=Temporal, F6=Epistemic, F7=Attribution, F8=Moral/Legal"
+    },
+    "variable_object": {
+      "oneOf": [
+        { "type": "string" },
+        {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string", "description": "Variable name" },
+            "role": { "type": "string", "description": "Variable role (e.g., exposure, outcome, confounder)" }
+          },
+          "required": ["name"]
+        }
+      ]
+    },
+    "variables": {
+      "type": "object",
+      "properties": {
+        "X": { "$ref": "#/definitions/variable_object", "description": "Exposure/treatment/predictor variable" },
+        "Y": { "$ref": "#/definitions/variable_object", "description": "Outcome variable" },
+        "Z": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Confounders, mediators, colliders, or mechanisms (MUST be array)"
+        },
+        "X'": { "$ref": "#/definitions/variable_object", "description": "Counterfactual exposure (L3 only)" }
+      },
+      "required": ["X", "Y", "Z"]
+    },
+    "trap": {
+      "type": "object",
+      "properties": {
+        "type": { "type": ["string", "null"], "description": "Trap type code (L1: W1-W10/S1-S8/A, L2: T1-T17, L3: F1-F8)" },
+        "type_name": { "type": ["string", "null"], "description": "Human-readable trap type name" },
+        "subtype": { "type": ["string", "null"], "description": "Trap subtype code (more specific classification)" },
+        "subtype_name": { "type": ["string", "null"], "description": "Human-readable subtype name" }
+      }
+    },
+    "conditional_answers": {
+      "type": ["object", "null"],
+      "properties": {
+        "answer_if_condition_1": { "type": ["string", "null"], "description": "Answer if first condition holds" },
+        "answer_if_condition_2": { "type": ["string", "null"], "description": "Answer if second condition holds" }
+      }
+    },
+    "rubric_scores": {
+      "type": "object",
+      "description": "Quality validation scores (10 points total per Assignment 2 Table 7)",
+      "properties": {
+        "scenario_clarity": { "type": "number", "minimum": 0, "maximum": 1, "description": "X, Y, Z clearly defined (0-1 pt)" },
+        "hidden_question": { "type": "number", "minimum": 0, "maximum": 1, "description": "Identifies key ambiguity (0-1 pt)" },
+        "conditional_answer_a": { "type": "number", "minimum": 0, "maximum": 1.5, "description": "First conditional answer quality (0-1.5 pts)" },
+        "conditional_answer_b": { "type": "number", "minimum": 0, "maximum": 1.5, "description": "Second conditional answer quality (0-1.5 pts)" },
+        "wise_refusal": { "type": "number", "minimum": 0, "maximum": 2, "description": "Complete answer with verdict (0-2 pts)" },
+        "difficulty_calibration": { "type": "number", "minimum": 0, "maximum": 1, "description": "Label matches complexity (0-1 pt)" },
+        "final_label": { "type": "number", "minimum": 0, "maximum": 1, "description": "Correct label for Pearl level (0-1 pt)" },
+        "trap_type": { "type": "number", "minimum": 0, "maximum": 1, "description": "Correctly classified trap type (0-1 pt)" }
+      }
+    }
+  },
+
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "pattern": "^T3-BucketLarge-[A-Z]-[0-9]+\\.[0-9]+$",
+        "description": "Unique case identifier (e.g., T3-BucketLarge-G-1.1)"
+      },
+      "case_id": {
+        "type": "string",
+        "pattern": "^[0-9]+\\.[0-9]+$",
+        "description": "Case reference ID from original benchmark (e.g., 1.1)"
+      },
+      "bucket": {
+        "type": "string",
+        "description": "Bucket identifier (e.g., BucketLarge-G)"
+      },
+      "pearl_level": { "$ref": "#/definitions/pearl_level" },
+      "domain": {
+        "type": "string",
+        "description": "Domain area (e.g., Markets, Economics, Medicine, Technology, etc.)"
+      },
+      "subdomain": {
+        "type": ["string", "null"],
+        "description": "More specific subdomain (e.g., Commodities, Forex, Oncology)"
+      },
+      "scenario": {
+        "type": "string",
+        "minLength": 50,
+        "description": "Description of the situation (2-5 sentences)"
+      },
+      "claim": {
+        "type": "string",
+        "minLength": 10,
+        "description": "The causal claim being evaluated"
+      },
+      "label": {
+        "type": "string",
+        "enum": ["YES", "NO", "AMBIGUOUS", "VALID", "INVALID", "CONDITIONAL"],
+        "description": "Case label: L1 uses YES/NO/AMBIGUOUS, L2 uses NO only, L3 uses VALID/INVALID/CONDITIONAL"
+      },
+      "is_ambiguous": {
+        "type": "boolean",
+        "description": "True if label is AMBIGUOUS or CONDITIONAL"
+      },
+      "variables": { "$ref": "#/definitions/variables" },
+      "trap": { "$ref": "#/definitions/trap" },
+      "difficulty": { "$ref": "#/definitions/difficulty" },
+      "causal_structure": {
+        "type": ["string", "null"],
+        "description": "Description of the causal graph (e.g., 'Z -> X, Z -> Y' or 'X -> M -> Y')"
+      },
+      "key_insight": {
+        "type": ["string", "null"],
+        "description": "One-line memorable takeaway"
+      },
+      "hidden_timestamp": {
+        "type": ["string", "null"],
+        "description": "Question revealing temporal/causal ordering (for AMBIGUOUS/CONDITIONAL cases)"
+      },
+      "conditional_answers": { "$ref": "#/definitions/conditional_answers" },
+      "wise_refusal": {
+        "type": ["string", "null"],
+        "description": "Model's expected response identifying the trap or missing information"
+      },
+      "gold_rationale": {
+        "type": ["string", "null"],
+        "description": "Complete explanation of the correct reasoning"
+      },
+      "initial_author": {
+        "type": "string",
+        "description": "Student who originally created the case (e.g., student@stanford.edu)"
+      },
+      "validator": {
+        "type": ["string", "null"],
+        "description": "Student who validated this case"
+      },
+      "final_score": {
+        "type": ["number", "null"],
+        "minimum": 0,
+        "maximum": 10,
+        "description": "Quality score from validation rubric (0-10). >= 8 accept, 6-7 revise, < 6 reject"
+      }
+    },
+    "required": [
+      "id",
+      "case_id", 
+      "bucket",
+      "pearl_level",
+      "domain",
+      "scenario",
+      "claim",
+      "label",
+      "is_ambiguous",
+      "variables",
+      "trap",
+      "difficulty",
+      "initial_author",
+      "validator",
+      "final_score"
+    ],
+    "allOf": [
+      {
+        "if": { "properties": { "pearl_level": { "const": "L2" } } },
+        "then": { "properties": { "label": { "const": "NO" } } }
+      },
+      {
+        "if": { "properties": { "is_ambiguous": { "const": true } } },
+        "then": {
+          "required": ["hidden_timestamp", "conditional_answers"],
+          "properties": {
+            "hidden_timestamp": { "type": "string", "minLength": 1 },
+            "conditional_answers": { "type": "object" }
+          }
+        }
+      }
+    ]
+  },
+  "minItems": 170,
+
+  "examples": [
+    {
+      "id": "T3-BucketLarge-G-1.1",
+      "case_id": "1.1",
+      "bucket": "BucketLarge-G",
+      "pearl_level": "L1",
+      "domain": "Markets",
+      "subdomain": "Stock trading",
+      "scenario": "An analysis of global stock markets shows that rising technology stocks (X) are correlated with increased private investment (Y). However, periods of high interest rates (Z) drive both an influx of capital into tech sectors and a general uptick in private investments.",
+      "claim": "Rising technology stocks are associated with increased private investment.",
+      "label": "NO",
+      "is_ambiguous": false,
+      "variables": {
+        "X": { "name": "Rising technology stocks", "role": "exposure" },
+        "Y": { "name": "Increased private investment", "role": "outcome" },
+        "Z": ["High interest rates (Latent Cause)"]
+      },
+      "trap": {
+        "type": "W7",
+        "type_name": "Confounding",
+        "subtype": "Omitted_Variable",
+        "subtype_name": "Omitted Variable"
+      },
+      "difficulty": "Medium",
+      "causal_structure": "Z -> X, Z -> Y",
+      "key_insight": "High interest rates (Z) cause both rising tech stocks (X) and increased private investment (Y).",
+      "hidden_timestamp": null,
+      "conditional_answers": null,
+      "wise_refusal": "NO - the claim is invalid. The observed correlation between rising technology stocks (X) and increased private investment (Y) is misleading because high interest rates (Z) are the underlying factor driving both phenomena.",
+      "gold_rationale": "The scenario reveals a confounding trap by showing that high interest rates (Z) lead to both rising technology stocks (X) and increased private investment (Y). This creates a spurious correlation between X and Y.",
+      "initial_author": "student@stanford.edu",
+      "validator": "validator@stanford.edu",
+      "final_score": 9.0
+    },
+    {
+      "id": "T3-BucketLarge-G-2.1",
+      "case_id": "2.1",
+      "bucket": "BucketLarge-G",
+      "pearl_level": "L3",
+      "domain": "Markets",
+      "subdomain": "Commodities",
+      "scenario": "A severe drought hit the Wheat Belt (X). Wheat prices soared to $12/bushel (Y).",
+      "claim": "If it had rained normally (X'), wheat prices would be lower (Y').",
+      "label": "VALID",
+      "is_ambiguous": false,
+      "variables": {
+        "X": { "name": "Drought", "role": "exposure" },
+        "Y": { "name": "High wheat price", "role": "outcome" },
+        "Z": ["Supply/Demand Elasticity (Mechanism)"],
+        "X'": "Normal rainfall"
+      },
+      "trap": {
+        "type": "F1",
+        "type_name": "Deterministic",
+        "subtype": "Physical_Supply_Chain",
+        "subtype_name": "Physical Supply Chain"
+      },
+      "difficulty": "Medium",
+      "causal_structure": "Weather affects supply; supply affects price",
+      "key_insight": "Basic supply and demand mechanics",
+      "hidden_timestamp": null,
+      "conditional_answers": null,
+      "wise_refusal": "VALID. Agricultural pricing is supply-driven. Rain (X') increases yield, increasing supply (Z). Increased supply mechanically lowers price (Y') assuming constant demand.",
+      "gold_rationale": "Agricultural pricing is supply-driven. Rain increases yield, increasing supply. Increased supply mechanically lowers price assuming constant demand.",
+      "initial_author": "student@stanford.edu",
+      "validator": "validator@stanford.edu",
+      "final_score": 9.5
+    },
+    {
+      "id": "T3-BucketLarge-G-3.1",
+      "case_id": "3.1",
+      "bucket": "BucketLarge-G",
+      "pearl_level": "L1",
+      "domain": "Markets",
+      "subdomain": "Forex",
+      "scenario": "Currency A depreciated against Currency B (Y) after Bank Z implemented a new monetary policy (X). During the same period, significant foreign investment flowed into Currency B's economy (Z).",
+      "claim": "Currency A's depreciation (Y) is associated with Bank Z's monetary policy (X).",
+      "label": "AMBIGUOUS",
+      "is_ambiguous": true,
+      "variables": {
+        "X": { "name": "Monetary policy", "role": "exposure" },
+        "Y": { "name": "Currency A's depreciation", "role": "outcome" },
+        "Z": ["Foreign investment flow into Currency B"]
+      },
+      "trap": {
+        "type": "A",
+        "type_name": "Ambiguous",
+        "subtype": null,
+        "subtype_name": null
+      },
+      "difficulty": "Medium",
+      "causal_structure": null,
+      "key_insight": "Timing and impact of foreign investment flows (Z) on depreciation (Y) are unclear.",
+      "hidden_timestamp": "Did foreign investments into Currency B occur before or after Bank Z's monetary policy was implemented?",
+      "conditional_answers": {
+        "answer_if_condition_1": "If foreign investment preceded the policy: The depreciation (Y) is more likely due to the influx of foreign investment (Z).",
+        "answer_if_condition_2": "If foreign investment followed the policy: The monetary policy (X) is more likely associated with the depreciation (Y)."
+      },
+      "wise_refusal": "AMBIGUOUS - cannot definitively evaluate. The scenario lacks critical timing information regarding when the foreign investment flows (Z) occurred relative to the monetary policy (X).",
+      "gold_rationale": "The scenario lacks information on the timing and magnitude of the foreign investment flows compared to the effects of the new monetary policy.",
+      "initial_author": "student@stanford.edu",
+      "validator": "validator@stanford.edu",
+      "final_score": 8.5
+    }
+  ]
+}

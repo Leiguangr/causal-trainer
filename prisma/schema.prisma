@@ -25,7 +25,7 @@ model User {
 model Question {
   id                String      @id @default(cuid())
   scenario          String
-  claim             String
+  claim             String?     // Optional - some legacy data has claim embedded in scenario
   pearlLevel        String      // L1, L2, L3
   domain            String      // Markets, Medicine, Law, etc.
   subdomain         String?     // More specific domain (e.g., "Commodities")
@@ -38,6 +38,7 @@ model Question {
   causalStructure   String?     // Brief description of causal graph (null for AMBIGUOUS)
   keyInsight        String?     // One-line takeaway
   wiseRefusal       String?     // Complete answer with verdict
+  goldRationale     String?     // Gold standard rationale for the case
 
   // New metadata fields
   author            String?     // Who made/reviewed the annotation (e.g., "LLM", "admin@example.com")
@@ -52,6 +53,23 @@ model Question {
   dataset           String      @default("default") // Dataset identifier for grouping questions
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
+
+  // Validation workflow fields (CS372 Assignment 2)
+  initialAuthor             String?   // Original case creator (e.g., "julih@stanford.edu")
+  validator                 String?   // Person who validated (e.g., "lgren007@stanford.edu")
+  validationStatus          String    @default("pending") // pending, scored, approved, rejected
+  validatorNotes            String?   // Validator's notes and comments
+
+  // Rubric scores (10 points total) - Per revised Assignment 2 Table 7
+  scenarioClarityScore      Float?    // 0-1 point: X, Y, Z clearly defined
+  hiddenQuestionScore       Float?    // 0-1 point: Identifies causal confusion
+  conditionalAnswerAScore   Float?    // 0-1.5 points: First conditional answer quality
+  conditionalAnswerBScore   Float?    // 0-1.5 points: Second conditional answer quality
+  wiseRefusalScore          Float?    // 0-2 points: Complete answer with verdict
+  difficultyCalibrationScore Float?   // 0-1 point: Appropriate difficulty level
+  finalLabelScore           Float?    // 0-1 point: Correct label for Pearl level
+  trapTypeScore             Float?    // 0-1 point: Correctly classified trap type
+  finalScore                Float?    // 0-10 total (computed from rubric scores)
 
   answers           Answer[]
   corrections       Correction[]

@@ -1,0 +1,290 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=0.9in]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{titlesec}
+\usepackage{parskip}
+
+% Tighter section spacing
+\titlespacing*{\section}{0pt}{2.5ex plus 1ex minus .2ex}{1.5ex plus .2ex}
+\titlespacing*{\subsection}{0pt}{2ex plus 1ex minus .2ex}{1ex plus .2ex}
+
+\title{T\textsuperscript{3} Market Benchmark: Dataset Construction and Analysis}
+\author{
+    Deveen Harischandra \quad Juli Huang \quad Leiguang Ren \quad Theodore Wu\\[0.3em]
+    \small Stanford University, CS372\\[0.2em]
+    \small\texttt{\{deveenh, julih, leiguangr, wutheodo\}@stanford.edu}
+}
+\date{January 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We present the T\textsuperscript{3} Market Benchmark, a dataset of 451 expert-annotated questions designed to evaluate whether large language models can identify valid and invalid causal claims in financial market scenarios. The dataset spans all three levels of Pearl's causal hierarchy---association, intervention, and counterfactual---and covers 12 distinct causal trap types. Each question includes a scenario, a claim to evaluate, labeled variables, and ground truth with detailed explanations. We describe our generation methodology combining LLM-assisted drafting with LLM-assisted validation and rigorous human verification, analyze semantic diversity and structural coverage, and discuss lessons learned about creating rigorous causal reasoning benchmarks.
+\end{abstract}
+
+\section{Introduction}
+
+Large language models demonstrate impressive knowledge of causal inference concepts, yet often fail to apply scientific rigor when evaluating real-world causal claims. The T\textsuperscript{3} Market Benchmark addresses this gap by testing whether models can correctly identify spurious correlations and causal fallacies in realistic financial scenarios.
+
+Each question presents a scenario describing an observed relationship between variables, along with a claim about causation or correlation. The model must determine whether the claim is valid (YES), invalid due to an identifiable causal trap (NO), or underdetermined given the available information (AMBIGUOUS). This three-way classification tests not only detection of causal fallacies but also appropriate epistemic humility when evidence is insufficient.
+
+This report describes the dataset construction process, presents structural and semantic analyses, and synthesizes lessons learned during annotation that inform best practices for causal reasoning evaluation.
+
+\section{Dataset Overview}
+
+The dataset comprises 451 expert-verified questions focused on financial markets. Each question consists of a scenario describing observed relationships between variables, a claim to evaluate, explicitly labeled variables (X, Y, and optionally Z), and comprehensive annotations including Pearl hierarchy level, trap type, and difficulty.
+
+\subsection{Label Distributions}
+
+Table~\ref{tab:distributions} summarizes the ground truth and Pearl level distributions. The majority of questions (52.5\%) present invalid claims with identifiable causal traps, while 27.9\% present valid claims and 19.5\% are deliberately ambiguous. The Pearl level distribution was designed to target 11\% L1, 66\% L2, and 23\% L3, reflecting the emphasis on interventional reasoning as the most practically relevant level for evaluating causal claims. The actual distribution (20.0\% L1, 51.9\% L2, 28.2\% L3) overrepresents L1 and L3 while underrepresenting L2, a deviation that occurred during iterative refinement to ensure sufficient coverage of association-level and counterfactual traps.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrr|lrrr}
+\toprule
+\textbf{Ground Truth} & \textbf{n} & \textbf{\%} & \textbf{Pearl Level} & \textbf{n} & \textbf{\%} & \textbf{Target} \\
+\midrule
+NO (Invalid) & 237 & 52.5 & L1 (Association) & 90 & 20.0 & 11\% \\
+YES (Valid) & 126 & 27.9 & L2 (Intervention) & 234 & 51.9 & 66\% \\
+AMBIGUOUS & 88 & 19.5 & L3 (Counterfactual) & 127 & 28.2 & 23\% \\
+\bottomrule
+\end{tabular}
+\caption{Distribution of ground truth labels and Pearl hierarchy levels (N=451).}
+\label{tab:distributions}
+\end{table}
+
+\subsection{Example Cases}
+
+To illustrate the dataset structure, we present representative examples for each ground truth category.
+
+\textbf{NO (Invalid Claim---Confounding):} \emph{Scenario:} ``Increased stock trading activity (X) coincided with market volatility (Y) throughout the year. Economic instability (Z) caused both increased trading as investors sought to hedge risks, and market volatility due to fluctuating economic indicators.'' \emph{Claim:} ``Increased stock trading activity causes market volatility.'' The claim is invalid because economic instability confounds the relationship---both trading activity and volatility are driven by the same underlying cause.
+
+\textbf{YES (Valid Claim):} \emph{Scenario:} ``In a controlled environment, a trading firm randomly assigned traders to receive a new algorithm-based trading tool (X). Those using the tool achieved an average 15\% higher profit margin (Y) than those using traditional methods over a 6-month period.'' \emph{Claim:} ``The use of the algorithm-based trading tool causes traders to achieve higher profit margins.'' The claim is valid because random assignment establishes a credible causal identification strategy.
+
+\textbf{AMBIGUOUS:} \emph{Scenario:} ``A cryptocurrency exchange lowers transaction fees (X) while Bitcoin trading volume increases by 150\% (Y). Simultaneously, Bitcoin prices surge by 30\% over two weeks (Z).'' \emph{Claim:} ``Lowering transaction fees causes the increase in Bitcoin trading volume.'' The claim is ambiguous because the concurrent price surge (Z) represents a plausible alternative explanation; without additional information about timing or mechanism, validity cannot be determined.
+
+\subsection{Trap Type Coverage}
+
+The dataset covers 12 distinct trap types and 37 subtypes, designed to test different causal reasoning failures. Table~\ref{tab:traps} shows the distribution among invalid (NO) cases. The trap taxonomy is intentionally not mutually exclusive: Simpson's Paradox, for instance, is a specific manifestation of collider bias that describes the phenomenon where a trend reverses upon stratification. Overlapping categories serve a pedagogical purpose, helping evaluators understand both the graph-theoretic structure and the observable phenomenon.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lr|lr}
+\toprule
+\textbf{Trap Type} & \textbf{n} & \textbf{Trap Type} & \textbf{n} \\
+\midrule
+CONFOUNDING & 37 & SIMPSONS & 21 \\
+SELECTION & 33 & GOODHART & 22 \\
+FEEDBACK & 30 & COLLIDER & 17 \\
+REVERSE & 30 & PREEMPTION & 11 \\
+CONFOUNDER\_MEDIATOR & 27 & Other (3 types) & 11 \\
+\bottomrule
+\end{tabular}
+\caption{Distribution of trap types among invalid claims (n=237).}
+\label{tab:traps}
+\end{table}
+
+\section{Dataset Generation Process}
+
+We employed a hybrid approach combining LLM-assisted generation with rigorous human verification. This section describes the methodology and lessons learned.
+
+\subsection{Schema and Labeling Rules}
+
+All samples conform to a unified schema (Appendix~\ref{app:schema}) where the ground-truth label determines which attributes are meaningful. For YES cases, the sample includes an explicit causal structure supporting the claim, with trap annotations set to NONE. For AMBIGUOUS cases, the scenario is deliberately under-specified such that validity cannot be determined without additional assumptions; the schema includes fields for documenting the hidden assumption and conditional answers. For NO cases, exactly one identifiable causal trap must be present and diagnosable from the scenario details alone.
+
+\subsection{LLM-Assisted Generation}
+
+Candidate samples were generated using OpenAI's GPT-4o model with constrained prompts that enumerate the trap taxonomy, provide seed examples as structural scaffolding, and require strict JSON output. Several prompt refinements improved causal rigor: explicit Pearl-level criteria distinguishing association from intervention from counterfactual; emphasis on concrete measurable variables rather than unobservable intentions; and schematic causal-graph formats ensuring well-defined, diagnosable errors in invalid items.
+
+The generation workflow is implemented as a web application (Next.js with Prisma/SQLite backend) that stores drafts, revisions, and verification status.
+
+\subsection{LLM-Assisted Validation}
+
+Before human review, generated samples undergo automated validation using a separate GPT-4o evaluation agent. The agent applies a structured rubric assessing: (1) Pearl level accuracy---whether the assigned level matches the claim's epistemic requirements; (2) trap type accuracy---whether the labeled trap matches the actual causal structure; (3) ground truth consistency---whether the YES/NO/AMBIGUOUS label follows from the scenario; (4) logical consistency---whether the explanation matches the scenario and claim; (5) domain accuracy---whether the scenario contains factual errors; (6) clarity---whether the scenario is understandable (scored 1--5); and (7) variable accuracy---whether X, Y, Z are correctly identified. Each sample receives an overall verdict (APPROVED, NEEDS\_REVIEW, or REJECTED) with priority level and suggested corrections.
+
+\subsection{Human Verification}
+
+Automated generation and validation are complemented by rigorous human verification. Candidate questions are stored as unverified by default. A form-based review interface allows validators to verify labels, edit annotations, and trigger regeneration for samples that fail quality standards. Only human-verified samples are exported for the final dataset.
+
+\subsection{Code Availability}
+
+The full generation pipeline is available at \url{https://github.com/Leiguangr/causal-trainer}. Key entry points include the batch generation endpoint (\texttt{src/app/api/admin/generate/route.ts}), admin interfaces for generation and review, and the database schema with verification flags.
+
+\section{Structural Analysis}
+
+\subsection{Coverage Validation}
+
+Figure~\ref{fig:basic_stats} presents the distribution of questions across key dimensions. The dataset achieves broad Pearl hierarchy coverage: L1 (Association) questions test whether models can distinguish correlation from causation at the observational level; L2 (Intervention) questions require reasoning about ``what would happen if we do X?''; and L3 (Counterfactual) questions test reasoning about ``what would have happened had X not occurred?''
+
+The trap taxonomy includes 12 types and 37 subtypes. Importantly, subtypes are intentionally not mutually exclusive. Simpson's Paradox, for instance, is a specific manifestation of collider bias---describing the phenomenon where a trend reverses upon stratification---while ``Collider'' denotes the underlying graph structure ($X \rightarrow Z \leftarrow Y$). We introduced Berkson's Paradox as a distinct subtype because LLM-generated collider cases defaulted to positive correlations; Berkson cases (where conditioning on a collider induces negative correlation) required explicit prompting. This overlap serves pedagogical purposes, communicating both structure and observable phenomenon.
+
+\subsection{Ambiguity as a Design Feature}
+
+The AMBIGUOUS category (18.9\% of cases) is critical for testing whether models appropriately recognize uncertainty. Determinate YES cases include explicit identification strategies or RCT-equivalent setups; determinate NO cases contain identifiable causal traps. Ambiguous cases are deliberately under-specified such that validity cannot be determined without additional assumptions---testing epistemic humility rather than defaulting to YES or NO.
+
+\subsection{Failure-Mode Analysis}
+
+To justify the need for targeted case generation, we developed a lightweight failure-mode analysis system that identifies qualitative patterns rather than performing competitive model comparison. The analysis focuses on demonstrating that ``these cases expose specific weaknesses, but coverage is sparse or unstable.'' The system evaluates questions against explicit criteria: correct trap type identification, correct Pearl level classification, believable business scenarios, and reasonable variable analysis. Figure~\ref{fig:failure_analysis} shows the web interface for conducting this analysis.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{images/failure_analysis.png}
+\caption{Failure-mode analysis interface showing coverage gaps and pattern detection.}
+\label{fig:failure_analysis}
+\end{figure}
+
+The analysis operates in two modes: lightweight (15--20 representative questions) for rapid iteration, and comprehensive (45+ questions) for thorough validation. Pattern detection covers five categories: conceptual failures (Pearl level misclassification, mechanism confusion), structural failures (scenario-claim mismatches), ambiguity handling, coverage gaps, and instability patterns (questions sensitive to minor wording changes).
+
+\subsection{Coverage Analysis}
+
+Figure~\ref{fig:heatmap} visualizes the Pearl level $\times$ trap type coverage. The dataset achieves good coverage where trap types are conceptually applicable: most valid combinations have at least 5 examples, sufficient for reliable evaluation.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{pearl_trap_heatmap.png}
+\caption{Pearl Level $\times$ Trap Type coverage heatmap (N=451). Cells show count of questions for each combination. Empty cells reflect conceptual constraints---certain traps are level-specific by design.}
+\label{fig:heatmap}
+\end{figure}
+
+Some Pearl $\times$ trap combinations are intentionally sparse or absent because they lack conceptual coherence. PREEMPTION is inherently counterfactual (requiring reasoning about ``what would have happened''), making L1/L2 combinations unnatural. FEEDBACK loops manifest through intervention effects, concentrating at L2. GOODHART's Law describes how metrics change under intervention, also concentrating at L2. The observed distribution reflects these conceptual constraints rather than coverage failures.
+
+\subsection{Systemic Issues}
+
+Two systemic observations emerged from the analysis. First, questions with ground truth YES or AMBIGUOUS have \texttt{trapType = NONE} by design, meaning 47\% of questions do not test specific causal trap identification. For comprehensive evaluation, the 53\% of NO cases must provide broad trap coverage. Second, the analysis revealed that without coverage balancing algorithms, generation produces random gaps rather than balanced distribution. Targeted additions of 20--30 cases would address coverage gaps; the analysis provides specific targets rather than generic recommendations.
+
+\subsection{Seed-to-Scale Rationale}
+
+The dataset expanded from 45 canonical seed cases to the current 451. The seeds---drawn from financial markets and weather-driven confounding---provided structural richness: spurious indicators (Super Bowl Indicator), latent common causes (Odd Lot Theory, Skyscraper Index), selection/collider conditioning (survivorship bias, publication bias), and environment-driven confounding (weather shocks). However, with only 5 L1 and 10 L3 cases, the seed set was too small to reliably demonstrate causal patterns; coverage claims were dominated by idiosyncrasies of individual prompts.
+
+Controlled expansion maintained Pearl-level proportions while broadening topics beyond repeated crypto/HFT/weather motifs, filling underrepresented patterns (e.g., Berkson-style negative correlations), and enforcing metadata hygiene. Variable and label consistency is a prerequisite for expansion, not an afterthought.
+
+\section{Semantic Diversity Analysis}
+
+We computed pairwise semantic similarity using sentence embeddings (all-MiniLM-L6-v2) to assess scenario diversity. Figure~\ref{fig:basic_stats} shows the distribution of questions across key dimensions.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{images/basic_stats.png}
+\caption{Distribution of questions across ground truth, Pearl level, trap type, difficulty, subdomain, and annotator.}
+\label{fig:basic_stats}
+\end{figure}
+
+\subsection{Similarity Statistics}
+
+The mean pairwise cosine similarity of 0.332 ($\sigma$ = 0.144) indicates good overall diversity---scenarios are semantically distinct from one another. However, we identified 63 pairs with similarity $>$ 0.85, suggesting potential near-duplicates. The highest-similarity pairs predominantly involve Bitcoin/cryptocurrency trading (up to 0.957), central bank interest rate policy (up to 0.927), and bond purchasing programs (up to 0.920). These clusters represent opportunities for deduplication to improve diversity.
+
+\subsection{t-SNE Visualization}
+
+Figure~\ref{fig:tsne} shows a 2D t-SNE projection of scenario embeddings. Scenarios do not cluster strongly by ground truth, suggesting semantic content alone is not predictive of validity. Some clustering by trap type is visible, particularly for FEEDBACK and SELECTION traps. The embedding space shows good coverage without large empty regions.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{images/tsne_visualization.png}
+\caption{t-SNE visualization colored by ground truth (top-left), Pearl $\times$ ground truth (top-right), trap type (bottom-left), and subdomain (bottom-right).}
+\label{fig:tsne}
+\end{figure}
+
+\subsection{Subdomain and Topic Coverage}
+
+The dataset contains a single domain (Markets) with 123 unique subdomains providing topical diversity. The most frequent subdomains are stock trading (128 questions), cryptocurrency (51), macroeconomics (44), and commodities (27). Figure~\ref{fig:subdomain_gt} shows the ground truth distribution across subdomains.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{images/subdomain_ground_truth.png}
+\caption{Ground truth distribution by subdomain (top 10 subdomains + OTHER).}
+\label{fig:subdomain_gt}
+\end{figure}
+
+\subsection{Scenario Characteristics}
+
+Scenarios average 50.1 words ($\sigma$ = 11.7). Each includes 2--3 explicitly labeled variables: valid claims (YES) typically involve two variables (X, Y), while invalid and ambiguous claims include a third variable (Z) representing the confounder, collider, or mediator. Figure~\ref{fig:length} shows scenario length distributions by ground truth and difficulty.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{images/scenario_length.png}
+\caption{Scenario word count by ground truth (left) and difficulty (right).}
+\label{fig:length}
+\end{figure}
+
+\section{Discussion}
+
+\subsection{Behavioral vs.\ Knowledge Testing}
+
+A key observation from annotation: LLMs possess comprehensive knowledge of causal inference concepts---confounding, selection bias, identification strategies---yet do not naturally apply scientific rigor when evaluating causal claims. Left unprompted, models often accept ``X caused Y because Y followed X'' or validate claims with hand-wavy methodology. This benchmark tests whether models \emph{apply} causal reasoning as a first instinct, not whether they \emph{know} the concepts. This distinction---behavioral testing rather than knowledge testing---is fundamental to the benchmark's design.
+
+\subsection{Labeling Criteria}
+
+Ground truth labeling proved less subjective than initially expected. YES requires randomization, valid quasi-experiment with explicit identification, or established mechanism with appropriate controls. NO requires an identifiable flaw (confounding, selection, reverse causation) that can be named from the given information. AMBIGUOUS applies when methodology is mentioned but key assumptions are unstated. This makes annotation surprisingly systematic once criteria are internalized.
+
+Level-appropriate judgment is critical: at L1, the bar is whether the scenario credibly reports an observational association, not whether causality is identified. Over-triggering AMBIGUOUS from the mere presence of a third variable is inappropriate at L1 unless that variable affects sample selection.
+
+\subsection{Detection Heuristics}
+
+Annotators identified cue words for rapid classification. YES cases often include ``purchased,'' ``initiated program,'' ``held constant,'' or ``no other major events.'' AMBIGUOUS cases typically contain ``during the same period'' or ``concurrently'' combined with another plausible driver. NO cases exhibit trap-specific patterns: confounding (``announcement,'' ``stimulus,'' ``common shock''), selection (``only included,'' ``survivors''), feedback (``expectations adjusted,'' ``loop''), Goodhart (``rewarded,'' ``incentivized,'' ``targets''), and reverse causation (``latent cause,'' ``outcome-dependent'').
+
+\subsection{Generation Lessons}
+
+Several patterns emerged during LLM-assisted generation. Early outputs described actor intentions (``brokers trade merely to meet targets'') rather than observables; prompts were refined to require behavioral descriptions (``trading volume increased 300\% while profit per trade decreased 50\%''). Heavy concentration in certain topics (cryptocurrency, QE/bond purchases, central bank policy) created redundancy even when trap labels differed. Without explicit instruction, the LLM defaulted to positive correlations; even Berkson's Paradox cases lacked negative correlations until manually introduced.
+
+Many L3 items ``sound counterfactual'' but omit explicit identification setups (RCT/DiD/RD/IV/synthetic control), making validity hard to assess. NO justifications often rely on named traps without tying them to concrete violated assumptions.
+
+\section{Conclusion}
+
+The T\textsuperscript{3} Market Benchmark provides 451 expert-verified questions testing whether language models can identify valid and invalid causal claims in financial market scenarios. The dataset achieves good semantic diversity (mean pairwise similarity 0.332), comprehensive trap coverage (12 types, 37 subtypes), and broad Pearl hierarchy representation. While the target distribution was 11\% L1, 66\% L2, and 23\% L3, the actual distribution (20.0\% L1, 51.9\% L2, 28.2\% L3) reflects iterative refinement to ensure sufficient coverage of association-level and counterfactual traps.
+
+Key recommendations for future work include reviewing high-similarity pairs for potential deduplication and adding more negative correlation examples (currently underrepresented). The Pearl $\times$ trap coverage reflects conceptual constraints---certain traps are level-specific by design---rather than gaps requiring remediation.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lr|lr}
+\toprule
+\textbf{Metric} & \textbf{Value} & \textbf{Metric} & \textbf{Value} \\
+\midrule
+Total questions & 451 & Trap types & 12 \\
+Pearl levels & 3 & Trap subtypes & 37 \\
+Domain & Markets & Mean similarity & 0.332 \\
+\bottomrule
+\end{tabular}
+\caption{Dataset summary statistics.}
+\label{tab:summary}
+\end{table}
+
+\appendix
+
+\section{Question Schema}
+\label{app:schema}
+
+Each question follows a unified JSON schema with fields for \texttt{scenario} (the observed situation), \texttt{claim} (the causal or correlational assertion to evaluate), \texttt{variables} (explicitly labeled X, Y, and optionally Z), and \texttt{annotations} (Pearl level, domain, subdomain, trap type/subtype, difficulty, causal structure, and key insight). The \texttt{groundTruth} field contains YES, NO, or AMBIGUOUS. For ambiguous cases, additional fields document the hidden assumption and conditional answers (e.g., ``if the fee reduction preceded the price surge, YES; if the price surge preceded the fee reduction, NO'').
+
+\section{Generation Code}
+\label{app:code}
+
+The generation endpoint uses OpenAI's API with JSON-only response formatting:
+
+{\small
+\begin{verbatim}
+const completion = await openai.chat.completions.create({
+  model: 'gpt-4o',
+  messages: [...],
+  temperature: 0.85,
+  response_format: { type: 'json_object' },
+});
+await prisma.question.create({
+  data: { ...parsed, isLLMGenerated: true, isVerified: false }
+});
+\end{verbatim}
+}
+
+Generated questions are stored as unverified and require human review before export.
+
+\end{document}
+
