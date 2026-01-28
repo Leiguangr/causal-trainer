@@ -437,13 +437,40 @@ async function selectNextL3Family(dataset: string): Promise<L3Family> {
   return selected;
 }
 
+/** Target distribution: 1 Easy : 2 Medium : 1 Hard (25% : 50% : 25%) — enforced per batch like trap types */
+const DIFFICULTY_TARGETS: Record<string, number> = { Easy: 0.25, Medium: 0.50, Hard: 0.25 };
+const DIFFICULTIES = ['Easy', 'Medium', 'Hard'] as const;
+type TargetDifficulty = (typeof DIFFICULTIES)[number];
+
+/**
+ * Build a difficulty schedule for a batch that enforces 1:2:1 (Easy : Medium : Hard).
+ * Same idea as trap-type distribution: assign exact counts per batch, then shuffle.
+ */
+function buildDifficultySchedule(totalTasks: number): TargetDifficulty[] {
+  const nEasy = Math.round(totalTasks * 0.25);
+  const nHard = Math.round(totalTasks * 0.25);
+  const nMedium = Math.max(0, totalTasks - nEasy - nHard);
+  const schedule: TargetDifficulty[] = [
+    ...Array<TargetDifficulty>(nEasy).fill('Easy'),
+    ...Array<TargetDifficulty>(nMedium).fill('Medium'),
+    ...Array<TargetDifficulty>(nHard).fill('Hard'),
+  ];
+  // Shuffle so we don't always generate Easy first, etc.
+  for (let i = schedule.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [schedule[i], schedule[j]] = [schedule[j], schedule[i]];
+  }
+  return schedule;
+}
+
 function buildL1Prompt(
   evidenceSelection: L1EvidenceSelection | null,
   validity: ValidityType,
   domain: GenerationDomain,
   subdomain: string,
   recentScenarios: string[],
-  promptNotes?: string
+  promptNotes?: string,
+  targetDifficulty?: TargetDifficulty
 ): string {
   const globalGuardrails = `GLOBAL GUARDRAILS (APPLY TO ALL OUTPUT):
 1) SELF-CONTAINED EPISTEMOLOGY:
@@ -543,13 +570,17 @@ EVIDENCE TYPE:
 - The claim MUST use explicit causal language ("X causes Y", "X increases Y", "X leads to Y").
 `;
 
+  const difficultyBlock = targetDifficulty
+    ? `\n- **TARGET DIFFICULTY: ${targetDifficulty}** — You MUST generate a ${targetDifficulty} case. Set "difficulty": "${targetDifficulty}" in your JSON. Do not use Easy/Medium/Hard arbitrarily; we need variety across batches.\n`
+    : '';
+
   return `You are generating ONE T3-L1 causal reasoning case.
 
 MANDATORY SPECIFICATIONS:
 - Pearl Level: L1 (Association-level evidence, but the claim is explicitly causal)
 - Domain: ${domain}
 - REQUIRED Subdomain: ${subdomain} (YOU MUST set this scenario specifically in ${subdomain} - use subdomain-specific terminology, actors, and contexts)
-- Target: ${validity} (this must match groundTruth after applying evidence rules)
+- Target: ${validity} (this must match groundTruth after applying evidence rules)${difficultyBlock}
 
 ${domainContext}
 
@@ -592,7 +623,7 @@ OUTPUT FORMAT (Unified T3Case Schema valid JSON only, using snake_case for all f
     "subtype": "Optional trap subtype",
     "subtype_name": "Optional human-readable subtype name"
   },
-  "difficulty": "Easy|Medium|Hard",
+  "difficulty": "${targetDifficulty ?? 'Easy|Medium|Hard'}",
   "causal_structure": "Description of the causal graph structure in natural language (REQUIRED - use full sentences, NOT notation. Example: 'X causes Y, but Z is a confounder that affects both X and Y' instead of 'X -> Y, Z -> X, Z -> Y')",
   "key_insight": "One-line memorable takeaway",
   "hidden_timestamp": "Question that reveals temporal/causal ordering (REQUIRED if label is AMBIGUOUS, otherwise omit)",
@@ -620,7 +651,7 @@ REQUIRED FIELDS (ALL must be present in your JSON response, using snake_case):
    - type_name: string (optional but recommended)
    - subtype: string (optional)
    - subtype_name: string (optional)
-7. difficulty (string) - REQUIRED: "Easy", "Medium", or "Hard" (capitalized)
+7. difficulty (string) - REQUIRED: ${targetDifficulty ? `MUST be exactly "${targetDifficulty}" (we need variety; do not default to Easy).` : '"Easy", "Medium", or "Hard" (capitalized)'}
 8. causal_structure (string) - REQUIRED: Natural language description of the causal graph structure. Use full sentences, NOT mathematical notation. Example: "X causes Y, but Z is a confounder that affects both X and Y" instead of "X -> Y, Z -> X, Z -> Y"
 9. wise_refusal (string) - REQUIRED
 10. gold_rationale (string) - REQUIRED: Complete explanation (60-120 words)
@@ -655,7 +686,8 @@ function buildL2Prompt(
   domain: GenerationDomain,
   subdomain: string,
   recentScenarios: string[],
-  promptNotes?: string
+  promptNotes?: string,
+  targetDifficulty?: TargetDifficulty
 ): string {
   const globalGuardrails = `GLOBAL GUARDRAILS (APPLY TO ALL OUTPUT):
 1) SELF-CONTAINED EPISTEMOLOGY:
@@ -695,9 +727,10 @@ TRAP TYPE (MUST FOLLOW EXACTLY - ALL FIELDS ARE MANDATORY):
 - Family: ${trapDef.family} - ${trapDef.familyName}
 - Definition: ${trapDef.definition}
 
-CORE HIDDEN QUESTION (this is the key ambiguity):
-- Core Hidden Question: ${trapDef.coreHiddenQuestion}
-- Hidden Question Pattern: "${trapDef.hiddenQuestionPattern}" (your hiddenQuestion MUST match this pattern exactly)
+HIDDEN QUESTION GUIDANCE (critical - do NOT copy the pattern verbatim):
+- Conceptual pattern for this trap: "${trapDef.hiddenQuestionPattern}" — use ONLY as guidance for what *type* of ambiguity to target.
+- You MUST write a **scenario-specific** hidden question: it must reference concrete X, Y, Z, domain, actors, or narrative details from *your* scenario. High-quality questions are distinct and grounded in the case.
+- **LAZY GENERATION = 0 points**: Do NOT output the generic pattern (e.g. "${trapDef.hiddenQuestionPattern}") as hidden_timestamp. Evaluators reject cases where the hidden question is the template rather than a tailored, scenario-relevant question.
 
 REQUIRED ELEMENTS (ALL must appear in your scenario):
 ${trapDef.requiredElements.map(e => `  - ${e}`).join('\n')}
@@ -722,6 +755,10 @@ ${trapDef.commonPitfalls.map(p => `  - ${p}`).join('\n')}
 4. Decline to endorse the causal claim ("Without this information, the causal claim is not justified.").
 Template: "The [claim] is ambiguous due to [trap type]. We cannot determine whether [A] or [B] without knowing [hidden information]. If [A], then [interpretation A]. If [B], then [interpretation B]. Without this information, the causal claim is not justified."`;
 
+  const l2DifficultyBlock = targetDifficulty
+    ? `\n- **TARGET DIFFICULTY: ${targetDifficulty}** — You MUST generate a ${targetDifficulty} case. Set "difficulty": "${targetDifficulty}" in your JSON. We need variety; do not default to Easy.\n`
+    : '';
+
   return `You are generating ONE L2 causal reasoning case (revamped schema).
 
 MANDATORY SPECIFICATIONS:
@@ -729,7 +766,7 @@ MANDATORY SPECIFICATIONS:
 - Domain: ${domain}
 - REQUIRED Subdomain: ${subdomain} (YOU MUST set this scenario specifically in ${subdomain} - use subdomain-specific terminology, actors, and contexts)
 - Trap Type: ${trapType} (${trapDef.name})
-- Ground Truth: NO (INVALID) - The causal claim is not justified; we refuse to endorse because hidden information is missing
+- Ground Truth: NO (INVALID) - The causal claim is not justified; we refuse to endorse because hidden information is missing${l2DifficultyBlock}
 
 ${domainContext}
 
@@ -738,7 +775,7 @@ ${globalGuardrails}
 L2 CASE STRUCTURE (Revamped):
 - Scenario: Narrative (3-6 sentences) describing an OBSERVED CORRELATION between X and Y, with Z present. Label X, Y, Z inline as (X), (Y), (Z). Z is REQUIRED.
 - Variables: X (exposure), Y (outcome), Z (ambiguous third variable - confounder, mediator, collider, etc.). All three required.
-- hidden_timestamp (Hidden Question): The temporal or structural question that would resolve the ambiguity (must align with "${trapDef.hiddenQuestionPattern}").
+- hidden_timestamp (Hidden Question): A **scenario-specific** question that would resolve the ambiguity. It must target the same *type* of ambiguity as the trap's conceptual pattern but **must reference your scenario's concrete X, Y, Z, domain, or narrative** — e.g. "Were only long-term gym members surveyed, or a random sample of all adults?" not "Who is systematically excluded from observation?" Do NOT use the generic pattern as the hidden question.
 - answer_if_condition_1 / answer_if_condition_2: Causal interpretation when condition A holds vs when B holds. The two interpretations must be MUTUALLY EXCLUSIVE and EXHAUSTIVE. Under one condition the claim may be invalid, under the other it may be valid; we refuse to endorse because we do not know which holds.
 - wise_refusal: Must follow the 4-part template below (identify ambiguity, state missing info, present both interpretations, decline to endorse).
 
@@ -746,7 +783,7 @@ ${wiseRefusalTemplate}
 
 CRITICAL REQUIREMENTS:
 1. The scenario must describe an OBSERVED CORRELATION between X and Y, with Z present. Causal structure PLAUSIBLE but UNRESOLVED.
-2. The hidden question (hidden_timestamp) MUST match the pattern: "${trapDef.hiddenQuestionPattern}"
+2. The hidden question (hidden_timestamp) MUST be **scenario-specific**: reference concrete X, Y, Z, domain, or narrative details. Do NOT copy the generic pattern "${trapDef.hiddenQuestionPattern}" verbatim. Write a distinct, high-quality question tailored to your scenario.
 3. answer_if_condition_1 and answer_if_condition_2 must be MUTUALLY EXCLUSIVE and EXHAUSTIVE. They give the causal interpretation under each possibility; we decline because we lack the hidden information (one branch may support the claim, one refute it).
 4. wise_refusal MUST follow the 4-part template: identify ambiguity, state missing info, present both interpretations, decline to endorse.
 5. Variables X, Y, Z must be clearly labeled in the narrative using (X), (Y), (Z). Z is REQUIRED (non-empty).
@@ -775,10 +812,10 @@ OUTPUT FORMAT (Unified T3Case Schema - Table 9, valid JSON only, using snake_cas
     "subtype": "Canonical subtype for this trap (e.g. per spec: healthy user/volunteer/indication for T1; Berkson's paradox/M-bias for T3; etc.)",
     "subtype_name": "Human-readable subtype name"
   },
-  "difficulty": "Easy|Medium|Hard",
+  "difficulty": "${targetDifficulty ?? 'Easy|Medium|Hard'}",
   "causal_structure": "Causal graph structure. Use natural language (required); you may also include arrow notation (→, ←, ↔) in addition. E.g. 'X causes Y, but Z is a confounder affecting both. (Z → X, Z → Y.)'",
   "key_insight": "One-line memorable takeaway",
-  "hidden_timestamp": "The pivotal question that would resolve the ambiguity (REQUIRED - must match pattern: ${trapDef.hiddenQuestionPattern})",
+  "hidden_timestamp": "SCENARIO-SPECIFIC pivotal question that would resolve the ambiguity (REQUIRED - reference concrete X/Y/Z/domain/narrative; do NOT use the generic pattern verbatim)",
   "conditional_answers": {
     "answer_if_condition_1": "Causal interpretation when condition A holds (REQUIRED). Mutually exclusive and exhaustive with answer_if_condition_2.",
     "answer_if_condition_2": "Causal interpretation when condition B holds (REQUIRED). One branch may support the claim, one refute it; we refuse because we lack hidden info."
@@ -796,11 +833,11 @@ REQUIRED FIELDS (ALL must be present in your JSON response, using snake_case):
 4. is_ambiguous (boolean) - REQUIRED: MUST be true (L2 cases are ambiguous by nature)
 5. variables (object) - REQUIRED with X, Y, Z. Z must be a NON-EMPTY array (never []).
 6. trap (object) - REQUIRED with type="${trapType}", type_name, subtype, subtype_name
-7. difficulty (string) - REQUIRED: "Easy", "Medium", or "Hard" (capitalized)
+7. difficulty (string) - REQUIRED: ${targetDifficulty ? `MUST be exactly "${targetDifficulty}" (we need variety; do not default to Easy).` : '"Easy", "Medium", or "Hard" (capitalized)'}
 8. causal_structure (string) - REQUIRED: Causal graph in natural language (required). You may also include arrows (→, ←, ↔) in addition.
 9. wise_refusal (string) - REQUIRED. Must follow the 4-part template (identify ambiguity, state missing info, both interpretations, decline to endorse).
 10. gold_rationale (string) - REQUIRED: Complete explanation
-11. hidden_timestamp (string) - REQUIRED: The pivotal question (must match pattern: ${trapDef.hiddenQuestionPattern})
+11. hidden_timestamp (string) - REQUIRED: Scenario-specific pivotal question. Must reference your scenario's X, Y, Z, domain, or narrative. Do NOT copy the generic trap pattern verbatim.
 12. conditional_answers (object) - REQUIRED with answer_if_condition_1 and answer_if_condition_2. Mutually exclusive and exhaustive.
 
 CRITICAL REQUIREMENTS:
@@ -810,7 +847,7 @@ CRITICAL REQUIREMENTS:
 - difficulty MUST be capitalized: "Easy", "Medium", or "Hard"
 - causal_structure: Use natural language (required). You may include arrow notation (→, ←, ↔) in addition.
 - claim MUST be present (not empty, not null)
-- hidden_timestamp MUST be present (not empty, not null). MANDATORY for all L2 cases.
+- hidden_timestamp MUST be present (not empty, not null), scenario-specific, and high-quality. Do NOT use the taxonomy's generic hidden-question pattern as the literal text. MANDATORY for all L2 cases.
 - conditional_answers MUST be present with answer_if_condition_1 and answer_if_condition_2. Mutually exclusive and exhaustive. MANDATORY.
 - wise_refusal MUST follow the 4-part template. Cases will be REJECTED if wise_refusal omits any of: identify ambiguity, state missing info, present both interpretations, decline to endorse.
 - CRITICAL: hidden_timestamp, conditional_answers, and wise_refusal are REQUIRED. Cases will be REJECTED if any are missing.
@@ -825,7 +862,8 @@ function buildL3Prompt(
   domain: GenerationDomain,
   subdomain: string,
   recentScenarios: string[],
-  promptNotes?: string
+  promptNotes?: string,
+  targetDifficulty?: TargetDifficulty
 ): string {
   const globalGuardrails = `GLOBAL GUARDRAILS (APPLY TO ALL OUTPUT):
 1) SELF-CONTAINED EPISTEMOLOGY:
@@ -944,6 +982,33 @@ KEY COUNTERFACTUAL CONCEPTS (Section 2.3 of spec):
    CRITICAL: The same scenario with different invariants can yield different labels.
 `;
 
+  // Invariants must be scenario-specific and unique — not generic templates
+  const invariantsScenarioSpecificBlock = `
+INVARIANTS — SCENARIO-SPECIFIC AND UNIQUE (CRITICAL):
+
+Invariants MUST be **unique to your case** and **grounded in your scenario**. Reference concrete X, Y, Z, domain, actors, mechanisms, rules, or narrative details. Do NOT reuse generic templates.
+
+**AVOID (generic / repetitive — penalized):**
+- "Mechanism and causal rules unchanged."
+- "Background risk and population fixed."
+- "Other causes remain active."
+- "Mechanism and rules unchanged."
+- "Background risk, population, randomness model."
+- Any invariant that could apply to many unrelated scenarios without modification.
+
+**GOOD (scenario-specific):**
+- "Boarding rules and gate-closure policy unchanged; flight still departs at 10:00."
+- "The dam's design, river flow, and upstream geology fixed; no other flood barriers."
+- "Order-book liquidity and market-maker behavior unchanged; no external shocks."
+- "Contractual payout rules and premium structure unchanged; policy terms as written."
+- For CONDITIONAL: "Not specified: whether the agent holds or sells during volatility." (references your scenario's agent and assets)
+
+**RULES:**
+- Each invariant must mention at least one concrete element from YOUR scenario (e.g., boarding, dam, order-book, contract, specific actor, or mechanism).
+- Do not copy the family's canonical invariant phrasing verbatim. Adapt it to your domain, subdomain, and variables.
+- Invariants should be distinguishable from those of other cases; they must feel tailored to this specific story.
+`;
+
   // Deterministic vs Probabilistic guidance
   const deterministicProbabilisticGuidance = `
 DETERMINISTIC VS PROBABILISTIC PHRASING (Section 2.2 of spec):
@@ -1000,6 +1065,7 @@ Each case must satisfy ALL of the following:
 ✓ CLARITY: X, Y, Z, and invariants are unambiguous and well-defined
 ✓ CORRECTNESS: Label is defensible; gold_rationale (justification) is sound under stated invariants
 ✓ FAMILY FIT: Case clearly tests the assigned counterfactual pattern (${familyDef.name})
+✓ INVARIANTS UNIQUE: Invariants are scenario-specific and reference concrete X, Y, Z, domain, or narrative — not generic templates
 ✓ NOVELTY: Not a trivial variant of an existing case
 ✓ REALISM: Scenario is plausible (real-world or realistic hypothetical)
 ✓ DETERMINACY: Label is defensible under normal reading and stable under reasonable paraphrases
@@ -1037,10 +1103,14 @@ NOTE: The spec Section 4.1 mentions both "Justification" and "WiseResponse" as s
   const distributionGuidance = `
 TARGET DISTRIBUTIONS (Section 5.2 of spec - for reference):
 - Ground truth: ~35% VALID, ~25% INVALID, ~40% CONDITIONAL
-- Difficulty: ~25% Easy, ~45% Medium, ~30% Hard
+- Difficulty: 1 Easy : 2 Medium : 1 Hard (25% : 50% : 25%) — enforced per batch
 
-These are batch-level targets; generate cases that match the assigned target label and difficulty.
+Generate cases that match the assigned target label and difficulty.
 `;
+
+  const l3DifficultyBlock = targetDifficulty
+    ? `\n- **TARGET DIFFICULTY: ${targetDifficulty}** — You MUST generate a ${targetDifficulty} case. Set "difficulty": "${targetDifficulty}" in your JSON. We need variety; do not default to Easy.\n`
+    : '';
 
   return `You are generating ONE T3-L3 counterfactual reasoning case.
 
@@ -1049,13 +1119,15 @@ MANDATORY SPECIFICATIONS:
 - Domain: ${domain}
 - REQUIRED Subdomain: ${subdomain} (YOU MUST set this scenario specifically in ${subdomain} - use subdomain-specific terminology, actors, and contexts)
 - Family: ${family} (${familyDef.name})
-- Target Ground Truth: ${l3GroundTruth} (this must match groundTruth after applying family logic)
+- Target Ground Truth: ${l3GroundTruth} (this must match groundTruth after applying family logic)${l3DifficultyBlock}
 
 ${domainContext}
 
 ${globalGuardrails}
 
 ${keyConcepts}
+
+${invariantsScenarioSpecificBlock}
 
 ${deterministicProbabilisticGuidance}
 
@@ -1098,8 +1170,8 @@ SCENARIO STRUCTURE (T3-L3 per Section 4.1 of spec):
 - Scenario: 2-5 sentences describing what happened in World A (use inline variable notation (X), (Y), (Z) in-text)
 - Counterfactual Claim: "If [X had been different], then [Y]." (explicit counterfactual language)
 - Variables: X (Antecedent - single, identifiable), Y (Consequent - single, identifiable), Z (Mechanism/Context)
-- Invariants: 1-3 bullets specifying what is held fixed across worlds
-  * If unknown, MUST state explicitly: "Not specified: [what is missing]"
+- Invariants: 1-3 bullets, **scenario-specific and unique** — reference concrete X, Y, Z, domain, actors, or mechanisms from YOUR scenario. No generic templates (e.g. "Mechanism and rules unchanged").
+  * If unknown, MUST state explicitly: "Not specified: [what is missing]" (still tie the "missing" to your scenario)
   * For CONDITIONAL cases, ALL missing invariants must be listed
 - Ground Truth: VALID | INVALID | CONDITIONAL
 - Gold Rationale: 2-4 sentences grounded in Scenario + Invariants (serves as both justification and gold rationale per spec Section 4.1)
@@ -1108,7 +1180,7 @@ SCENARIO STRUCTURE (T3-L3 per Section 4.1 of spec):
 STYLE CONSTRAINTS:
 - Be concise (2-5 sentences for scenario)
 - Use explicit counterfactual language matching mechanism determinism ("would have" for deterministic, "more likely" for probabilistic)
-- Clearly state invariants - they determine the label
+- Clearly state invariants - they determine the label. Invariants must be scenario-specific and unique (no generic templates).
 - All causal reasoning must be derivable from the scenario text
 - Use domain-appropriate terminology from ${subdomain} to make the scenario feel authentic and grounded
 - Ensure label is stable under reasonable paraphrases of the claim (determinacy requirement)
@@ -1134,7 +1206,7 @@ OUTPUT FORMAT (valid JSON only, using snake_case for all field names):
     "subtype": "Optional trap subtype",
     "subtype_name": "Optional human-readable subtype name"
   },
-  "difficulty": "Easy|Medium|Hard",
+  "difficulty": "${targetDifficulty ?? 'Easy|Medium|Hard'}",
   "causal_structure": "Description of the causal graph structure in natural language (REQUIRED - use full sentences, NOT notation. Example: 'X causes Y, but Z is a confounder that affects both X and Y' instead of 'X -> Y, Z -> X, Z -> Y')",
   "key_insight": "One-line memorable takeaway",
   "hidden_timestamp": "Question that reveals temporal/causal ordering or missing invariant (REQUIRED if label is CONDITIONAL, otherwise omit)",
@@ -1145,8 +1217,8 @@ OUTPUT FORMAT (valid JSON only, using snake_case for all field names):
   "wise_refusal": "Brief structured reasoning template following RCA rubric (response identifying missing information or biases)",
   "gold_rationale": "Complete explanation of the correct reasoning (2-4 sentences grounded in Scenario + Invariants) following RCA structure. This serves as both the justification and gold rationale per spec Section 4.1.",
   "invariants": [
-    "1-3 bullets; what is held fixed across worlds",
-    "If unknown, MUST state: 'Not specified: [what is missing]'",
+    "1-3 scenario-specific bullets; reference concrete X/Y/Z, domain, actors, or mechanisms. NO generic templates.",
+    "If unknown, MUST state: 'Not specified: [what is missing]' (tied to your scenario)",
     "${l3GroundTruth === 'CONDITIONAL' ? 'For CONDITIONAL: ALL missing invariants must be explicitly listed' : ''}"
   ],
   "domain": "${domain}",
@@ -1160,11 +1232,11 @@ REQUIRED FIELDS (ALL must be present in your JSON response, using snake_case):
 4. is_ambiguous (boolean) - REQUIRED: true only if label is "CONDITIONAL"
 5. variables (object) - REQUIRED with X, Y, Z where Z is an array. X and Y must be single, identifiable variables.
 6. trap (object) - REQUIRED with type="${family}", type_name, subtype, subtype_name
-7. difficulty (string) - REQUIRED: "Easy", "Medium", or "Hard" (capitalized)
+7. difficulty (string) - REQUIRED: ${targetDifficulty ? `MUST be exactly "${targetDifficulty}" (we need variety; do not default to Easy).` : '"Easy", "Medium", or "Hard" (capitalized)'}
 8. causal_structure (string) - REQUIRED: Natural language description of the causal graph structure. Use full sentences, NOT mathematical notation. Example: "X causes Y, but Z is a confounder that affects both X and Y" instead of "X -> Y, Z -> X, Z -> Y"
 9. wise_refusal (string) - REQUIRED: Follow RCA rubric structure
 10. gold_rationale (string) - REQUIRED: Complete explanation (2-4 sentences grounded in Scenario + Invariants) following RCA structure. This serves as both the justification and gold rationale per spec Section 4.1.
-11. invariants (array) - REQUIRED: Array of invariant strings. If unknown, use "Not specified: [what is missing]" format.
+11. invariants (array) - REQUIRED: Array of invariant strings. Each must be scenario-specific and unique (reference your X, Y, Z, domain, or narrative). No generic templates. If unknown, use "Not specified: [what is missing]" format.
 
 CONDITIONAL REQUIREMENTS (using snake_case):
 - If label is "CONDITIONAL" (is_ambiguous is true):
@@ -1188,7 +1260,7 @@ CRITICAL REQUIREMENTS:
 - trap.type MUST be "${family}" (F1-F8)
 - causal_structure MUST be a natural language description in full sentences (NOT mathematical notation like "X -> Y"). Describe the causal relationships in plain English.
 - counterfactual_claim MUST be present (not empty, not null) and match mechanism determinism (deterministic vs probabilistic wording)
-- invariants MUST be a non-empty array. If any invariant is unknown, MUST use "Not specified: [what is missing]" format.
+- invariants MUST be a non-empty array. Each invariant must be scenario-specific and unique (reference concrete elements from your case). Do NOT use generic templates (e.g. "Mechanism and rules unchanged", "Background risk fixed"). If any invariant is unknown, use "Not specified: [what is missing]" format, still tied to your scenario.
 - FOR CONDITIONAL CASES: hidden_timestamp, conditional_answers, and explicit missing invariants are MANDATORY. All MUST be generated. Cases will be REJECTED if any are missing.
 - All 11 required fields above MUST be present in your JSON
 - difficulty MUST be capitalized: "Easy", "Medium", or "Hard"
@@ -1897,6 +1969,7 @@ interface GenerationRequestMetadata {
   evidenceSelection?: L1EvidenceSelection | null;
   selectedTrapType?: string; // For L2
   selectedFamily?: string; // For L3
+  targetDifficulty?: TargetDifficulty;
   prompt: string;
   systemPrompt: string;
 }
@@ -1916,6 +1989,7 @@ async function collectGenerationRequests(
   dataset: string
 ): Promise<GenerationRequestMetadata[]> {
   const requests: GenerationRequestMetadata[] = [];
+  const difficultySchedule = buildDifficultySchedule(totalTasks);
 
   for (let i = 0; i < totalTasks; i++) {
     // Determine validity and pearl level for this iteration
@@ -1943,19 +2017,21 @@ async function collectGenerationRequests(
     let selectedTrapType: string | undefined;
     let selectedFamily: string | undefined;
 
+    const targetDifficulty = difficultySchedule[i];
+
     if (trap.pearlLevel === 'L1') {
       evidenceSelection = await selectNextL1Evidence(validity);
-      prompt = buildL1Prompt(evidenceSelection, validity, currentDomain, currentSubdomain, recentScenarios, promptNotes);
+      prompt = buildL1Prompt(evidenceSelection, validity, currentDomain, currentSubdomain, recentScenarios, promptNotes, targetDifficulty);
       systemPrompt = 'You generate high-quality causal reasoning training cases. Follow the specifications EXACTLY. Return only valid JSON.';
     } else if (taskPearlLevel === 'L2' || (trap.pearlLevel === 'L2' && useRevampedL2)) {
       const trapType = await selectNextL2TrapType(dataset);
       selectedTrapType = trapType;
-      prompt = buildL2Prompt(trapType, currentDomain, currentSubdomain, recentScenarios, promptNotes);
+      prompt = buildL2Prompt(trapType, currentDomain, currentSubdomain, recentScenarios, promptNotes, targetDifficulty);
       systemPrompt = 'You generate high-quality L2 causal reasoning cases with hidden questions and conditional answers. Follow the specifications EXACTLY. Return only valid JSON.';
     } else if (taskPearlLevel === 'L3' || trap.pearlLevel === 'L3') {
       const family = await selectNextL3Family(dataset);
       selectedFamily = family;
-      prompt = buildL3Prompt(family, validity, currentDomain, currentSubdomain, recentScenarios, promptNotes);
+      prompt = buildL3Prompt(family, validity, currentDomain, currentSubdomain, recentScenarios, promptNotes, targetDifficulty);
       systemPrompt = 'You generate high-quality L3 counterfactual reasoning cases with explicit alternative worlds and invariants. Follow the specifications EXACTLY. Return only valid JSON.';
     } else {
       // Legacy path
@@ -1973,6 +2049,7 @@ async function collectGenerationRequests(
       evidenceSelection,
       selectedTrapType,
       selectedFamily,
+      targetDifficulty,
       prompt,
       systemPrompt,
     });
@@ -2104,8 +2181,9 @@ async function processBatchGenerationResult(
       }
 
       const caseId = await getNextGeneratedCaseId();
-      const difficulty = (generated.difficulty?.toLowerCase() as 'easy' | 'medium' | 'hard' | undefined) || 
+      const difficultyFromGenerated = (generated.difficulty?.toLowerCase() as 'easy' | 'medium' | 'hard' | undefined) || 
         (meta.evidenceSelection ? inferDifficultyForL1(meta.evidenceSelection.evidence) : 'medium');
+      const difficulty = meta.targetDifficulty ?? (difficultyFromGenerated.charAt(0).toUpperCase() + difficultyFromGenerated.slice(1));
 
       const variables = generated.variables || { X: '', Y: '', Z: [] };
       if (!Array.isArray(variables.Z)) {
@@ -2144,7 +2222,7 @@ async function processBatchGenerationResult(
           trapTypeName: generated.trap.type_name || null,
           trapSubtype: generated.trap.subtype || null,
           trapSubtypeName: generated.trap.subtype_name || null,
-          difficulty: difficulty.charAt(0).toUpperCase() + difficulty.slice(1),
+          difficulty,
           causalStructure: generated.causal_structure || null,
           keyInsight: generated.key_insight || null,
           hiddenTimestamp: hidden_timestamp,
@@ -2247,7 +2325,7 @@ async function processBatchGenerationResult(
 
       const caseId = await getNextGeneratedCaseId();
       const difficultyRaw = (generated.difficulty?.toLowerCase() as 'easy' | 'medium' | 'hard' | undefined) || 'medium';
-      const difficulty = difficultyRaw.charAt(0).toUpperCase() + difficultyRaw.slice(1);
+      const difficulty = meta.targetDifficulty ?? (difficultyRaw.charAt(0).toUpperCase() + difficultyRaw.slice(1));
 
       const variables = generated.variables || { X: '', Y: '', Z: [] };
       if (!Array.isArray(variables.Z)) {
@@ -2396,7 +2474,7 @@ async function processBatchGenerationResult(
 
       const caseId = await getNextGeneratedCaseId();
       const difficultyRaw = (generated.difficulty?.toLowerCase() as 'easy' | 'medium' | 'hard' | undefined) || 'medium';
-      const difficulty = difficultyRaw.charAt(0).toUpperCase() + difficultyRaw.slice(1);
+      const difficulty = meta.targetDifficulty ?? (difficultyRaw.charAt(0).toUpperCase() + difficultyRaw.slice(1));
 
       const variables = generated.variables || { X: '', Y: '', Z: [] };
       if (!Array.isArray(variables.Z)) {
@@ -2552,7 +2630,7 @@ async function runBackgroundGeneration(
     // Mark as running
     await prisma.generationBatch.update({
       where: { id: batchId },
-      data: { status: 'running', currentIndex: 0 },
+      data: { status: 'running', current_index: 0 },
     });
 
     let successCount = 0;
@@ -2572,8 +2650,8 @@ async function runBackgroundGeneration(
       }
     }
 
-    // Check if we should use batch API (for cost savings on large batches)
-    const useBatchAPI = shouldUseBatchAPI(totalTasks);
+    // Always use synchronous generation (one at a time) - skip batch API
+    const useBatchAPI = false;
     
     // Declare batchResponses outside the if block for fallback access
     let batchResponses: BatchResponse[] | null = null;
@@ -2615,7 +2693,7 @@ async function runBackgroundGeneration(
       // Process batch
       await prisma.generationBatch.update({
         where: { id: batchId },
-        data: { currentIndex: totalTasks },
+        data: { current_index: totalTasks },
       });
       try {
         batchResponses = await processBatch(batchRequests, (status) => {
@@ -2636,7 +2714,7 @@ async function runBackgroundGeneration(
             where: { id: batchId },
             data: {
               status: 'failed',
-              errorMessage: errorMessage,
+              error_message: errorMessage,
             },
           });
           throw error;
@@ -2664,7 +2742,7 @@ async function runBackgroundGeneration(
         // Update progress
         await prisma.generationBatch.update({
           where: { id: batchId },
-          data: { currentIndex: i + 1 },
+          data: { current_index: i + 1 },
         });
 
         if (response.error) {
@@ -2693,7 +2771,7 @@ async function runBackgroundGeneration(
             successCount++;
             await prisma.generationBatch.update({
               where: { id: batchId },
-              data: { generatedCount: successCount },
+              data: { generated_count: successCount },
             });
             if (result.scenario) {
               recentScenarios.unshift(result.scenario);
@@ -2709,10 +2787,12 @@ async function runBackgroundGeneration(
       }
 
       console.log(`[Batch ${batchId}] Batch API processing completed: ${successCount} successful, ${errorCount} errors`);
+      }
     }
     
     // Use synchronous API if batch wasn't used or failed with token limit
     if (!useBatchAPI || batchResponses === null) {
+      const difficultySchedule = buildDifficultySchedule(totalTasks);
       // Use synchronous API for small batches (≤10 samples) or fallback
       for (let i = 0; i < totalTasks; i++) {
       // Check if batch was cancelled
@@ -2728,7 +2808,7 @@ async function runBackgroundGeneration(
       // Update current index
       await prisma.generationBatch.update({
         where: { id: batchId },
-        data: { currentIndex: i + 1 },
+        data: { current_index: i + 1 },
       });
 
       // Determine validity and pearl level for this iteration
@@ -2753,12 +2833,14 @@ async function runBackgroundGeneration(
       // Also rotate through subdomains within the domain for extra diversity
       const currentSubdomain = getRotatedSubdomain(currentDomain, i);
 
+      const targetDifficulty = difficultySchedule[i];
+
       if (trap.pearlLevel === 'L1') {
         const evidenceSelection = await selectNextL1Evidence(validity);
         console.log(
-          `[Batch ${batchId}] Generating ${i + 1}/${totalTasks}: ${validity} - L1 - ${evidenceSelection?.evidence.code || 'NONE'} - ${currentDomain}/${currentSubdomain}`
+          `[Batch ${batchId}] Generating ${i + 1}/${totalTasks}: ${validity} - L1 - ${evidenceSelection?.evidence.code || 'NONE'} - ${currentDomain}/${currentSubdomain} - ${targetDifficulty}`
         );
-        const prompt = buildL1Prompt(evidenceSelection, validity, currentDomain, currentSubdomain, recentScenarios, promptNotes);
+        const prompt = buildL1Prompt(evidenceSelection, validity, currentDomain, currentSubdomain, recentScenarios, promptNotes, targetDifficulty);
 
         try {
           const completion = await openai.chat.completions.create({
@@ -2931,8 +3013,9 @@ async function runBackgroundGeneration(
           }
 
           const caseId = await getNextGeneratedCaseId();
-          const difficulty = (generated.difficulty?.toLowerCase() as 'easy' | 'medium' | 'hard' | undefined) || 
+          const difficultyFromGenerated = (generated.difficulty?.toLowerCase() as 'easy' | 'medium' | 'hard' | undefined) || 
             (evidenceSelection ? inferDifficultyForL1(evidenceSelection.evidence) : 'medium');
+          const difficultyToStore = targetDifficulty ?? (difficultyFromGenerated.charAt(0).toUpperCase() + difficultyFromGenerated.slice(1));
 
           // Ensure variables.Z is always an array (unified schema requirement)
           const variables = generated.variables || { X: '', Y: '', Z: [] };
@@ -2975,7 +3058,7 @@ async function runBackgroundGeneration(
             trap_type_name: generated.trap.type_name || null,
             trap_subtype: generated.trap.subtype || null,
             trap_subtype_name: generated.trap.subtype_name || null,
-            difficulty: difficulty.charAt(0).toUpperCase() + difficulty.slice(1), // "Easy", "Medium", "Hard"
+            difficulty: difficultyToStore,
             causal_structure: generated.causal_structure || null,
             key_insight: generated.key_insight || null,
             hidden_timestamp,
@@ -2997,7 +3080,7 @@ async function runBackgroundGeneration(
 
           await prisma.generationBatch.update({
             where: { id: batchId },
-            data: { generatedCount: successCount },
+            data: { generated_count: successCount },
           });
 
           recentScenarios.unshift(generated.scenario);
@@ -3010,9 +3093,9 @@ async function runBackgroundGeneration(
         // Revamped L2 generation path (T1-T17)
         const selectedTrapType = await selectNextL2TrapType(dataset);
         console.log(
-          `[Batch ${batchId}] Generating ${i + 1}/${totalTasks}: L2 (revamped) - ${selectedTrapType} - ${currentDomain}/${currentSubdomain}`
+          `[Batch ${batchId}] Generating ${i + 1}/${totalTasks}: L2 (revamped) - ${selectedTrapType} - ${currentDomain}/${currentSubdomain} - ${targetDifficulty}`
         );
-        const prompt = buildL2Prompt(selectedTrapType, currentDomain, currentSubdomain, recentScenarios, promptNotes);
+        const prompt = buildL2Prompt(selectedTrapType, currentDomain, currentSubdomain, recentScenarios, promptNotes, targetDifficulty);
 
         try {
           const completion = await openai.chat.completions.create({
@@ -3021,7 +3104,7 @@ async function runBackgroundGeneration(
               {
                 role: 'system',
                 content:
-                  'You generate high-quality L2 causal disambiguation cases. Include: trap type, pivotal hidden question (hidden_timestamp), mutually exclusive and exhaustive conditional answers, and a 4-part wise refusal (identify ambiguity, state missing info, both interpretations, decline to endorse). Z is required in every case (non-empty array). Follow the specifications EXACTLY. Return only valid JSON.',
+                  'You generate high-quality L2 causal disambiguation cases. Include: trap type, a **scenario-specific** pivotal hidden question (hidden_timestamp — reference concrete X, Y, Z, domain, or narrative; do NOT use the generic taxonomy pattern verbatim), mutually exclusive and exhaustive conditional answers, and a 4-part wise refusal. Z is required in every case (non-empty array). Follow the specifications EXACTLY. Return only valid JSON.',
               },
               { role: 'user', content: prompt },
             ],
@@ -3167,7 +3250,7 @@ async function runBackgroundGeneration(
 
           const caseId = await getNextGeneratedCaseId();
           const difficultyRaw = (generated.difficulty?.toLowerCase() as 'easy' | 'medium' | 'hard' | undefined) || 'medium';
-          const difficulty = difficultyRaw.charAt(0).toUpperCase() + difficultyRaw.slice(1); // "Easy", "Medium", "Hard"
+          const difficultyToStore = targetDifficulty ?? (difficultyRaw.charAt(0).toUpperCase() + difficultyRaw.slice(1));
 
           // Ensure variables.Z is always an array (already validated non-empty above)
           const variables = generated.variables || { X: '', Y: '', Z: [] };
@@ -3211,7 +3294,7 @@ async function runBackgroundGeneration(
               trap_type_name: generated.trap.type_name || null,
               trap_subtype: generated.trap.subtype || null,
               trap_subtype_name: generated.trap.subtype_name || null,
-              difficulty,
+              difficulty: difficultyToStore,
               causal_structure: generated.causal_structure || null,
               key_insight: generated.key_insight || null,
               hidden_timestamp,
@@ -3230,7 +3313,7 @@ async function runBackgroundGeneration(
 
           await prisma.generationBatch.update({
             where: { id: batchId },
-            data: { generatedCount: successCount },
+            data: { generated_count: successCount },
           });
 
           recentScenarios.unshift(generated.scenario);
@@ -3243,9 +3326,9 @@ async function runBackgroundGeneration(
         // Revamped L3 generation path (F1-F8 families)
         const selectedFamily = await selectNextL3Family(dataset);
         console.log(
-          `[Batch ${batchId}] Generating ${i + 1}/${totalTasks}: ${validity} - L3 (revamped) - ${selectedFamily} - ${currentDomain}/${currentSubdomain}`
+          `[Batch ${batchId}] Generating ${i + 1}/${totalTasks}: ${validity} - L3 (revamped) - ${selectedFamily} - ${currentDomain}/${currentSubdomain} - ${targetDifficulty}`
         );
-        const prompt = buildL3Prompt(selectedFamily, validity, currentDomain, currentSubdomain, recentScenarios, promptNotes);
+        const prompt = buildL3Prompt(selectedFamily, validity, currentDomain, currentSubdomain, recentScenarios, promptNotes, targetDifficulty);
 
         try {
           const completion = await openai.chat.completions.create({
@@ -3416,7 +3499,7 @@ async function runBackgroundGeneration(
 
           const caseId = await getNextGeneratedCaseId();
           const difficultyRaw = (generated.difficulty?.toLowerCase() as 'easy' | 'medium' | 'hard' | undefined) || 'medium';
-          const difficulty = difficultyRaw.charAt(0).toUpperCase() + difficultyRaw.slice(1); // "Easy", "Medium", "Hard"
+          const difficultyToStore = targetDifficulty ?? (difficultyRaw.charAt(0).toUpperCase() + difficultyRaw.slice(1));
 
           // Prepare conditional answers
           let conditional_answers: string | null = null;
@@ -3453,7 +3536,7 @@ async function runBackgroundGeneration(
               trap_type_name: generated.trap.type_name || null,
               trap_subtype: generated.trap.subtype || null,
               trap_subtype_name: generated.trap.subtype_name || null,
-              difficulty,
+              difficulty: difficultyToStore,
               causal_structure: generated.causal_structure || null,
               key_insight: generated.key_insight || null,
               hidden_timestamp,
@@ -3473,7 +3556,7 @@ async function runBackgroundGeneration(
 
           await prisma.generationBatch.update({
             where: { id: batchId },
-            data: { generatedCount: successCount },
+            data: { generated_count: successCount },
           });
 
           recentScenarios.unshift(generated.scenario);
@@ -3597,7 +3680,7 @@ async function runBackgroundGeneration(
           // Update generated count
           await prisma.generationBatch.update({
             where: { id: batchId },
-            data: { generatedCount: successCount },
+            data: { generated_count: successCount },
           });
 
           // Add to recent scenarios for diversity tracking (keep last 20)
@@ -3623,7 +3706,7 @@ async function runBackgroundGeneration(
       // Just update the generated count, keep cancelled status
       await prisma.generationBatch.update({
         where: { id: batchId },
-        data: { generatedCount: successCount },
+        data: { generated_count: successCount },
       });
       console.log(`[Batch ${batchId}] Cancelled: ${successCount} generated before cancellation`);
     } else {
@@ -3632,21 +3715,21 @@ async function runBackgroundGeneration(
         where: { id: batchId },
         data: {
           status: 'completed',
-          completedAt: new Date(),
-          generatedCount: successCount,
+          completed_at: new Date(),
+          generated_count: successCount,
         },
       });
       console.log(`[Batch ${batchId}] Completed: ${successCount} generated, ${errorCount} errors`);
     }
-
-  } catch (error) {
+  }  
+} catch (error) {
     console.error(`[Batch ${batchId}] Fatal error:`, error);
     await prisma.generationBatch.update({
       where: { id: batchId },
       data: {
         status: 'failed',
-        errorMessage: error instanceof Error ? error.message : 'Unknown error',
-        completedAt: new Date(),
+        error_message: error instanceof Error ? error.message : 'Unknown error',
+        completed_at: new Date(),
       },
     });
   }
@@ -3803,4 +3886,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-

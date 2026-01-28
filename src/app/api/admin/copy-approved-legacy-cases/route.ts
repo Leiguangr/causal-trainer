@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import OpenAI from 'openai';
+import { mapLegacyToTaxonomy } from '@/lib/legacy-trap-mapping';
+import { getL2TrapByCode, L2_TRAP_TAXONOMY } from '@/lib/l2-trap-taxonomy';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -79,6 +81,9 @@ export async function POST(req: NextRequest) {
           variables: JSON.stringify(transformedData.variables),
           trap_type: transformedData.trap_type,
           trap_subtype: transformedData.trap_subtype || null,
+          trap_type_name: pearlLevel === 'L2' && transformedData.trap_type
+            ? (getL2TrapByCode(transformedData.trap_type as any)?.name ?? null)
+            : null,
           difficulty: transformedData.difficulty,
           causal_structure: transformedData.causal_structure || null,
           key_insight: transformedData.key_insight || null,
@@ -95,7 +100,7 @@ export async function POST(req: NextRequest) {
           dataset: finalTargetDataset, // Use the new target dataset
           author: question.author || 'Legacy Migration',
           source_case: question.source_case || null,
-          is_verified: question.is_verified || false,
+          is_verified: false, // New T3 cases are not yet T3-evaluated; keep unverified so they appear in "Unverified only" evaluations
         };
 
         // Level-specific fields
@@ -214,8 +219,15 @@ async function transformAndValidateAllFields(
     }
   }
 
-  // Build prompt for LLM to transform and validate ALL fields
-  const prompt = buildTransformationPrompt(pearlLevel, question, variables, conditionalAnswers, invariants);
+  const suggestedTrap = mapLegacyToTaxonomy(pearlLevel, question.trap_type);
+  const prompt = buildTransformationPrompt(
+    pearlLevel,
+    question,
+    variables,
+    conditionalAnswers,
+    invariants,
+    suggestedTrap
+  );
 
   try {
     const response = await openai.chat.completions.create({
@@ -223,7 +235,11 @@ async function transformAndValidateAllFields(
       messages: [
         {
           role: 'system',
-          content: `You are an expert at transforming legacy causal reasoning cases to the unified T3Case schema. Given a legacy case, transform and validate ALL fields to ensure they match the ${pearlLevel} schema requirements exactly. Return a complete JSON object with all required and optional fields properly formatted.`,
+          content: `You are an expert at migrating legacy causal reasoning cases to the T3Case schema. Your job is to PRESERVE the scenario (same situation, domain, story) while assigning the correct case attributes and label structure per the generation rules.
+
+- Keep the scenario narrative largely unchanged. Only adjust wording if needed for variable labels (X), (Y), (Z) or clarity. Do NOT invent new facts or change the causal setup.
+- Assign trap_type, label, variables, and other fields according to the level-specific taxonomy and generation rules provided.
+- Return valid JSON only, using snake_case for all keys.`,
         },
         { role: 'user', content: prompt },
       ],
@@ -267,19 +283,23 @@ function buildTransformationPrompt(
   question: any,
   variables: Record<string, any>,
   conditionalAnswers: any,
-  invariants: string[]
+  invariants: string[],
+  suggestedTrap: string | null
 ): string {
-  // Map legacy ground_truth to T3Case label
   const legacyLabel = question.ground_truth || 'NO';
   const label = pearlLevel === 'L1'
     ? (legacyLabel === 'VALID' ? 'YES' : legacyLabel === 'INVALID' ? 'NO' : 'AMBIGUOUS')
     : pearlLevel === 'L2'
-    ? 'NO' // All L2 cases are NO
+    ? 'NO'
     : (legacyLabel === 'VALID' ? 'VALID' : legacyLabel === 'INVALID' ? 'INVALID' : 'CONDITIONAL');
 
   const isAmbiguous = label === 'AMBIGUOUS' || label === 'CONDITIONAL';
 
-  let prompt = `Transform this legacy ${pearlLevel} causal reasoning case to the unified T3Case schema. Validate and format ALL fields to ensure they match the schema requirements exactly.
+  const taxonomyBlock = buildTaxonomyBlock(pearlLevel, suggestedTrap, label, isAmbiguous);
+
+  let prompt = `PRESERVE THE SCENARIO: Keep the same situation, domain, and narrative. Only adjust wording if needed for variable labels (X), (Y), (Z) or clarity. Do NOT invent new facts or change the causal setup.
+
+Assign attributes (trap_type, label, variables, etc.) using the generation rules and taxonomy below.
 
 LEGACY CASE DATA:
 ${JSON.stringify({
@@ -302,89 +322,86 @@ ${JSON.stringify({
   family: (question as any).family,
 }, null, 2)}
 
-REQUIRED OUTPUT FORMAT (${pearlLevel}):
-`;
+${taxonomyBlock}
 
-  if (pearlLevel === 'L1') {
-    prompt += `{
-  "scenario": "string (1-3 sentences describing the situation)",
-  "claim": "string (required - the causal claim being evaluated)",
-  "label": "${label} (must be YES, NO, or AMBIGUOUS)",
-  "is_ambiguous": ${isAmbiguous},
-  "variables": {
-    "X": "string or object (cause variable)",
-    "Y": "string or object (effect variable)",
-    "Z": ["string"] (array of confounders/mediators, always an array)
-  },
-  "trap_type": "string (W1-W10, S1-S8 for L1, T1-T17 for L2, F1-F8 for L3). Null for AMBIGUOUS/CONDITIONAL cases (no trap - ambiguity is about causal graph structure, not a trap).",
-  "trap_subtype": "string or null",
-  "difficulty": "easy|medium|hard",
-  "causal_structure": "string (natural language, full sentences, NOT mathematical notation)",
-  "gold_rationale": "string (50-100 words explaining why claim is ${label})",
-  "key_insight": "string or null (one-line takeaway)",
-  "domain": "string or null",
-  "subdomain": "string or null"
-}`;
-  } else if (pearlLevel === 'L2') {
-    prompt += `{
-  "scenario": "string (1-3 sentences describing the situation)",
-  "claim": "string (required - the causal claim being evaluated)",
-  "label": "NO (always NO for L2)",
-  "is_ambiguous": ${isAmbiguous},
-  "variables": {
-    "X": "string or object",
-    "Y": "string or object",
-    "Z": ["string"] (always an array)
-  },
-  "trap_type": "string (T1-T17 - infer from scenario if missing)",
-  "trap_subtype": "string or null",
-  "difficulty": "easy|medium|hard",
-  "causal_structure": "string or null (natural language)",
-  "hidden_timestamp": "${isAmbiguous ? 'string (required if ambiguous - question revealing temporal/causal ordering)' : 'null'}",
-  "conditional_answers": ${isAmbiguous ? `{
-    "answer_if_condition_1": "string",
-    "answer_if_condition_2": "string"
-  }` : 'null'} (required if ambiguous),
-  "wise_refusal": "string (required - starts with 'NO - the claim is invalid.' followed by reasoning)",
-  "domain": "string or null",
-  "subdomain": "string or null"
-}`;
-  } else if (pearlLevel === 'L3') {
-    prompt += `{
-  "scenario": "string (1-3 sentences describing the situation)",
-  "counterfactual_claim": "string (required - format: 'If [X had been different], then [Y].')",
-  "label": "${label} (must be VALID, INVALID, or CONDITIONAL)",
-  "is_ambiguous": ${isAmbiguous},
-  "variables": {
-    "X": "string or object",
-    "Y": "string or object",
-    "Z": ["string"] (always an array)
-  },
-  "trap_type": "string (F1-F8 family type - infer from scenario if missing)",
-  "trap_subtype": "string or null",
-  "difficulty": "easy|medium|hard",
-  "causal_structure": "string or null (natural language)",
-  "gold_rationale": "string (50-100 words explaining why counterfactual is ${label})",
-  "wise_refusal": "string (response identifying missing information or biases)",
-  "invariants": ["string"] (REQUIRED: array of invariant strings describing what remains constant - return empty array [] if none, never null),
-  "domain": "string or null",
-  "subdomain": "string or null"
-}`;
-  }
-
-  prompt += `
-
-TASK:
-1. Transform ALL fields from legacy format to T3Case schema format
-2. Ensure trap_type is in correct format (W1-W10/S1-S8/A for L1, T1-T17 for L2, F1-F8 for L3)
-3. Ensure variables.Z is always an array (even if empty: [])
-4. For L3: invariants must be an array of strings (return [] if empty, never null)
-5. Generate missing required fields if needed
-6. Validate and correct format of all fields
-7. Ensure causal_structure uses natural language (full sentences), NOT mathematical notation
-8. Return the complete transformed case as JSON with all fields properly formatted`;
+OUTPUT: Return a single JSON object (snake_case keys only, no markdown). Include all required fields for ${pearlLevel} as specified above.`;
 
   return prompt;
+}
+
+const L2_TAXONOMY_REFERENCE = L2_TRAP_TAXONOMY.map(
+  (t) => `${t.code} ${t.name}: ${t.definition} Hidden Q: "${t.hiddenQuestionPattern}"`
+).join('\n');
+
+const L2_TRAP_CODES = new Set(L2_TRAP_TAXONOMY.map((t) => t.code));
+
+function isValidL2TrapType(s: string | null | undefined): boolean {
+  return typeof s === 'string' && L2_TRAP_CODES.has(s as any);
+}
+
+function ensureL3InvariantsNonEmpty(
+  inv: string[],
+  scenario?: string,
+  counterfactual?: string
+): string[] {
+  const arr = Array.isArray(inv) ? inv.filter((x) => typeof x === 'string' && x.trim().length > 0) : [];
+  if (arr.length > 0) return arr;
+  return ['Mechanism and background conditions held fixed across counterfactual worlds.'];
+}
+
+function buildTaxonomyBlock(
+  pearlLevel: 'L1' | 'L2' | 'L3',
+  suggestedTrap: string | null,
+  label: string,
+  isAmbiguous: boolean
+): string {
+  if (pearlLevel === 'L1') {
+    const l1Codes = 'W1–W10 (WOLF/NO), S1–S8 (SHEEP/YES), null for AMBIGUOUS';
+    const l1Label = `label: YES | NO | AMBIGUOUS. WOLF→NO, SHEEP→YES, NONE→AMBIGUOUS. trap_type null only when AMBIGUOUS.`;
+    const hint = suggestedTrap ? `Suggested trap_type from legacy "${suggestedTrap}" (use if it fits the scenario).` : '';
+    return `L1 GENERATION RULES:
+- trap_type: ${l1Codes}. Must be a valid L1 evidence code.
+- ${l1Label}
+- variables: X, Y, Z. Z must be an array ([] if empty).
+- causal_structure: natural language, full sentences. No arrow notation only.
+- gold_rationale: 50–100 words. wise_refusal: required.
+- If AMBIGUOUS: hidden_timestamp (question revealing temporal/causal ordering) and conditional_answers { answer_if_condition_1, answer_if_condition_2 } are REQUIRED.
+${hint}
+
+Required JSON keys: scenario, claim, label, is_ambiguous, variables, trap_type, trap_subtype, difficulty, causal_structure, gold_rationale, wise_refusal, key_insight (optional), domain, subdomain. If AMBIGUOUS add hidden_timestamp, conditional_answers.`;
+  }
+
+  if (pearlLevel === 'L2') {
+    const hint = suggestedTrap ? `Legacy suggested: "${suggestedTrap}". Use it ONLY if it best matches the scenario; otherwise pick the single best-matching T below.` : '';
+    return `L2 GENERATION RULES:
+- trap_type: MUST be exactly one of T1–T17. Choose the type that BEST matches the scenario using the reference below.
+- label: always "NO". is_ambiguous: always true.
+- variables: X, Y, Z. Z is REQUIRED and must be a non-empty array (the ambiguous third variable).
+- hidden_timestamp: REQUIRED. A **scenario-specific** pivotal question that would resolve the ambiguity. It must target the same *type* of ambiguity as your chosen trap's conceptual pattern but **must reference the scenario's concrete X, Y, Z, domain, or narrative**. Do NOT use the taxonomy's generic "Hidden Q" pattern verbatim; write a distinct, high-quality question tailored to the case.
+- conditional_answers: REQUIRED. { answer_if_condition_1, answer_if_condition_2 }. Mutually exclusive and exhaustive. One branch may support the claim, the other refute it; we refuse because we lack hidden info.
+- wise_refusal: 4-part template—(1) identify ambiguity, (2) state missing info, (3) both conditional interpretations, (4) decline to endorse.
+- causal_structure: natural language. May include arrows (→, ←, ↔).
+${hint}
+
+L2 TRAP TAXONOMY (pick the single best match for this case):
+${L2_TAXONOMY_REFERENCE}
+
+Required JSON keys: scenario, claim, label, is_ambiguous, variables, trap_type, trap_subtype, difficulty, causal_structure, gold_rationale, wise_refusal, hidden_timestamp, conditional_answers, domain, subdomain.`;
+  }
+
+  const l3Codes = 'F1–F8 (F1=Deterministic, F2=Probabilistic, F3=Overdetermination, F4=Structural, F5=Temporal, F6=Epistemic, F7=Attribution, F8=Moral/Legal)';
+  const hint = suggestedTrap ? `Suggested trap_type (family) from legacy: "${suggestedTrap}".` : '';
+  return `L3 GENERATION RULES:
+- trap_type: ${l3Codes}. Must be a valid F1–F8 family code.
+- label: VALID | INVALID | CONDITIONAL. Match legacy ground_truth (VALID/INVALID/CONDITIONAL).
+- counterfactual_claim: "If [X had been different], then [Y]." format.
+- variables: X, Y, Z. Z must be an array ([] if empty).
+- invariants: REQUIRED, NON-EMPTY array of strings. NEVER return []. Each invariant must be **scenario-specific and unique**: reference concrete X, Y, Z, domain, actors, mechanisms, or narrative details from THIS case. Do NOT use generic templates (e.g. "Mechanism and causal rules unchanged.", "Background risk and population fixed.", "Other causes remain active."). Good examples: "Boarding rules and gate-closure policy unchanged; flight still departs at 10:00." or "Not specified: whether the agent holds or sells during volatility." (tied to scenario). If legacy provides invariants, preserve and refine them to be scenario-specific; avoid repetition across cases.
+- If CONDITIONAL: hidden_timestamp and conditional_answers required; show how different invariant completions lead to different labels.
+- causal_structure: natural language. gold_rationale, wise_refusal: required.
+${hint}
+
+Required JSON keys: scenario, counterfactual_claim, label, is_ambiguous, variables, trap_type, trap_subtype, difficulty, causal_structure, gold_rationale, wise_refusal, invariants, domain, subdomain. If CONDITIONAL add hidden_timestamp, conditional_answers.`;
 }
 
 function validateAndCompleteTransformation(
@@ -395,59 +412,125 @@ function validateAndCompleteTransformation(
   conditionalAnswers: any,
   invariants: string[]
 ): any {
-  // Ensure all mandatory fields are present
+  const trapType = transformed.trap?.type ?? transformed.trap_type;
+  const trapSubtype = transformed.trap?.subtype ?? transformed.trap_subtype;
+  const defaultTrap = mapLegacyToTaxonomy(pearlLevel, question.trap_type)
+    ?? (pearlLevel === 'L3' ? 'F1' : pearlLevel === 'L2' ? 'T1' : 'A');
+
+  const defaultLabel = pearlLevel === 'L1'
+    ? (question.ground_truth === 'VALID' ? 'YES' : question.ground_truth === 'INVALID' ? 'NO' : 'AMBIGUOUS')
+    : pearlLevel === 'L2'
+    ? 'NO'
+    : (question.ground_truth === 'VALID' ? 'VALID' : question.ground_truth === 'INVALID' ? 'INVALID' : 'CONDITIONAL');
+
+  let finalTrapType = trapType ?? defaultTrap;
+  if (pearlLevel === 'L2' && !isValidL2TrapType(finalTrapType)) {
+    finalTrapType = defaultTrap as string;
+    if (!isValidL2TrapType(finalTrapType)) finalTrapType = 'T1';
+  }
+
   const result: any = {
-    scenario: transformed.scenario || question.scenario || '',
-    label: transformed.label || (pearlLevel === 'L1' 
-      ? (question.ground_truth === 'VALID' ? 'YES' : question.ground_truth === 'INVALID' ? 'NO' : 'AMBIGUOUS')
-      : pearlLevel === 'L2' 
-      ? 'NO' 
-      : (question.ground_truth === 'VALID' ? 'VALID' : question.ground_truth === 'INVALID' ? 'INVALID' : 'CONDITIONAL')),
-    is_ambiguous: transformed.is_ambiguous !== undefined ? transformed.is_ambiguous : (transformed.label === 'AMBIGUOUS' || transformed.label === 'CONDITIONAL'),
-    variables: transformed.variables || variables,
-    trap_type: transformed.trap_type || question.trap_type || (pearlLevel === 'L3' ? 'F1' : pearlLevel === 'L2' ? 'T1' : 'A'),
-    trap_subtype: transformed.trap_subtype || question.trap_subtype || null,
-    difficulty: transformed.difficulty || question.difficulty || 'medium',
-    causal_structure: transformed.causal_structure || question.causal_structure || null,
-    key_insight: transformed.key_insight || (question as any).key_insight || null,
-    domain: transformed.domain || question.domain || null,
-    subdomain: transformed.subdomain || question.subdomain || null,
+    scenario: transformed.scenario ?? question.scenario ?? '',
+    label: transformed.label ?? defaultLabel,
+    is_ambiguous: transformed.is_ambiguous !== undefined
+      ? transformed.is_ambiguous
+      : (transformed.label === 'AMBIGUOUS' || transformed.label === 'CONDITIONAL'),
+    variables: transformed.variables ?? variables,
+    trap_type: finalTrapType,
+    trap_subtype: trapSubtype ?? question.trap_subtype ?? null,
+    difficulty: normalizeDifficulty(transformed.difficulty ?? question.difficulty ?? 'medium'),
+    causal_structure: transformed.causal_structure ?? question.causal_structure ?? null,
+    key_insight: transformed.key_insight ?? (question as any).key_insight ?? null,
+    domain: transformed.domain ?? question.domain ?? null,
+    subdomain: transformed.subdomain ?? question.subdomain ?? null,
   };
 
-  // Ensure variables.Z is an array
   if (!Array.isArray(result.variables.Z)) {
     result.variables.Z = result.variables.Z ? [result.variables.Z] : [];
   }
 
-  // Level-specific fields
-  if (pearlLevel === 'L1' || pearlLevel === 'L2') {
-    result.claim = transformed.claim || question.claim || null;
-    result.gold_rationale = transformed.gold_rationale || question.explanation || null;
-    result.wise_refusal = transformed.wise_refusal || question.wise_refusal || null;
-  } else if (pearlLevel === 'L2') {
-    result.hidden_timestamp = transformed.hidden_timestamp || question.hidden_timestamp || null;
+  if (pearlLevel === 'L1') {
+    result.claim = transformed.claim ?? question.claim ?? null;
+    result.gold_rationale = transformed.gold_rationale ?? question.explanation ?? null;
+    result.wise_refusal = transformed.wise_refusal ?? question.wise_refusal ?? null;
     if (result.is_ambiguous) {
-      if (transformed.conditional_answers) {
-        result.conditional_answers = typeof transformed.conditional_answers === 'string'
-          ? transformed.conditional_answers
-          : JSON.stringify(transformed.conditional_answers);
-      } else if (conditionalAnswers) {
-        result.conditional_answers = JSON.stringify(conditionalAnswers);
-      } else {
-        result.conditional_answers = null;
-      }
+      result.hidden_timestamp = transformed.hidden_timestamp ?? question.hidden_timestamp ?? null;
+      result.conditional_answers = formatConditionalAnswers(
+        transformed.conditional_answers,
+        conditionalAnswers
+      );
     } else {
+      result.hidden_timestamp = null;
       result.conditional_answers = null;
     }
-  } else if (pearlLevel === 'L3') {
-    result.counterfactual_claim = transformed.counterfactual_claim || question.claim || null;
-    result.gold_rationale = transformed.gold_rationale || question.explanation || null;
-    result.wise_refusal = transformed.wise_refusal || question.wise_refusal || null;
-    // Keep invariants as array for now, will be converted to JSON string when saving
-    result.invariants = Array.isArray(transformed.invariants) ? transformed.invariants : invariants;
+  } else if (pearlLevel === 'L2') {
+    result.claim = transformed.claim ?? question.claim ?? null;
+    result.gold_rationale = transformed.gold_rationale ?? question.explanation ?? null;
+    result.wise_refusal = transformed.wise_refusal ?? question.wise_refusal ?? null;
+    result.hidden_timestamp = transformed.hidden_timestamp ?? question.hidden_timestamp ?? null;
+    result.conditional_answers = formatConditionalAnswers(
+      transformed.conditional_answers,
+      conditionalAnswers
+    );
+  } else {
+    result.counterfactual_claim = transformed.counterfactual_claim ?? question.claim ?? null;
+    result.gold_rationale = transformed.gold_rationale ?? question.explanation ?? null;
+    result.wise_refusal = transformed.wise_refusal ?? question.wise_refusal ?? null;
+    const rawInv = Array.isArray(transformed.invariants) ? transformed.invariants : invariants;
+    result.invariants = ensureL3InvariantsNonEmpty(
+      rawInv,
+      result.scenario,
+      result.counterfactual_claim
+    );
+    if (result.is_ambiguous) {
+      result.hidden_timestamp = transformed.hidden_timestamp ?? question.hidden_timestamp ?? null;
+      result.conditional_answers = formatConditionalAnswers(
+        transformed.conditional_answers,
+        conditionalAnswers
+      );
+    } else {
+      result.hidden_timestamp = null;
+      result.conditional_answers = null;
+    }
   }
 
   return result;
+}
+
+function normalizeDifficulty(d: string): string {
+  const s = (d ?? 'medium').toString().toLowerCase();
+  if (s === 'easy') return 'Easy';
+  if (s === 'hard') return 'Hard';
+  return 'Medium';
+}
+
+function formatConditionalAnswers(
+  fromTransformed: any,
+  fromLegacy: any
+): string | null {
+  const toPayload = (o: any) => ({
+    answer_if_condition_1: o?.answer_if_condition_1 ?? o?.answerIfA ?? '',
+    answer_if_condition_2: o?.answer_if_condition_2 ?? o?.answerIfB ?? '',
+  });
+
+  if (fromTransformed) {
+    const obj = typeof fromTransformed === 'string'
+      ? (() => { try { return JSON.parse(fromTransformed); } catch { return null; } })()
+      : fromTransformed;
+    if (obj && (obj.answer_if_condition_1 != null || obj.answer_if_condition_2 != null || obj.answerIfA != null || obj.answerIfB != null)) {
+      return JSON.stringify(toPayload(obj));
+    }
+  }
+  if (fromLegacy) {
+    const obj = typeof fromLegacy === 'string'
+      ? (() => { try { return JSON.parse(fromLegacy); } catch { return null; } })()
+      : fromLegacy;
+    if (obj && typeof obj === 'object') {
+      return JSON.stringify(toPayload(obj));
+    }
+    return typeof fromLegacy === 'string' ? fromLegacy : null;
+  }
+  return null;
 }
 
 function getFallbackTransformation(
@@ -464,38 +547,56 @@ function getFallbackTransformation(
     : (question.ground_truth === 'VALID' ? 'VALID' : question.ground_truth === 'INVALID' ? 'INVALID' : 'CONDITIONAL');
 
   const isAmbiguous = label === 'AMBIGUOUS' || label === 'CONDITIONAL';
+  const trapType = mapLegacyToTaxonomy(pearlLevel, question.trap_type)
+    ?? (pearlLevel === 'L3' ? 'F1' : pearlLevel === 'L2' ? 'T1' : 'A');
 
   const result: any = {
-    scenario: question.scenario || '',
+    scenario: question.scenario ?? '',
     label,
     is_ambiguous: isAmbiguous,
     variables: variables,
-    trap_type: question.trap_type || (pearlLevel === 'L3' ? 'F1' : pearlLevel === 'L2' ? 'T1' : 'A'),
-    trap_subtype: question.trap_subtype || null,
-    difficulty: question.difficulty || 'medium',
-    causal_structure: question.causal_structure || null,
-    key_insight: (question as any).key_insight || null,
-    domain: question.domain || null,
-    subdomain: question.subdomain || null,
+    trap_type: trapType,
+    trap_subtype: question.trap_subtype ?? null,
+    difficulty: normalizeDifficulty(question.difficulty ?? 'medium'),
+    causal_structure: question.causal_structure ?? null,
+    key_insight: (question as any).key_insight ?? null,
+    domain: question.domain ?? null,
+    subdomain: question.subdomain ?? null,
   };
 
-  if (pearlLevel === 'L1' || pearlLevel === 'L2') {
-    result.claim = question.claim || null;
-    result.gold_rationale = question.explanation || null;
-    result.wise_refusal = question.wise_refusal || null;
-  }
-
-  if (pearlLevel === 'L2') {
-    result.hidden_timestamp = question.hidden_timestamp || null;
-    result.conditional_answers = conditionalAnswers ? JSON.stringify(conditionalAnswers) : null;
-  }
-
-  if (pearlLevel === 'L3') {
-    result.counterfactual_claim = question.claim || null;
-    result.gold_rationale = question.explanation || null;
-    result.wise_refusal = question.wise_refusal || null;
-    // Keep invariants as array for now, will be converted to JSON string when saving
-    result.invariants = invariants;
+  if (pearlLevel === 'L1') {
+    result.claim = question.claim ?? null;
+    result.gold_rationale = question.explanation ?? null;
+    result.wise_refusal = question.wise_refusal ?? null;
+    if (isAmbiguous) {
+      result.hidden_timestamp = question.hidden_timestamp ?? null;
+      result.conditional_answers = formatConditionalAnswers(null, conditionalAnswers);
+    } else {
+      result.hidden_timestamp = null;
+      result.conditional_answers = null;
+    }
+  } else if (pearlLevel === 'L2') {
+    result.claim = question.claim ?? null;
+    result.gold_rationale = question.explanation ?? null;
+    result.wise_refusal = question.wise_refusal ?? null;
+    result.hidden_timestamp = question.hidden_timestamp ?? null;
+    result.conditional_answers = formatConditionalAnswers(null, conditionalAnswers);
+  } else {
+    result.counterfactual_claim = question.claim ?? null;
+    result.gold_rationale = question.explanation ?? null;
+    result.wise_refusal = question.wise_refusal ?? null;
+    result.invariants = ensureL3InvariantsNonEmpty(
+      Array.isArray(invariants) ? invariants : [],
+      result.scenario,
+      result.counterfactual_claim
+    );
+    if (isAmbiguous) {
+      result.hidden_timestamp = question.hidden_timestamp ?? null;
+      result.conditional_answers = formatConditionalAnswers(null, conditionalAnswers);
+    } else {
+      result.hidden_timestamp = null;
+      result.conditional_answers = null;
+    }
   }
 
   return result;
@@ -576,6 +677,9 @@ async function streamCopyProgress(
               variables: JSON.stringify(transformedData.variables),
               trap_type: transformedData.trap_type,
               trap_subtype: transformedData.trap_subtype || null,
+              trap_type_name: pearlLevel === 'L2' && transformedData.trap_type
+                ? (getL2TrapByCode(transformedData.trap_type as any)?.name ?? null)
+                : null,
               difficulty: transformedData.difficulty,
               causal_structure: transformedData.causal_structure || null,
               key_insight: transformedData.key_insight || null,
@@ -592,7 +696,7 @@ async function streamCopyProgress(
               dataset: finalTargetDataset,
               author: question.author || 'Legacy Migration',
               source_case: question.source_case || null,
-              is_verified: question.is_verified || false,
+              is_verified: false, // New T3 cases not yet T3-evaluated; keep unverified for "Unverified only" evaluations
             };
 
             // Level-specific fields

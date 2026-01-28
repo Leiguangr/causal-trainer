@@ -202,7 +202,8 @@ export function buildT3RubricPrompt(payload: T3RubricPayload): string {
   - CONDITIONAL label: Validity depends on missing or ambiguous invariants
 - Label must match counterfactual validity
 - Trap type must align with family classification
-- **INVARIANTS VALIDATION:** For L3 cases, invariants field must be present and clearly specify what is held fixed across worlds. Missing or unclear invariants affect conditional answers and wise refusal quality.`;
+- **INVARIANTS VALIDATION:** For L3 cases, invariants field must be present and clearly specify what is held fixed across worlds. Missing or unclear invariants affect conditional answers and wise refusal quality.
+- **INVARIANTS UNIQUENESS:** Invariants must be **scenario-specific and unique** — they should reference concrete X, Y, Z, domain, actors, or mechanisms from THIS case. **Generic or repetitive invariants** (e.g. "Mechanism and causal rules unchanged.", "Background risk and population fixed.", "Other causes remain active.") without scenario-specific detail are **lazy generation** and must be penalized (deduct points in scenario_clarity, wise_refusal_quality, or other relevant categories). High-quality invariants are tailored to the case and distinguishable from other cases.`;
 
   // Level-specific label validation with explicit mappings
   const labelGuidelines = c.pearl_level === 'L1'
@@ -285,11 +286,12 @@ ${c.invariants ? `**INVARIANTS**: ${typeof c.invariants === 'string' ? c.invaria
     - Object: \`{name: string, role: string}\` format
   - Z MUST be an array of strings (even if empty or single element) - NOT a string or object
   - If Z is not an array format, deduct points
+- **For L3 only:** Invariants should be scenario-specific and unique (reference concrete X, Y, Z, domain, or narrative). Generic/repetitive invariants (e.g. "Mechanism and rules unchanged") warrant lower scores.
 
 **Scoring (Maximum: 1.0 point):**
-- **1.0 point**: X, Y, and Z (if applicable) are explicitly or unambiguously defined AND variables structure is correct (X/Y are string or object, Z is array)
-- **0.5 point**: One variable is implicit but reasonably inferable, OR variables are clear but structure has minor issues (e.g., Z is string instead of array)
-- **0.0 points**: Variables are unclear, overloaded, or confused, OR critical structure violations (e.g., Z is not an array when it should be)
+- **1.0 point**: X, Y, and Z (if applicable) are explicitly or unambiguously defined AND variables structure is correct (X/Y are string or object, Z is array). For L3, invariants are scenario-specific.
+- **0.5 point**: One variable is implicit but reasonably inferable, OR variables are clear but structure has minor issues (e.g., Z is string instead of array). For L3, invariants may be partly generic.
+- **0.0 points**: Variables are unclear, overloaded, or confused, OR critical structure violations (e.g., Z is not an array when it should be). For L3, invariants are purely generic/repetitive.
 
 **Important:** This category is scored out of 1.0 point maximum. Do not exceed 1.0 point.${varValidationNote}
 
@@ -297,21 +299,22 @@ ${c.invariants ? `**INVARIANTS**: ${typeof c.invariants === 'string' ? c.invaria
 
 ### 2. Hidden Question Quality — **1.0 point**
 
-**Goal:** Identifies key ambiguity
+**Goal:** Identifies key ambiguity with a **scenario-specific** question
 
 **What is evaluated:**
 - Does the hidden question/timestamp directly target the **core causal ambiguity**?
+- Is the question **scenario-specific**: does it reference concrete X, Y, Z, domain, actors, or narrative details from the case? Generic taxonomy patterns (e.g. "Who is missing or conditioned away?", "Did X precede Y or did Y precede X?", "Is there an unmeasured common cause?") used verbatim **without** scenario-specific detail are **lazy generation** and must be penalized.
 - Is the question **necessary and sufficient** to resolve the ambiguity?
 - Is it phrased as a *structural or temporal uncertainty*, not as a demand for more data in general?
 
 **Scoring (Maximum: 1.0 point):**
 - **1.0 point**: 
   - For non-ambiguous cases (label is YES/VALID/NO/INVALID): If hiddenTimestamp is missing, assign full marks (1.0) as it is optional for unambiguous cases.
-  - For ambiguous cases (label is AMBIGUOUS/CONDITIONAL): Precisely captures the defining ambiguity. Answering would clearly distinguish between competing causal interpretations.
-- **0.5 point**: Gestures at the right issue but is overly broad or slightly misaligned (only applies to ambiguous cases with a hiddenTimestamp present).
-- **0.0 points**: Generic, irrelevant, or does not meaningfully distinguish between causal interpretations (only applies to ambiguous cases with a hiddenTimestamp present).
+  - For ambiguous cases (label is AMBIGUOUS/CONDITIONAL): Precisely captures the defining ambiguity, is **scenario-specific** (references concrete variables, domain, or narrative), and would clearly distinguish between competing causal interpretations.
+- **0.5 point**: Gestures at the right issue but is overly broad, slightly misaligned, or only weakly scenario-specific (only applies to ambiguous cases with a hiddenTimestamp present).
+- **0.0 points**: **Lazy generation** — the hidden question is essentially the generic trap taxonomy pattern (e.g. "Who is missing or conditioned away?", "Did X precede Y or did Y precede X?") without scenario-specific detail. Also: generic, irrelevant, or does not meaningfully distinguish between causal interpretations (only applies to ambiguous cases with a hiddenTimestamp present).
 
-**Important:** This category is scored out of 1.0 point maximum. Do not exceed 1.0 point.
+**Important:** This category is scored out of 1.0 point maximum. Do not exceed 1.0 point. **Always assign 0.0** when the hidden question copies the taxonomy pattern verbatim instead of being tailored to the scenario.
 
 ---
 
@@ -516,6 +519,7 @@ Evaluate the case above using this unified rubric. Return a JSON object with the
   ${c.pearl_level === 'L2' ? `- L2: Verify label is "NO" (all L2 cases must be NO). If not "NO", assign 0.0 to final_label immediately.
   - L2: Verify trap type belongs to correct family (T1-T4→F1, T5-T6→F2, T7-T9→F3, T10-T12→F4, T13-T14→F5, T15-T17→F6).` : ''}
   ${c.pearl_level === 'L3' ? `- L3: Verify invariants are present and clearly specified. Missing invariants affect conditional answers and wise refusal.
+  - L3: Verify invariants are scenario-specific and unique (reference concrete X, Y, Z, domain, or narrative). Penalize generic/repetitive invariants (e.g. "Mechanism and rules unchanged", "Background risk fixed").
   - L3: Verify counterfactual claim uses proper language and aligns with scenario and invariants.
   - L3: Verify label matches counterfactual validity under stated invariants.` : ''}
 - **Variables Structure:** Verify X/Y are string or object, Z is array. Structure violations affect scenario_clarity scoring.`;

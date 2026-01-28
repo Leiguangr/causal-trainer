@@ -87,7 +87,7 @@ model T3Case {
   variables            String?  // JSON string: { X: string|object, Y: string|object, Z: string[] }
   
   // Trap Structure (Table 9) - stored as separate fields for easier querying
-  trap_type            String   // Trap type code (W1–W10/S1–S8/A for L1, T1–T17 for L2, F1–F8 for L3)
+  trap_type            String?   // Trap type code (W1–W10/S1–S8/A for L1, T1–T17 for L2, F1–F8 for L3)
   trap_type_name       String?  // Human-readable trap type name (optional)
   trap_subtype         String?  // Trap subtype (optional)
   trap_subtype_name    String?  // Human-readable subtype name (optional)

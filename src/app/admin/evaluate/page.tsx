@@ -157,8 +157,9 @@ export default function EvaluatePage() {
           : `/api/admin/evaluate?batchId=${batchId}`;
         const bRes = await fetch(pollEndpoint, { cache: 'no-store' });
         if (bRes.ok) { setCurrentBatch((await bRes.json()).batch); }
-      } else { 
-        alert(`Error: ${data.error || 'Failed to start evaluation'}`);
+      } else {
+        const msg = data.detail ? `${data.error || 'Error'}\n\n${data.detail}` : (data.error || 'Failed to start evaluation');
+        alert(msg);
       }
     } catch (error) {
       alert(`Error: ${error instanceof Error ? error.message : 'Failed to start evaluation'}`);

@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body: EvaluateT3Request = await req.json();
-    const {
+    let {
       caseType,
       dataset,
       generationBatchId,
@@ -69,8 +69,14 @@ export async function POST(req: NextRequest) {
       skipAlreadyEvaluated = true,
     } = body;
 
+    if (!caseType && generationBatchId) {
+      caseType = 'all';
+    }
     if (!caseType) {
-      return NextResponse.json({ error: 'caseType is required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'caseType is required (L1, L2, L3, or all). Omit only when generationBatchId is provided.' },
+        { status: 400 }
+      );
     }
 
     const idsByType: { L1: string[]; L2: string[]; L3: string[] } = { L1: [], L2: [], L3: [] };
@@ -121,8 +127,19 @@ export async function POST(req: NextRequest) {
 
     const totalCount = idsByType.L1.length + idsByType.L2.length + idsByType.L3.length;
     if (totalCount === 0) {
+      const hints: string[] = [];
+      if (unverifiedOnly) {
+        hints.push('Uncheck "Unverified only" to include verified cases (e.g. newly copied legacy cases)');
+      }
+      if (skipAlreadyEvaluated) {
+        hints.push('Uncheck "Skip already evaluated" to re-evaluate cases');
+      }
+      const hintText = hints.length > 0 ? ` ${hints.join('. ')}.` : '';
       return NextResponse.json(
-        { error: 'No cases found matching criteria (or all already evaluated)' },
+        {
+          error: 'No T3 cases found matching the given filters (or all already evaluated).',
+          detail: `Filters: dataset=${dataset ?? 'all'}, caseType=${caseType}, unverifiedOnly=${unverifiedOnly}, skipAlreadyEvaluated=${skipAlreadyEvaluated}.${hintText}`,
+        },
         { status: 400 }
       );
     }
